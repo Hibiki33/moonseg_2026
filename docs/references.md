@@ -8,7 +8,7 @@
 
 `references/index.json`（同样不入库）每项记录 title、authors、venue/year、url、local_file、sha256、bytes、fetched_at（UTC）、任务/划分/结果摘要和相关性标签；没有下载文件的条目 local_file、sha256、bytes 为 null。核对文件完整性用 `sha256sum -c` 或对照 index.json 的 sha256。
 
-arXiv 从主机下载只有约 20–35 KB/s，LuSNAR v3（17,869,228 字节）、DINOv3（15,823,906 字节）和 LuMon 三个 PDF 在按要求停止下载时尚未完成，以 `.pdf.part` 保存，不是有效 PDF，可用 `curl -C - -o <文件> https://arxiv.org/pdf/<id>` 续传；index.json 中这三项的 sha256 为 null。
+arXiv 从主机下载只有约 20–35 KB/s；LuSNAR v3（17,869,228 字节）、DINOv3（15,823,906 字节）和 LuMon（23,023,708 字节）三个 PDF 首次抓取时未完成，已于 2026-10-22 01:37（UTC+8）用 `curl -C -` 续传补齐并校验 `%PDF`/`%%EOF`，`index.json` 中的 sha256 与字节数已更新；当前 `references/` 内没有 `.part` 文件。
 
 只存合法公开的文件：arXiv、开放获取出版物（CC BY）、课程报告页、学位论文开放库和 Zenodo 复现包。没有下载任何付费墙 PDF 或数据集文件；Zenodo 复现包按其 README 不含 LuSNAR 图像，只有代码、权重、帧清单和结果表。
 
@@ -51,7 +51,7 @@ Wu 报告的其他设置：增强为水平翻转、±10° 旋转、亮度/对比
 | 工作 | 年份 | 发布形式 | 任务 | 划分 | 关键数字 | 本地文件 | 结论 |
 |---|---|---|---|---|---|---|---|
 | J. Liu 等, *BEA-RandLA-Net: a boundary-enhanced and globally-aware network for lunar surface obstacle detection from point clouds* | 2026 | J. Phys.: Conf. Ser. 3240, 012038（AIPC 2026，CC BY 4.0） | 3D 点云三类分割（月壤/撞击坑/岩石） | **按场景**：训练 1/2/3/6/7，验证 4/8，测试 5/9 | 场景 5 mIoU 93.22→95.26；场景 9 87.84→89.45；场景 9 撞击坑 67.84→76.56 | `references/2026_jpcs_3240_012038_liu_bea_randla_net_lusnar_pointcloud.pdf` | 任务不同，不可比；佐证场景 9 撞击坑最难 |
-| Sekmen 等, *LuMon: A Comprehensive Benchmark and Development Suite with Novel Datasets for Lunar Monocular Depth Estimation* | 2026 | arXiv 2604.09352v1；CVPR 2026 AI4Space Workshop | 单目深度 | **按场景**：训练 Moon_2/3/4/5/7/9，验证 Moon_6，测试 Moon_1/8 | DAv2-FT 在 LuSNAR 测试集 δ1 0.93、AbsRel 0.07、RMSE 1.07；零样本 DAv2 0.31/0.45/2.89 | 未完成（`references/2026_cvprw_arxiv_2604.09352v1_lumon_lusnar_depth.pdf.part`，内容依据 arXiv HTML） | 深度任务，不可比；权重 `LuMonDepth/DAv2-FT-LuSNAR` |
+| Sekmen 等, *LuMon: A Comprehensive Benchmark and Development Suite with Novel Datasets for Lunar Monocular Depth Estimation* | 2026 | arXiv 2604.09352v1；CVPR 2026 AI4Space Workshop | 单目深度 | **按场景**：训练 Moon_2/3/4/5/7/9，验证 Moon_6，测试 Moon_1/8 | DAv2-FT 在 LuSNAR 测试集 δ1 0.93、AbsRel 0.07、RMSE 1.07；零样本 DAv2 0.31/0.45/2.89 | 未完成（`references/2026_cvprw_arxiv_2604.09352v1_lumon_lusnar_depth.pdf`，内容依据 arXiv HTML） | 深度任务，不可比；权重 `LuMonDepth/DAv2-FT-LuSNAR` |
 | Pérez-Ramos 等, *Zero-shot semantic landmark-based visual odometry using foundation models for unstructured planetary exploration* | 2026 | Front. Robot. AI, 10.3389/frobt.2026.1819714（CC BY） | 视觉里程计（SAM + DINOv2） | 只用 Moon_1/2/3，各 100 帧 | ATE RMSE：Moon_3 1.93 m、Moon_2 4.88 m、Moon_1 5.70 m；无 IoU | `references/2026_frobt_1819714_perezramos_sam_dinov2_vo_lusnar.pdf` | 非分割；只有阴影下 SAM 表现的定性观察 |
 | *MoonGS: High-quality Representation of the Lunar Surface via Gaussian Splatting Using Robust Depth Features from Image Pairs* | 2026 | arXiv 2610.07110（代码 InRobots/MoonBlender） | 稀疏视角 3DGS 新视角合成 | "the last 4 of the 9 scenes" 作训练和验证，256×256 | 摘要称比前馈 NeRF/3DGS 基线 PSNR +4.9 dB | 无 | 无关 |
 | Dai、Casadesus Vila、Gao, *Visual SLAM with DEM Anchoring for Lunar Surface Navigation* | 2026 | arXiv 2603.17229；IEEE Aerospace Conf. 2026 | 视觉 SLAM | 九个场景逐一评测，用 LiDAR 累积构造局部 DEM | 表 I 逐场景 RPE/ATE | 无 | 无关 |
@@ -76,8 +76,8 @@ Wu 报告的其他设置：增强为水平翻转、±10° 旋转、亮度/对比
 
 | 论文 | arXiv | 本地文件 | 本仓库引用原因 |
 |---|---|---|---|
-| LuSNAR: A Lunar Segmentation, Navigation and Reconstruction Dataset based on Multi-sensor for Autonomous Exploration | 2407.06512v3 | 未完成（`references/2024_arxiv_2407.06512v3_lusnar.pdf.part`） | 数据集原论文：类别、场景网格、表 V/VII 基线和误差分析均以此版为据（[paper_alignment.md](paper_alignment.md)、[data.md](data.md)）；TGRS 终稿（10.1109/TGRS.2026.3720373）未取得全文 |
-| DINOv3 | 2508.10104v1 | 未完成（`references/2025_arxiv_2508.10104v1_dinov3.pdf.part`） | 冻结骨干 ViT-B/16、ViT-L/16（LVD-1689M）及其分割适配做法（[model.md](model.md)、[weights.md](weights.md)、[training.md](training.md)） |
+| LuSNAR: A Lunar Segmentation, Navigation and Reconstruction Dataset based on Multi-sensor for Autonomous Exploration | 2407.06512v3 | `references/2024_arxiv_2407.06512v3_lusnar.pdf` | 数据集原论文：类别、场景网格、表 V/VII 基线和误差分析均以此版为据（[paper_alignment.md](paper_alignment.md)、[data.md](data.md)）；TGRS 终稿（10.1109/TGRS.2026.3720373）未取得全文 |
+| DINOv3 | 2508.10104v1 | `references/2025_arxiv_2508.10104v1_dinov3.pdf` | 冻结骨干 ViT-B/16、ViT-L/16（LVD-1689M）及其分割适配做法（[model.md](model.md)、[weights.md](weights.md)、[training.md](training.md)） |
 | Masked-attention Mask Transformer for Universal Image Segmentation（Mask2Former） | 2112.01527v3 | `references/2022_cvpr_arxiv_2112.01527v3_mask2former.pdf` | 分割头、匹配损失 CE/BCE/Dice = 2/5/5、12,544 个采样点、lr 与训练长度参照 |
 | Vision Transformer Adapter for Dense Predictions（ViT-Adapter） | 2205.08534v4 | `references/2023_iclr_arxiv_2205.08534v4_vit_adapter.pdf` | 连接冻结 DINOv3 与 Mask2Former 的适配器；80k 训练长度参照 |
 | Stronger, Fewer, & Superior: Harnessing Vision Foundation Models for Domain Generalized Semantic Segmentation（Rein） | 2312.04265v5 | `references/2024_cvpr_arxiv_2312.04265v5_rein.pdf` | 域偏移下冻结、全量微调与参数高效微调的对比，对应 [roadmap.md](roadmap.md) 候选 #8 部分解冻 |
