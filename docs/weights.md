@@ -4,17 +4,18 @@
 
 ## ckpts 目录各文件的含义
 
-这里只下载了一种预训练模型：**DINOv3 ViT-B/16（LVD-1689M）**。`vitb16` 表示骨干架构是 ViT-Base、patch size=16，并不是另一个普通 ViT 模型；DINOv3 描述其模型与预训练方式。ViT-Adapter 是后续可训练的分割适配模块，也不是另一份预训练 ViT。
+这里有两种预训练骨干：**DINOv3 ViT-B/16（主线）与 ViT-L/16（第二配置）**，均为 LVD-1689M 预训练。ViT-L 于 2026-10-21 晚按用户确认补充下载。`vitb16` 表示骨干架构是 ViT-Base、patch size=16，并不是另一个普通 ViT 模型；DINOv3 描述其模型与预训练方式。ViT-Adapter 是后续可训练的分割适配模块，也不是另一份预训练 ViT。
 
 | 路径 | 内容 | 训练是否直接使用 |
 |---|---|---|
 | `ckpts/modelscope/vitb16/model.safetensors` | ModelScope 下载的原始 DINOv3 权重，Transformers 键名 | 保留来源；经转换后使用 |
-| `ckpts/dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth` | 同一份 DINOv3 权重转换为 Meta 原生 state_dict | 当前配置实际加载此文件 |
+| `ckpts/dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth` | 同一份 DINOv3 权重转换为 Meta 原生 state_dict | `dnv3_va_m2f_vitb16.yaml` 加载此文件 |
+| `ckpts/modelscope/vitl16/model.safetensors` 与 `ckpts/dinov3_vitl16_pretrain_lvd1689m-8aa4cbdd.pth` | ViT-L/16 的 ModelScope 原始文件及其原生转换（368 个张量，strict 校验通过） | `dnv3_va_m2f_vitl16.yaml` 加载后者 |
 | 同名 `.source.json` | 下载来源、版本及转换说明 | 不是模型 |
 | `ckpts/pretrained_model_probe.json` | 临时前向/反向验证报告 | 不是模型 |
 | `ckpts/modelscope/vitb16/*.json`、README、LICENSE | 模型配置、预处理配置、来源清单与许可 | 不是额外权重 |
 
-目前没有 LuSNAR 任务训练后的完整分割 checkpoint。Adapter 与 Mask2Former 在构建模型时初始化，正式训练后才与 backbone 一起保存到 `runs/<实验名>/last.pt`、`best.pt`。
+目前没有 LuSNAR 任务训练后的分割 checkpoint。Adapter 与 Mask2Former 在构建模型时初始化，训练后保存到 `runs/<实验名>/last.pt`、`best.pt`；checkpoint 不包含冻结的 DINOv3 张量，加载时从本目录的预训练文件重建骨干。
 
 已从 [ModelScope ViT-B/16 仓库](https://modelscope.cn/models/facebook/dinov3-vitb16-pretrain-lvd1689m)下载完整快照，固定 revision 为 `23d0280ae6ee4ced592a3459674ad027d3c18906`。原始文件位于 `ckpts/modelscope/vitb16/`（实际磁盘目录 `/home/disk02/wjj/moonseg/checkpoints/modelscope/vitb16/`），包含 `.gitattributes`、`config.json`、`configuration.json`、`preprocessor_config.json`、`README.md`、`LICENSE.md` 和 `model.safetensors`。权重文件为 **342,662,192 bytes**，真实 safetensors header 包含 211 个 FP32 张量，并非 Git LFS pointer。
 
@@ -35,7 +36,7 @@ uv run --no-sync python tools/convert_dinov3_weights.py \
   --output ckpts/dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth
 ```
 
-输出路径沿用官方发行文件名以匹配现有配置；来源说明必须与文件一起保留。转换工具只支持 LVD-1689M ViT-B/16 与 ViT-L/16 的非 gated MLP 结构，拒绝未知键、缺键、重复键、错误形状及不兼容配置，不会自动退回随机初始化。转换不会验证训练数据声明或模型质量。ViT-L 本次没有下载；转换时使用 `--arch vitl16`。
+输出路径沿用官方发行文件名以匹配现有配置；来源说明必须与文件一起保留。转换工具只支持 LVD-1689M ViT-B/16 与 ViT-L/16 的非 gated MLP 结构，拒绝未知键、缺键、重复键、错误形状及不兼容配置，不会自动退回随机初始化。转换不会验证训练数据声明或模型质量。ViT-L 已以同样流程下载并转换（`--arch vitl16`），ModelScope 提交 `99b6205b…`；其 safetensors 的 sha256 `dcb2e451…8179` 与调研中记录的 Meta Hugging Face 发布文件哈希一致，ViT-B 的哈希已记录但镜像未公开可比对的值。两份 `.source.json` 保留这些事实；按原项目约定，哈希只作记录，不作为下载流程的强制校验。
 
 ## 验证范围
 

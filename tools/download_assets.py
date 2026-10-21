@@ -102,7 +102,7 @@ def source(args):
 
 
 def link_assets(root):
-    for name, target in (("data", root / "data"), ("ckpts", root / "checkpoints")):
+    for name, target in (("data", root / "data"), ("ckpts", root / "checkpoints"), ("runs", root / "runs")):
         target.mkdir(parents=True, exist_ok=True)
         link = REPO / name
         if link.is_symlink() and link.resolve() == target.resolve():
