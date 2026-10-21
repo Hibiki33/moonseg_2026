@@ -14,10 +14,10 @@ LuSNAR作者公开仓库尚未提供可复现的2D分割训练脚本。TGRS终�
 | 可选裁剪 | 仅显式`random_resize_crop`模式启用 | 默认不随机缩放、不选crop，不把裁剪伪装成整图 |
 | 标签 | 比赛ID0–4，mask最近邻；ignore255仅用于无效/补齐区域 | 天空与月壤均为有效类别，不能照搬ADE20K reduce_zero_label |
 | 归一化 | ImageNet mean/std | 与DINOv3预训练骨干输入约定一致 |
-| 批量 | 每卡4 × 2卡 × 累积8 = 全局有效64 | 真实完整模型双卡验证；启动检查`min_effective_batch:64` |
-| epoch尾部 | 只做完整64张更新，按每轮随机顺序跳过不足组 | 不允许最后一次优化器更新偷偷变成小batch；日志记录使用/跳过数量 |
+| 批量 | 每卡7 × 2卡 × 累积5 = 全局有效70 | 真实完整模型双卡验证；启动检查`min_effective_batch:65`，拒绝64 |
+| epoch尾部 | 只做完整70张更新，按每轮随机顺序跳过不足组 | 不允许最后一次优化器更新偷偷变成小batch；日志记录使用/跳过数量 |
 | 优化 | AdamW、LR1e-4、weight decay0.05、poly0.9、clip0.1 | 当前初始工程设置，待验证集选择 |
-| Warmup | 94次优化器更新，即6016张图像 | 约保持既有6000张预热图像预算；不是论文设置 |
+| Warmup | 86次优化器更新，即6020张图像 | 约保持既有6000张预热图像预算；不是论文设置 |
 | 损失 | Mask2Former Hungarian + CE/BCE/Dice权重2/5/5，辅助层监督 | 与所选模型结构相符；不是LuSNAR的SegFormer配方 |
 | 训练预算 | 80 epoch，BF16 | 初始预算，尚无正式数据验证结果 |
 | 验证/推理 | 整图、单尺度、无flip TTA | `sliding_window:false`；输出恢复原输入尺寸 |
@@ -25,11 +25,11 @@ LuSNAR作者公开仓库尚未提供可复现的2D分割训练脚本。TGRS终�
 
 ## 批量选择的实测依据
 
-物理GPU0/7均为RTX 6000 Ada 48GB，固定PCI顺序。每卡4的1024²容量测试约8.40张/秒（双卡总计），每卡6追加预热后的结果约8.29张/秒；后者没有更高吞吐，却将预留显存提高到41.01GiB，仅余约5.7GiB设备可用空间。
+物理GPU0/7均为RTX 6000 Ada 48GB，固定PCI顺序。按用户要求充分利用显存，当前选每卡7、累积5，有效batch70严格大于64。5次实际DDP/AdamW更新通过：每卡峰值allocated41.46GiB、reserved45.73GiB，设备余量约0.96GiB，双卡约8.33张/秒。报告为 `/home/disk02/wjj/moonseg/verification/1024_b7_a5_capacity.json`。
 
-选择每卡4、累积8后，实际执行5次AdamW更新（2次预热、3次计时），双卡约8.51张/秒，每卡峰值allocated24.09GiB、reserved27.72GiB，实际设备尚余约19GiB。报告为 `/home/disk02/wjj/moonseg/verification/1024_batch_selection.json`。这是合成输入的短程容量/流程验证，不是精度证据，吞吐不包含真实读图与增强。
+单卡不累积的容量报告见 [memory_capacity.md](memory_capacity.md)：48GB实卡成功batch7、下一档8 OOM；24GiB预算模拟成功batch3、下一档4 OOM。后者不是24GB实体卡实测。报告明确模型、输入、精度、骨干冻结和优化器条件。
 
-累积64只说明每次优化器更新累计的图像数：Adapter的普通BatchNorm仍按每卡microbatch=4计算统计；损失中的mask数量也按当前分布式microbatch归一化。因此不宣称与一次前向64张严格数学或逐位等价。
+累积70只说明每次优化器更新累计的图像数：Adapter的普通BatchNorm仍按每卡microbatch=7计算统计；损失中的mask数量也按当前分布式microbatch归一化。因此不宣称与一次前向70张严格数学或逐位等价。
 
 ## 实验顺序
 

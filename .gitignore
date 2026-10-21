@@ -6,8 +6,8 @@
 /predictions/
 /submissions/
 /manifests/
-/.venv/
-/.cache/
+/.venv
+/.cache
 __pycache__/
 *.py[cod]
 *.egg-info/

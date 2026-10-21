@@ -33,15 +33,16 @@ train:
   output_dir: runs/moonseg_vitb16_1024_final
   seed: 42
   epochs: 80
-  batch_size: 4
-  accumulation_steps: 8
-  min_effective_batch: 64
+  batch_size: 7
+  accumulation_steps: 5
+  # Integer minimum 65 enforces the user's effective batch > 64 requirement.
+  min_effective_batch: 65
   num_workers: 4
   lr: 0.0001
   backbone_lr_multiplier: 0.1
   weight_decay: 0.05
-  # Roughly preserves the 6000-image warmup budget (94 x 64 = 6016).
-  warmup_iters: 94
+  # Roughly preserves the 6000-image warmup budget (86 x 70 = 6020).
+  warmup_iters: 86
   warmup_ratio: 0.001
   poly_power: 0.9
   amp: bf16

@@ -2,12 +2,12 @@
 
 LuSNAR 月面五类语义分割第一版。类别编号固定为月壤 0、岩石 1、撞击坑 2、山体 3、天空 4；输入仅左相机 RGB。比赛信息见 [challenge.md](challenge.md)，模型细节见 [docs/model.md](docs/model.md)。
 
-当前方案为用户确认的1024×1024整图训练、双卡梯度累积、全局有效batch至少64。增强来源见 [增强调研](docs/augmentation_research.md)，指标定义见 [评测说明](docs/metrics.md)；[论文对照表](docs/paper_alignment.md)保留论文事实、比赛规则与工程选择的边界。
+当前方案为用户确认的1024×1024整图训练、双卡梯度累积、全局有效batch严格大于64。增强来源见 [增强调研](docs/augmentation_research.md)，指标定义见 [评测说明](docs/metrics.md)；[论文对照表](docs/paper_alignment.md)保留论文事实、比赛规则与工程选择的边界。
 
 ## 当前状态（2026-10-21）
 
 - 已实现数据准备、开发/最终训练配置、双卡训练、验证、双卡整图推理和预测检查打包；默认 DINOv3 ViT-B/16，骨干冻结，Adapter 和 Mask2Former 从头训练。
-- 固定版本DINOv3源码及ModelScope预训练权重已就绪；完整1024×1024模型在物理GPU0/7上通过每卡4、累积8步的真实AdamW更新验证。
+- 固定版本DINOv3源码及ModelScope预训练权重已就绪；完整1024×1024模型在物理GPU0/7上通过每卡7、累积5步的真实AdamW更新验证。
 - **uv 独立管理 Python 3.12.15** 的 `.venv` 已安装，`uv.lock` 已生成，`uv pip check` 通过；不借用外部 Conda 解释器。
 - 九个LuSNAR原始包已完整下载，共52,301,555,752字节；已整理8002对训练RGB/标签与5004张测试RGB。资产位于 `/home/disk02/wjj/moonseg`，仓库通过 `data`、`ckpts` 软链接访问。
 - 已实际读取官方评价与提交要求，详见 `challenge.md`。具体场景权重尚未公布；官方训练包计划10月22日起发放，正式样本清单尚未取得。
@@ -20,7 +20,7 @@ LuSNAR 月面五类语义分割第一版。类别编号固定为月壤 0、岩�
 bash scripts/setup_env.sh
 ```
 
-该脚本让 uv 下载并管理 Python 3.12，安装至项目 `.cache/uv-python`，创建 `.venv`。PyTorch 2.7.1 / torchvision 0.22.1 使用官方 CUDA 12.6 wheel 索引，默认面向 Linux x86_64。当前主机驱动为580.126.09，物理GPU0、7均为48GB RTX 6000 Ada。
+该脚本让 uv 下载并管理 Python 3.12。Python和安装缓存实际位于 `/home/disk02/wjj/moonseg/.cache`，虚拟环境位于 `/home/disk02/wjj/moonseg/.venv`；代码目录的 `.cache` 与 `.venv` 都是指向它们的软链接。可用 `MOONSEG_STORAGE_ROOT=/其他目录 bash scripts/setup_env.sh` 指定新的存储根目录。PyTorch 2.7.1 / torchvision 0.22.1 使用官方 CUDA 12.6 wheel 索引，默认面向 Linux x86_64。当前主机驱动为580.126.09，物理GPU0、7均为48GB RTX 6000 Ada。
 
 `uv.lock` 随代码保留。迁移时复制代码及锁文件，重新运行安装脚本（内部使用 `uv sync --locked`）；不复制 `.venv`，也不依赖其他人的解释器路径。数据和模型存储位置通过下载脚本的 `--storage` 设置。运行入口使用 `uv run --no-sync`，避免训练时隐式修改环境。
 
@@ -46,6 +46,8 @@ bash scripts/bootstrap.sh --only weights --weights-provider modelscope --backbon
 
 ```text
 /home/disk02/wjj/moonseg/
+  .cache/                     # uv缓存与独立Python
+  .venv/                      # 运行环境
   data/
     archives/Moon_1.zip ... Moon_9.zip
     LuSNAR/Moon_1/color/       # 保留原sample_id
@@ -56,6 +58,8 @@ bash scripts/bootstrap.sh --only weights --weights-provider modelscope --backbon
   checkpoints/
     dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth
 
+本仓库/.cache -> /home/disk02/wjj/moonseg/.cache
+本仓库/.venv  -> /home/disk02/wjj/moonseg/.venv
 本仓库/data  -> /home/disk02/wjj/moonseg/data
 本仓库/ckpts -> /home/disk02/wjj/moonseg/checkpoints
 ```
@@ -119,19 +123,13 @@ uv run --no-sync python tools/package_submission.py \
 
 默认 `train_mode: full_image`、`image_size: [1024,1024]`，保留完整视野；原图已是1024×1024时不重采样。推理使用整图、单尺度、无翻转TTA。随机缩放/裁剪只能通过显式 `random_resize_crop` 模式启用，默认不做。增强为同步水平翻转0.5、独立亮度扰动0.5（RGB像素加性±16）和独立对比度扰动0.5（乘性0.9–1.1），标签不做光度变换；gamma、HSV扰动和外部图像合成均未启用。算子来源与本项目收窄的强度范围详见 [增强调研](docs/augmentation_research.md)。
 
-每卡batch=4，2卡，累积8步：`4×2×8=64`张图像参与每次优化器更新。使用BF16、AdamW、LR1e-4、warmup+poly；warmup94步对应6016张图像，约保持此前6000张图像的工程预热预算。80 epoch、学习率和预热量仍是初始超参数，不声称来自LuSNAR论文或已经验证精度最佳。
+每卡batch=7，2卡，累积5步：`7×2×5=70`张图像参与每次优化器更新，**严格大于64**。使用BF16、AdamW、LR1e-4、warmup+poly；warmup86步对应6020张图像，约保持6000张图像的工程预热预算。80 epoch及优化参数仍为初始超参数，不声称来自LuSNAR论文或已验证精度最优。
 
-`min_effective_batch: 64`在启动时校验有效batch，单卡沿用此配置会因仅有32而报错。训练只进行完整的累积更新：分布式采样、microbatch及epoch尾部不完整组会丢弃，避免最后一次更新小于64。每轮重新打乱，实际使用/跳过的样本数写入 `batch_plan.json`；例如6403张训练图像每轮用6400张、跳过3张，8002张则用8000张、跳过2张。具体数量以官方清单为准。梯度只在第8次反向传播同步，裁剪、优化器和调度器各更新一次。
+`min_effective_batch: 65`使用整数下限，明确拒绝有效batch64；单卡沿用此配置得到35，也会报错。训练只进行完整70张的累积更新，epoch尾部不完整组跳过；每轮重新打乱，并在 `batch_plan.json` 记录使用/跳过数量。例如6403张每轮使用6370张、跳过33张，8002张使用7980张、跳过22张，具体以正式清单为准。梯度在第5次反向传播同步，再统一裁剪和更新。
 
-2026-10-21，完整1024×1024模型、BF16、冻结骨干、真实AdamW状态的双卡实测：
+当前组合已完成5次真实双卡AdamW更新，前2次预热、后3次计时；每卡峰值allocated **41.46 GiB**、reserved **45.73 GiB**，设备剩余约0.96GiB，双卡约 **8.33张/秒**。这是接近48GB容量上限的配置。报告在 `/home/disk02/wjj/moonseg/verification/1024_b7_a5_capacity.json`；累积70指优化器有效batch，Adapter BatchNorm仍按每卡7张统计。
 
-| 每卡batch | 实测累积步数 | 实测有效batch | 每卡峰值allocated | 每卡峰值reserved | 双卡合计吞吐 |
-|---:|---:|---:|---:|---:|---:|
-| 4（容量对比） | 1 | 8 | 23.97 GiB | 27.68 GiB | 约8.40张/秒 |
-| 6（容量对比） | 1 | 12 | 35.55 GiB | 41.01 GiB | 约8.29张/秒 |
-| **4（默认）** | **8** | **64** | **24.09 GiB** | **27.72 GiB** | **约8.51张/秒** |
-
-每卡6没有吞吐收益，设备可用显存仅剩约5.7GiB；默认组合仍余约19GiB。默认组合验证了5个实际优化器更新，前2个预热、后3个统计。完整报告在 `/home/disk02/wjj/moonseg/verification/1024_batch_selection.json`。这些是合成输入的短程结果，吞吐不含真实读图与增强，不能当作精度或长跑显存保证。累积64描述优化器有效batch；Adapter的普通BatchNorm仍按每卡microbatch=4统计，不等同一次前向64张。
+不使用梯度累积时的独立容量测试见 [48GB/24GB容量报告](docs/memory_capacity.md)：48GB实卡batch7通过、8 OOM；24GiB预算模拟batch3通过、4 OOM。模拟不等同于真实24GB显卡测试。所有吞吐/容量数据来自短程合成输入，不含真实读图、增强及长跑变化，也不代表精度。
 
 此配置使用新输出目录。旧512×1024配置的checkpoint不能用来做完整状态续训。LuSNAR原始图像/标签为1024×1024，但公开v3未给出训练crop；当前整图设定来自用户确认。`ckpts`中的safetensors和pth是同一个DINOv3模型的不同格式，见 [权重说明](docs/weights.md)。
 
@@ -150,8 +148,8 @@ git status
 
 ## 验证边界
 
-uv环境及依赖检查已通过；ModelScope真实权重已严格加载。默认完整1024×1024模型已完成双卡容量比较和有效batch64的5次AdamW更新，所有损失与裁剪前梯度范数有限，冻结骨干无梯度。完整视野与增强几何同步、mAcc/缺类/全ignore等CPU检查通过，报告在 `/home/disk02/wjj/moonseg/verification/full_image_data_metrics.json`。
+uv环境及依赖检查已通过；ModelScope真实权重已严格加载。当前完整1024×1024模型已完成单卡容量边界检查和双卡有效batch70的5次AdamW更新，所有损失与裁剪前梯度范数有限，冻结骨干无梯度。完整视野与增强几何同步、mAcc/缺类/全ignore等CPU检查通过，报告在 `/home/disk02/wjj/moonseg/verification/full_image_data_metrics.json`。
 
-完整1024×1024配置的CLI集成检查包括两轮训练、epoch尾部不足64的处理、断点恢复、含mAcc的分布式验证、整图预测与官方ZIP打包。结果记录在 `/home/disk02/wjj/moonseg/verification/full1024_integration.json`。恢复完整epoch状态不保证CUDA逐位确定性。
+此前有效batch64的完整1024 CLI集成检查覆盖两轮训练、尾部处理、恢复、mAcc、整图预测及ZIP，历史记录在 `/home/disk02/wjj/moonseg/verification/full1024_integration.json`。本次另验证了当前70的真实累积更新、尾部样本数及64配置被拒绝；不将旧报告冒称为70的全流程重跑。恢复完整epoch状态不保证CUDA逐位确定性。
 
 上述运行仅使用临时合成数据，未进行正式比赛训练或报告比赛精度；未添加unittest或仓库测试文件。正式训练前仍需取得组织方样本清单，按官方范围准备训练与验证索引。

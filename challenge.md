@@ -194,4 +194,4 @@ result.zip
 
 ## 论文实现对齐记录
 
-以2026年TGRS终稿（[DOI:10.1109/TGRS.2026.3720373](https://doi.org/10.1109/TGRS.2026.3720373)）为优先依据；本次未取得出版社正文，按用户允许暂用arXiv v3核对。详细的“论文原文位置—当前实现—明确差异—未报告项”见 [docs/paper_alignment.md](docs/paper_alignment.md)。v3未报告某项，不代表终稿也未报告；原始1024×1024尺寸不能推断出作者的训练crop。用户随后确认本项目采用1024×1024整图、补充mAcc、梯度累积且有效batch至少64；这是本项目方案。增强参考实现、源码版本和取舍记录在 [docs/augmentation_research.md](docs/augmentation_research.md)，不将其归为LuSNAR作者配方。
+以2026年TGRS终稿（[DOI:10.1109/TGRS.2026.3720373](https://doi.org/10.1109/TGRS.2026.3720373)）为优先依据；本次未取得出版社正文，按用户允许暂用arXiv v3核对。详细的“论文原文位置—当前实现—明确差异—未报告项”见 [docs/paper_alignment.md](docs/paper_alignment.md)。v3未报告某项，不代表终稿也未报告；原始1024×1024尺寸不能推断出作者的训练crop。用户随后确认本项目采用1024×1024整图、补充mAcc、梯度累积且有效batch严格大于64；这是本项目方案。增强参考实现、源码版本和取舍记录在 [docs/augmentation_research.md](docs/augmentation_research.md)，不将其归为LuSNAR作者配方。

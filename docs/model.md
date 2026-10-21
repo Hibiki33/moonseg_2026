@@ -115,32 +115,32 @@ local implementation and does not import detectron2.
 ## Current 1024x1024 configuration
 
 The current full-image configuration uses physical GPUs 0 and 7, BF16, a frozen
-DINOv3 backbone, batch 4 per GPU and eight gradient-accumulation microbatches:
-each optimizer update receives 64 images. Training enforces a minimum effective
-batch of 64 and drops incomplete shuffled epoch tails. Whole-image inference is
-the default. The adapter and Mask2Former retain their full default dimensions
-and layer counts; these measurements do not use the earlier reduced smoke-test head.
+DINOv3 backbone, batch 7 per GPU and five gradient-accumulation microbatches:
+each optimizer update receives 70 images, strictly more than 64. The configured
+integer minimum is 65, so an effective batch of 64 is rejected. Incomplete
+shuffled epoch tails are dropped. Whole-image inference remains the default.
 
-Five real AdamW updates at this configuration passed, including allocated
-optimizer state and finite pre-clipping gradient norms. After two warmup updates,
-the three measured updates processed 8.51 images/second across both GPUs. Peak
-allocated memory was 24.09 GiB/GPU and peak reserved memory 27.72 GiB/GPU. A batch-6
-capacity comparison reserved 41.01 GiB/GPU without showing higher throughput.
-See `/home/disk02/wjj/moonseg/verification/1024_batch_selection.json` for both
-candidates, complete accumulation measurements, and CUDA/NCCL memory boundaries.
+Five real DDP/AdamW updates at this configuration passed with finite losses and
+pre-clipping gradient norms. After two warmup updates, measured throughput was
+8.33 images/second across both GPUs. Peak allocated memory was 41.46 GiB/GPU and
+peak reserved memory 45.73 GiB/GPU; device-free headroom was about 0.96 GiB.
+See `/home/disk02/wjj/moonseg/verification/1024_b7_a5_capacity.json`.
 
-Gradient accumulation extends the optimizer batch, not each forward pass's
-BatchNorm statistics. The adapter's ordinary training BatchNorm uses four images
-per rank. Mask loss normalization also uses each distributed microbatch's target
-mask count, so accumulation need not exactly equal normalizing one concatenated
-64-image batch when images contain different class counts.
+The separate [capacity report](memory_capacity.md) disables accumulation and
+uses fresh single-GPU processes: batch 7 passed on the actual 48GB card and
+batch 8 ran out of memory; a 24GiB budget simulation passed batch 3 and failed
+batch 4. The 24GiB result is not a physical 24GB-card benchmark.
 
-The complete 1024 configuration also passed the training CLI, incomplete-tail
-handling, epoch resume, mAcc reporting, distributed evaluation/prediction and
-official ZIP packaging on temporary synthetic inputs. Its report is
-`/home/disk02/wjj/moonseg/verification/full1024_integration.json`. These checks
-establish execution and memory feasibility; they do not measure LuSNAR accuracy
-or long-run training performance.
+Gradient accumulation extends the optimizer batch, not BatchNorm statistics.
+The adapter's ordinary training BatchNorm uses seven images per rank. Mask loss
+normalization uses each distributed microbatch's target-mask count, so its
+average need not equal one concatenated 70-image batch when class counts differ.
+
+The earlier full 1024 training-CLI integration report used effective batch 64
+and covered tail handling, resume, metrics and packaging; it is retained as
+historical evidence. Current-70 accumulation and batch-plan boundary checks were
+verified separately. These are synthetic execution/capacity checks, not LuSNAR
+accuracy or long-run performance measurements.
 
 ## Earlier verification and limits
 
