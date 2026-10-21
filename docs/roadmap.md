@@ -32,7 +32,7 @@
 | 13 | 更大骨干（H+/7B） | — | 不做 | 不可承受 | — | H+ 与 L 持平；7B 不可行 |
 | 14 | 几何辅助：用来源可核验的通用单目深度/法线模型（如 Depth Anything V2）从官方 RGB 推出伪深度，作辅助监督头、额外输入通道或第二路特征集成 | 阴影中的撞击坑与岩石（场景 9 的失分点） | 无 | 需要新代码与一次训练 | 中：只能用官方 RGB 推出，必须申报来源且模型未见过 LuSNAR 测试场景；公开包的深度/双目/LiDAR 禁用；LuMon 系列深度模型因训练含 LuSNAR 而禁用 | 坑是凹陷、岩石是凸起、阴影只是亮度；LuSeg 的 RGB-D 融合思路 |
 | 15 | SegFormer（MiT-B5，ImageNet-1k）作为轻量第二模型 | 便宜的集成成员、来源最干净 | 无 | 新代码 + 一次训练 | 无 | LuSNAR 论文基线中最强（89.96，划分不同） |
-| 16 | 几何基础模型特征：Depth Anything 3 / VGGT 的 ViT token（DINOv2 初始化、多视角几何监督），三档接法——伪深度/法线辅助头；与 DINOv3 双流融合后进 Adapter；或直接换骨干（优先 DA3，普通 ViT、patch 14） | 坑/岩石/山体本质是几何，阴影只改亮度 | 无 | 新代码 + 一次训练；双流时每卡 batch 约降到 5–6 | 中：须核对训练数据清单无 LuSNAR/月面测试数据（DA3 晚于 LuSNAR 公开，不能靠时间排除）、权重许可（VGGT 为 CC-BY-NC）并申报 | Depth Anything v1/v2 编码器做分割优于 DINOv2 初始化；VGGT/DA3 特征用于 2D 分割的公开结果待查 |
+| 16 | 几何基础模型特征：Depth Anything 3 / VGGT 的 ViT token（DINOv2 初始化、多视角几何监督），接法由省到贵：(0) 伪深度/法线辅助头（AM-RADIO 式蒸馏，推理不变）；(A) 4 个交互层位把 DINOv3 与 DA3 token 拼通道、线性降维后进现有 Adapter，联合注意力由 Adapter 可变形交叉注意力与 M2F 像素解码器承担；(B) 每层位加 cross-attention，DINO 作 query、DA3 作 key/value（ViT-Adapter/CMX/GeminiFusion 模式）；(C) 两路 token 拼成 8192 序列过 2–4 个联合自注意力块（最易过拟合）；或直接换骨干。token 网格对齐：DA3 输入缩到 896²（patch 14 → 64×64）与 DINOv3 1024²（patch 16 → 64×64）一致，免插值 | 坑/岩石/山体本质是几何，阴影只改亮度 | 无 | 新代码 + 一次训练；双流时每卡 batch 约降到 5–6 | 中：须核对训练数据清单无 LuSNAR/月面测试数据（DA3 晚于 LuSNAR 公开，不能靠时间排除）、权重许可（VGGT 为 CC-BY-NC）并申报 | Depth Anything v1/v2 编码器做分割优于 DINOv2 初始化；VGGT/DA3 特征用于 2D 分割的公开结果待查 |
 
 不采用：ADE20K 式 `random_resize_crop`（[0.5,2.0] + 小 crop 会丢掉大部分视野，HRDA 证据不支持）；训练集内的岩石 copy-paste（不在规则明文列表中，属中风险，需先在官方论坛确认）。
 
