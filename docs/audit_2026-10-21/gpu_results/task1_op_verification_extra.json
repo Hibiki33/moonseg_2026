@@ -1,0 +1,71 @@
+{
+  "loc_grad_fp32_vs_fp64_reference_realistic_locality": {
+    "ref_max_abs": 1629.785003672354,
+    "cuda_fp32_max_abs_err": 0.00039502532240476285,
+    "torch_fp32_max_abs_err": 0.004625623628271569,
+    "cuda_fp32_frac_elems_err_gt_1pct_of_max": 0.0,
+    "torch_fp32_frac_elems_err_gt_1pct_of_max": 0.0,
+    "cuda_fp32_mean_abs_err": 9.998776888250117e-06,
+    "torch_fp32_mean_abs_err": 4.178700018162932e-05,
+    "forward_cuda_vs_fp64_max_abs": 5.421163304930587e-07,
+    "forward_torch_vs_fp64_max_abs": 7.255465801547789e-06,
+    "note": "Local sampling (ref point + ~2px offsets). Same upstream grad for all. CUDA fp32 is ~10x closer to the fp64 reference than the PyTorch fp32 grid_sample path; no element exceeds 1% of max |grad|."
+  },
+  "op_level_perf": {
+    "pixel_decoder_layer_1024_N7 (3 levels 32/64/128, Lq=21504, M=8, D=32, P=4)": {
+      "cuda": {
+        "forward_nograd_ms": 1.9217334687709808,
+        "fwd_bwd_ms": 10.44941209256649,
+        "peak_extra_GiB_fwd_bwd": 0.901123046875,
+        "autograd_saved_GiB_beyond_inputs": 0.0009765625
+      },
+      "torch": {
+        "forward_nograd_ms": 23.855705745518208,
+        "fwd_bwd_ms": 66.01821165531874,
+        "peak_extra_GiB_fwd_bwd": 6.265380859375,
+        "autograd_saved_GiB_beyond_inputs": 2.0277099609375
+      }
+    },
+    "adapter_extractor_vitb_1024_N7 (1 level 64x64, Lq=21504, M=12, D=32, P=4)": {
+      "cuda": {
+        "forward_nograd_ms": 1.33743304759264,
+        "fwd_bwd_ms": 4.75593414157629,
+        "peak_extra_GiB_fwd_bwd": 0.67462158203125,
+        "autograd_saved_GiB_beyond_inputs": 0.0
+      },
+      "torch": {
+        "forward_nograd_ms": 11.251300014555454,
+        "fwd_bwd_ms": 31.15478754043579,
+        "peak_extra_GiB_fwd_bwd": 3.5008544921875,
+        "autograd_saved_GiB_beyond_inputs": 0.98309326171875
+      }
+    },
+    "stress_4level_87040q_N2_random_locations": {
+      "cuda": {
+        "forward_nograd_ms": 2.8513967990875244,
+        "fwd_bwd_ms": 17.415238916873932,
+        "peak_extra_GiB_fwd_bwd": 1.162109375,
+        "autograd_saved_GiB_beyond_inputs": 0.0
+      },
+      "torch": {
+        "forward_nograd_ms": 44.06998734921217,
+        "fwd_bwd_ms": 113.27889543026686,
+        "peak_extra_GiB_fwd_bwd": 9.38037109375,
+        "autograd_saved_GiB_beyond_inputs": 3.07177734375
+      }
+    }
+  },
+  "loc_grad_random_locations_kink_analysis": {
+    "case": "3-level pixel-decoder shape, uniformly random locations in [-0.05,1.05] (crosses borders)",
+    "ref_fp64_loc_grad_max_abs": 2003.3563123482663,
+    "cuda64_vs_ref64_max_abs": 1.3642420526593924e-12,
+    "cuda32_vs_ref64_max_abs": 0.0004412997834606358,
+    "torch32_vs_ref64_max_abs": 0.005261817890186649,
+    "cuda32_vs_ref64_frac_gt_1e-3_scale": 0.0,
+    "torch32_vs_ref64_frac_gt_1e-3_scale": 0.0,
+    "cuda32_vs_torch32_disagreeing_elements": 0,
+    "total_elements": 4128768,
+    "median_distance_to_cell_boundary_of_disagreeing_coords_px": null,
+    "median_distance_to_cell_boundary_all_coords_px": 0.250213623046875
+  }
+}

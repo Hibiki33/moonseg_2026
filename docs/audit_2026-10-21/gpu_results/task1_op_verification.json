@@ -1,0 +1,366 @@
+{
+  "torch": "2.7.1+cu126",
+  "device": "NVIDIA RTX 6000 Ada Generation",
+  "extension_file": "/home/vrlab/.cache/claude-workbench/claude-vrlab-132-nat-moon-moon/moonseg_perf/ops_build/MultiScaleDeformableAttention.cpython-312-x86_64-linux-gnu.so",
+  "upstream_hybrid_MSDA_detected": false,
+  "comparisons": {
+    "pixel_decoder_1024/float32": {
+      "shape": {
+        "N": 1,
+        "M": 8,
+        "D": 32,
+        "shapes": [
+          [
+            256,
+            256
+          ],
+          [
+            128,
+            128
+          ],
+          [
+            64,
+            64
+          ],
+          [
+            32,
+            32
+          ]
+        ],
+        "Lq": 87040,
+        "P": 4
+      },
+      "forward": {
+        "max_abs": 4.336237907409668e-06,
+        "mean_abs": 2.3739075061257608e-07,
+        "max_rel": 1.3838762044906616,
+        "ref_max_abs": 1.0560907125473022
+      },
+      "grad_value": {
+        "max_abs": 5.304813385009766e-06,
+        "mean_abs": 1.7878387836844922e-07,
+        "max_rel": 1.489184856414795,
+        "ref_max_abs": 3.6236953735351562
+      },
+      "grad_sampling_locations": {
+        "max_abs": 506.4437561035156,
+        "mean_abs": 7.218268001452088e-05,
+        "max_rel": 49.39432144165039,
+        "ref_max_abs": 1586.0181884765625
+      },
+      "grad_attention_weights": {
+        "max_abs": 0.000194549560546875,
+        "mean_abs": 2.3390089154418092e-06,
+        "max_rel": 2.2048192024230957,
+        "ref_max_abs": 31.201671600341797
+      },
+      "allclose_fwd_rtol1e-4_atol1e-5": true
+    },
+    "pixel_decoder_1024/float64": {
+      "shape": {
+        "N": 1,
+        "M": 8,
+        "D": 32,
+        "shapes": [
+          [
+            256,
+            256
+          ],
+          [
+            128,
+            128
+          ],
+          [
+            64,
+            64
+          ],
+          [
+            32,
+            32
+          ]
+        ],
+        "Lq": 8192,
+        "P": 4
+      },
+      "forward": {
+        "max_abs": 4.440892098500626e-16,
+        "mean_abs": 2.118324521201454e-17,
+        "max_rel": 4.3526852637471155e-11,
+        "ref_max_abs": 1.059234503384541
+      },
+      "grad_value": {
+        "max_abs": 9.992007221626409e-16,
+        "mean_abs": 1.85927770968082e-18,
+        "max_rel": 7.800834631033204e-11,
+        "ref_max_abs": 1.3480660691037352
+      },
+      "grad_sampling_locations": {
+        "max_abs": 1.1368683772161603e-12,
+        "mean_abs": 1.1843402187311333e-14,
+        "max_rel": 5.279908093950106e-10,
+        "ref_max_abs": 1134.4282701841867
+      },
+      "grad_attention_weights": {
+        "max_abs": 1.4210854715202004e-14,
+        "mean_abs": 5.152006972196913e-16,
+        "max_rel": 5.943006297418072e-11,
+        "ref_max_abs": 27.736529906276694
+      },
+      "allclose_fwd_default": true
+    },
+    "adapter_extractor_vitb_1024/float32": {
+      "shape": {
+        "N": 2,
+        "M": 12,
+        "D": 32,
+        "shapes": [
+          [
+            64,
+            64
+          ]
+        ],
+        "Lq": 21504,
+        "P": 4
+      },
+      "forward": {
+        "max_abs": 6.556510925292969e-06,
+        "mean_abs": 1.7921743733495532e-07,
+        "max_rel": 0.6792114973068237,
+        "ref_max_abs": 2.8026740550994873
+      },
+      "grad_value": {
+        "max_abs": 8.225440979003906e-06,
+        "mean_abs": 4.031943205973221e-07,
+        "max_rel": 0.7338821887969971,
+        "ref_max_abs": 4.658496379852295
+      },
+      "grad_sampling_locations": {
+        "max_abs": 287.09234619140625,
+        "mean_abs": 0.00012103960034437478,
+        "max_rel": 5.16165828704834,
+        "ref_max_abs": 1440.68310546875
+      },
+      "grad_attention_weights": {
+        "max_abs": 4.38690185546875e-05,
+        "mean_abs": 1.3571774388765334e-06,
+        "max_rel": 4.287809371948242,
+        "ref_max_abs": 26.686920166015625
+      },
+      "allclose_fwd_rtol1e-4_atol1e-5": true
+    },
+    "adapter_extractor_vitb_1024/float64": {
+      "shape": {
+        "N": 2,
+        "M": 12,
+        "D": 32,
+        "shapes": [
+          [
+            64,
+            64
+          ]
+        ],
+        "Lq": 21504,
+        "P": 4
+      },
+      "forward": {
+        "max_abs": 8.881784197001252e-16,
+        "mean_abs": 2.1748668802523843e-17,
+        "max_rel": 1.333468086994684e-10,
+        "ref_max_abs": 2.802673833137657
+      },
+      "grad_value": {
+        "max_abs": 2.6645352591003757e-15,
+        "mean_abs": 1.121222377545777e-16,
+        "max_rel": 1.249000902703301e-10,
+        "ref_max_abs": 4.658496154377932
+      },
+      "grad_sampling_locations": {
+        "max_abs": 1.5916157281026244e-12,
+        "mean_abs": 2.524302851507101e-14,
+        "max_rel": 1.2570210447522903e-08,
+        "ref_max_abs": 1440.6828583934507
+      },
+      "grad_attention_weights": {
+        "max_abs": 1.4210854715202004e-14,
+        "mean_abs": 5.174730207782611e-16,
+        "max_rel": 3.28171797579625e-10,
+        "ref_max_abs": 26.686921492811905
+      },
+      "allclose_fwd_default": true
+    },
+    "small_odd/float32": {
+      "shape": {
+        "N": 3,
+        "M": 2,
+        "D": 5,
+        "shapes": [
+          [
+            6,
+            4
+          ],
+          [
+            3,
+            2
+          ],
+          [
+            7,
+            9
+          ]
+        ],
+        "Lq": 11,
+        "P": 3
+      },
+      "forward": {
+        "max_abs": 1.1920928955078125e-07,
+        "mean_abs": 2.0840811743028098e-08,
+        "max_rel": 6.44465908408165e-05,
+        "ref_max_abs": 0.8429326415061951
+      },
+      "grad_value": {
+        "max_abs": 2.384185791015625e-07,
+        "mean_abs": 3.918231072930212e-09,
+        "max_rel": 0.00028760425630025566,
+        "ref_max_abs": 1.2808243036270142
+      },
+      "grad_sampling_locations": {
+        "max_abs": 3.814697265625e-06,
+        "mean_abs": 1.1023651325103856e-07,
+        "max_rel": 0.0001499193167546764,
+        "ref_max_abs": 23.478435516357422
+      },
+      "grad_attention_weights": {
+        "max_abs": 1.8477439880371094e-06,
+        "mean_abs": 9.458097594006176e-08,
+        "max_rel": 2.3924732886371203e-05,
+        "ref_max_abs": 8.251422882080078
+      },
+      "allclose_fwd_rtol1e-4_atol1e-5": true
+    },
+    "small_odd/float64": {
+      "shape": {
+        "N": 3,
+        "M": 2,
+        "D": 5,
+        "shapes": [
+          [
+            6,
+            4
+          ],
+          [
+            3,
+            2
+          ],
+          [
+            7,
+            9
+          ]
+        ],
+        "Lq": 11,
+        "P": 3
+      },
+      "forward": {
+        "max_abs": 2.220446049250313e-16,
+        "mean_abs": 2.3603409841122304e-17,
+        "max_rel": 1.2166738372061644e-14,
+        "ref_max_abs": 0.8429326375057828
+      },
+      "grad_value": {
+        "max_abs": 2.220446049250313e-16,
+        "mean_abs": 2.33880672942796e-18,
+        "max_rel": 6.700144655307164e-14,
+        "ref_max_abs": 1.280824188836379
+      },
+      "grad_sampling_locations": {
+        "max_abs": 3.552713678800501e-15,
+        "mean_abs": 1.2978687146380249e-16,
+        "max_rel": 2.430980272449674e-13,
+        "ref_max_abs": 23.478435253648485
+      },
+      "grad_attention_weights": {
+        "max_abs": 8.881784197001252e-16,
+        "mean_abs": 8.182404436013161e-17,
+        "max_rel": 3.6701745537620375e-14,
+        "ref_max_abs": 8.251422322259216
+      },
+      "allclose_fwd_default": true
+    }
+  },
+  "gradcheck_float64_official_test_shape": {
+    "value+loc+weights": {
+      "passed": true
+    },
+    "value": {
+      "passed": true
+    },
+    "sampling_locations": {
+      "passed": true
+    },
+    "attention_weights": {
+      "passed": true
+    }
+  },
+  "gradcheck_float64_N2M3D4L2P3": {
+    "passed": true
+  },
+  "bf16": {
+    "raw_kernel_all_bf16": {
+      "accepted": false,
+      "error": "\"ms_deform_attn_forward_cuda\" not implemented for 'BFloat16'"
+    },
+    "raw_kernel_all_fp16": {
+      "accepted": false,
+      "error": "\"ms_deform_attn_forward_cuda\" not implemented for 'Half'"
+    },
+    "raw_kernel_value_bf16_loc_w_fp32": {
+      "accepted": false,
+      "error": "\"ms_deform_attn_forward_cuda\" not implemented for 'BFloat16'"
+    },
+    "raw_kernel_value_fp32_loc_bf16": {
+      "accepted": false,
+      "error": "expected scalar type Float but found BFloat16"
+    },
+    "official_ops_Function_under_autocast_value_bf16": {
+      "accepted": false,
+      "error": "\"ms_deform_attn_forward_cuda\" not implemented for 'BFloat16'"
+    },
+    "fp32_cast_wrapper_under_autocast_value_bf16": {
+      "accepted": true,
+      "output_dtype": "bfloat16"
+    },
+    "upstream_hybrid_Function_under_autocast_value_bf16": {
+      "accepted": true,
+      "output_dtype": "float32"
+    },
+    "wrapper_vs_repo_torch_path_same_bf16_inputs": {
+      "max_abs": 0.001953125,
+      "mean_abs": 1.3574668855653726e-07,
+      "max_rel": 0.06122449040412903,
+      "ref_max_abs": 1.3203125
+    },
+    "upstream_hybrid_vs_repo_torch_path": {
+      "max_abs": 0.0038667917251586914,
+      "mean_abs": 0.00027364405104890466,
+      "max_rel": 0.003901958465576172,
+      "ref_max_abs": 1.3203125
+    },
+    "wrapper_backward_grad_dtypes": {
+      "value": "torch.bfloat16",
+      "loc": "torch.float32",
+      "weights": "torch.float32"
+    }
+  },
+  "op_level_perf": {
+    "cuda": {
+      "fwd_bwd_ms": 1000.8502351120114,
+      "peak_extra_GiB": 1.1640625,
+      "saved_for_backward_GiB_after_forward": -0.01171875
+    },
+    "torch": {
+      "fwd_bwd_ms": 901.7892705276608,
+      "peak_extra_GiB": 9.3818359375,
+      "saved_for_backward_GiB_after_forward": 3.072265625
+    },
+    "shape": "N=2 (images), M=8, D=32, 4 levels 256/128/64/32, Lq=87040, P=4 (one pixel-decoder encoder layer at 1024x1024)",
+    "INVALID_NOTE": "Superseded: this timing loop generated the upstream gradient with a CPU torch.randn of 44.6M elements inside every iteration, which dominated the time; also used a 4-level 87040-query stress shape that the model does not use (pixel decoder uses 3 levels). See task1_op_verification_extra.json for valid op-level numbers."
+  }
+}

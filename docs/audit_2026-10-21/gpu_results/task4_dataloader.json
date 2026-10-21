@@ -1,0 +1,79 @@
+{
+  "root": "/home/nas_1/wjj/moon/data/LuSNAR/Moon_1",
+  "files_in_scene": 1094,
+  "storage": "/home/disk02 on /dev/sda (rotational HDD)",
+  "cpu_cores": 128,
+  "batch_size": 7,
+  "note": "warm = second pass over the same files (page cache).",
+  "single_process_ms_per_sample_first_pass": {
+    "decode_rgb": 30.97,
+    "decode_label": 97.93,
+    "augment": 8.67,
+    "normalize_to_tensor": 20.71
+  },
+  "single_process_ms_per_sample_warm": {
+    "decode_rgb": 30.7,
+    "decode_label": 97.59,
+    "augment": 8.26,
+    "normalize_to_tensor": 20.4,
+    "total": 156.95980789605528
+  },
+  "loader": {
+    "1": {
+      "first_pass": {
+        "images": 210,
+        "seconds": 35.010263074189425,
+        "images_per_second": 5.998241131607436,
+        "time_to_first_batch_s": 1.4698838954791427
+      },
+      "warm": {
+        "images": 210,
+        "seconds": 36.88099349942058,
+        "images_per_second": 5.693989778320348,
+        "time_to_first_batch_s": 1.7079043732956052
+      }
+    },
+    "4": {
+      "first_pass": {
+        "images": 210,
+        "seconds": 9.964907176792622,
+        "images_per_second": 21.073954455799772,
+        "time_to_first_batch_s": 1.5860736481845379
+      },
+      "warm": {
+        "images": 210,
+        "seconds": 9.861397333443165,
+        "images_per_second": 21.295156548233034,
+        "time_to_first_batch_s": 1.4383474374189973
+      }
+    },
+    "8": {
+      "first_pass": {
+        "images": 210,
+        "seconds": 6.382182418368757,
+        "images_per_second": 32.90410493369674,
+        "time_to_first_batch_s": 1.790772999636829
+      },
+      "warm": {
+        "images": 210,
+        "seconds": 5.875261344946921,
+        "images_per_second": 35.74309084660764,
+        "time_to_first_batch_s": 1.722260913811624
+      }
+    },
+    "16": {
+      "first_pass": {
+        "images": 210,
+        "seconds": 3.656468730419874,
+        "images_per_second": 57.43246161328052,
+        "time_to_first_batch_s": 1.9119674134999514
+      },
+      "warm": {
+        "images": 210,
+        "seconds": 3.2265675691887736,
+        "images_per_second": 65.08464350951076,
+        "time_to_first_batch_s": 1.5115060154348612
+      }
+    }
+  }
+}

@@ -1,0 +1,149 @@
+{
+  "tag": "smoke_cuda_b2",
+  "args": {
+    "attn": "cuda",
+    "batch": 2,
+    "accum": 1,
+    "warmup": 1,
+    "steps": 2,
+    "size": 1024,
+    "ckpt": 1,
+    "freeze": 1,
+    "backbone": "vitb16",
+    "load_backbone": 1,
+    "num_queries": null,
+    "num_points": null,
+    "encoder_layers": null,
+    "breakdown": 1,
+    "tag": "smoke_cuda_b2",
+    "out": "/home/vrlab/.cache/claude-workbench/claude-vrlab-132-nat-moon-moon/moonseg_perf/results/train_smoke_cuda_b2.json"
+  },
+  "world_size": 1,
+  "torch": "2.7.1+cu126",
+  "device_name": "NVIDIA RTX 6000 Ada Generation",
+  "physical_gpus": "0",
+  "device_total_GiB": 47.37200927734375,
+  "model_settings": {
+    "backbone": "vitb16",
+    "backbone_weights": "ckpts/dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth",
+    "freeze_backbone": true,
+    "num_classes": 5,
+    "num_queries": 100,
+    "hidden_dim": 256,
+    "decoder_layers": 6,
+    "encoder_layers": 6,
+    "gradient_checkpointing": true
+  },
+  "loss_settings": {
+    "ce_weight": 2.0,
+    "mask_weight": 5.0,
+    "dice_weight": 5.0,
+    "no_object_weight": 0.1,
+    "num_points": 12544
+  },
+  "status": "passed",
+  "phase": null,
+  "deformable_attention_impl": "msda_impl.CudaDeformableAttention",
+  "parameters_total": 114357222,
+  "parameters_trainable": 28687590,
+  "parameters_by_part": {
+    "vit_backbone": {
+      "total": 85669632,
+      "trainable": 0
+    },
+    "pixel_decoder": {
+      "total": 8991168,
+      "trainable": 8991168
+    },
+    "transformer_decoder": {
+      "total": 9723910,
+      "trainable": 9723910
+    },
+    "vit_adapter_excluding_vit": {
+      "total": 9972512,
+      "trainable": 9972512
+    }
+  },
+  "optimizer_groups": [
+    {
+      "n_params": 28568640,
+      "lr": 0.0001,
+      "weight_decay": 0.05
+    },
+    {
+      "n_params": 118950,
+      "lr": 0.0001,
+      "weight_decay": 0.0
+    }
+  ],
+  "memory_after_build_GiB": 0.4377608299255371,
+  "steps": [
+    {
+      "step": 1,
+      "seconds": 1.269868872128427,
+      "phases": {
+        "data": 0.015222913585603237,
+        "forward": 0.6782545419409871,
+        "loss": 0.13991210144013166,
+        "backward": 0.3537504496052861,
+        "optimizer": 0.0816362202167511
+      },
+      "losses": [
+        78.70053100585938
+      ],
+      "grad_norm": 481.4106140136719,
+      "peak_allocated_GiB": 9.035515308380127,
+      "peak_reserved_GiB": 10.53515625
+    },
+    {
+      "step": 2,
+      "seconds": 0.35281503945589066,
+      "phases": {
+        "data": 0.00022636819630861282,
+        "forward": 0.12064139265567064,
+        "loss": 0.030943501740694046,
+        "backward": 0.19341661781072617,
+        "optimizer": 0.006902522407472134
+      },
+      "losses": [
+        78.78718566894531
+      ],
+      "grad_norm": 483.2510986328125,
+      "peak_allocated_GiB": 9.255193710327148,
+      "peak_reserved_GiB": 10.5625
+    },
+    {
+      "step": 3,
+      "seconds": 0.3419462013989687,
+      "phases": {
+        "data": 0.00015619024634361267,
+        "forward": 0.1215724078938365,
+        "loss": 0.026801305823028088,
+        "backward": 0.186008227057755,
+        "optimizer": 0.006759230047464371
+      },
+      "losses": [
+        77.73806762695312
+      ],
+      "grad_norm": 462.6668701171875,
+      "peak_allocated_GiB": 9.255193710327148,
+      "peak_reserved_GiB": 10.5625
+    }
+  ],
+  "images_per_optimizer_step": 2,
+  "mean_step_seconds": 0.3473806204274297,
+  "images_per_second_total": 5.7573735619998825,
+  "images_per_second_per_gpu": 5.7573735619998825,
+  "phase_mean_seconds_per_microbatch": {
+    "data": 0.00019127922132611275,
+    "forward": 0.12110690027475357,
+    "loss": 0.028872403781861067,
+    "backward": 0.18971242243424058,
+    "optimizer": 0.006830876227468252
+  },
+  "peak_allocated_GiB": 9.255193710327148,
+  "peak_reserved_GiB": 10.5625,
+  "driver_used_GiB_at_end": 11.10296630859375,
+  "driver_free_GiB_at_end": 36.26904296875,
+  "all_losses_finite": true
+}

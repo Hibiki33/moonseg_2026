@@ -1,0 +1,124 @@
+{
+  "dataset_images": 8002,
+  "epochs": 80,
+  "tail_policy": "strict (drop incomplete effective batch), as train.py with min_effective_batch=65",
+  "excludes": "validation, checkpoint writes (~5-10 s/epoch), real dataloader stalls (none expected, see task4)",
+  "rows": [
+    {
+      "config": "a 基线 torch, ckpt on, frozen, b7×2×a5",
+      "source": "measured 2-GPU",
+      "img_s": 8.289356635795464,
+      "images_per_epoch": 7980,
+      "epoch_s": 962.6802598334849,
+      "hours_80_epochs": 21.39289466296633
+    },
+    {
+      "config": "b CUDA op, ckpt on, frozen, b7×2×a5",
+      "source": "measured 2-GPU (phase-sync on, ~1% pessimistic)",
+      "img_s": 10.819339890733078,
+      "images_per_epoch": 7980,
+      "epoch_s": 737.5681030998006,
+      "hours_80_epochs": 16.390402291106682
+    },
+    {
+      "config": "b CUDA op, ckpt on, frozen, b10×2×a4 (eff 80)",
+      "source": "measured 2-GPU (phase-sync on)",
+      "img_s": 10.591256173976117,
+      "images_per_epoch": 8000,
+      "epoch_s": 755.3400530200452,
+      "hours_80_epochs": 16.78533451155656
+    },
+    {
+      "config": "c CUDA op, ckpt OFF, frozen, b7×2×a5",
+      "source": "measured 2-GPU",
+      "img_s": 11.716225227327543,
+      "images_per_epoch": 7980,
+      "epoch_s": 681.1067425869405,
+      "hours_80_epochs": 15.1357053908209
+    },
+    {
+      "config": "d CUDA op, ckpt on, UNFROZEN, b7×2×a5",
+      "source": "measured 2-GPU",
+      "img_s": 8.807723987201907,
+      "images_per_epoch": 7980,
+      "epoch_s": 906.0229420898481,
+      "hours_80_epochs": 20.13384315755218
+    },
+    {
+      "config": "e ViT-L frozen CUDA, b7×2×a5 (est. from 1-GPU)",
+      "source": "estimate = 2 x single-GPU x 0.99",
+      "img_s": 8.255023214246071,
+      "images_per_epoch": 7980,
+      "epoch_s": 966.6841379959476,
+      "hours_80_epochs": 21.481869733243283
+    },
+    {
+      "config": "e ViT-L UNFROZEN CUDA, b4×2×a9 (eff 72, est. from 1-GPU)",
+      "source": "estimate = 2 x single-GPU x 0.99",
+      "img_s": 5.601133433287034,
+      "images_per_epoch": 7992,
+      "epoch_s": 1426.8540635908191,
+      "hours_80_epochs": 31.707868079795983
+    }
+  ],
+  "a6000_over_ada_speed_ratio": 0.6568847138710918,
+  "four_gpu_estimates": [
+    {
+      "config": "4 GPU, CUDA op ckpt OFF b7×4×a3 (eff 84)",
+      "hardware": "4x Ada (hypothetical, host has only 2)",
+      "img_s": 22.902575944909568,
+      "images_per_epoch": 7980,
+      "hours_80_epochs": 7.74294270478113
+    },
+    {
+      "config": "4 GPU, CUDA op ckpt OFF b7×4×a3 (eff 84)",
+      "hardware": "2 Ada + 2 A6000 / 4 A6000 (paced by A6000)",
+      "img_s": 15.04435204648287,
+      "images_per_epoch": 7980,
+      "hours_80_epochs": 11.787369292171745
+    },
+    {
+      "config": "4 GPU, CUDA op ckpt on b7×4×a3 (eff 84)",
+      "hardware": "4x Ada (hypothetical, host has only 2)",
+      "img_s": 20.951059506731355,
+      "images_per_epoch": 7980,
+      "hours_80_epochs": 8.464170190359967
+    },
+    {
+      "config": "4 GPU, CUDA op ckpt on b7×4×a3 (eff 84)",
+      "hardware": "2 Ada + 2 A6000 / 4 A6000 (paced by A6000)",
+      "img_s": 13.762430729375446,
+      "images_per_epoch": 7980,
+      "hours_80_epochs": 12.885320683563645
+    },
+    {
+      "config": "4 GPU, torch baseline b7×4×a3 (eff 84)",
+      "hardware": "4x Ada (hypothetical, host has only 2)",
+      "img_s": 16.434266091556655,
+      "images_per_epoch": 7980,
+      "hours_80_epochs": 10.790462582593872
+    },
+    {
+      "config": "4 GPU, torch baseline b7×4×a3 (eff 84)",
+      "hardware": "2 Ada + 2 A6000 / 4 A6000 (paced by A6000)",
+      "img_s": 10.79541817923358,
+      "images_per_epoch": 7980,
+      "hours_80_epochs": 16.426722002715703
+    }
+  ],
+  "four_gpu_note": "torch baseline b7 needs 41.3 GiB alloc / 45-46.5 GiB reserved: does NOT fit a 46068 MiB A6000 (44.99 GiB), marginal on 49140 MiB A6000; CUDA-op configs fit all cards. A6000 ratio from one b9 run that may be allocator-limited.",
+  "dev_validation_per_epoch_s_2gpu": {
+    "torch": 69.740717901662,
+    "cuda": 50.173167232540436
+  },
+  "test_5004_seconds_2gpu": {
+    "torch": {
+      "single_scale": 218.25050180107354,
+      "tta_3scales_x_flip": 1394.1480899741873
+    },
+    "cuda": {
+      "single_scale": 157.014714716468,
+      "tta_3scales_x_flip": 1004.1513027671725
+    }
+  }
+}

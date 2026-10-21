@@ -1,0 +1,319 @@
+{
+  "tag": "abl_pts4096_b7",
+  "args": {
+    "attn": "cuda",
+    "batch": 7,
+    "accum": 1,
+    "warmup": 3,
+    "steps": 10,
+    "size": 1024,
+    "ckpt": 1,
+    "freeze": 1,
+    "backbone": "vitb16",
+    "load_backbone": 1,
+    "num_queries": null,
+    "num_points": 4096,
+    "encoder_layers": null,
+    "breakdown": 1,
+    "tag": "abl_pts4096_b7",
+    "out": "/home/vrlab/.cache/claude-workbench/claude-vrlab-132-nat-moon-moon/moonseg_perf/results/train_abl_pts4096_b7.json"
+  },
+  "world_size": 1,
+  "torch": "2.7.1+cu126",
+  "device_name": "NVIDIA RTX 6000 Ada Generation",
+  "physical_gpus": "0",
+  "device_total_GiB": 47.37200927734375,
+  "model_settings": {
+    "backbone": "vitb16",
+    "backbone_weights": "ckpts/dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth",
+    "freeze_backbone": true,
+    "num_classes": 5,
+    "num_queries": 100,
+    "hidden_dim": 256,
+    "decoder_layers": 6,
+    "encoder_layers": 6,
+    "gradient_checkpointing": true
+  },
+  "loss_settings": {
+    "ce_weight": 2.0,
+    "mask_weight": 5.0,
+    "dice_weight": 5.0,
+    "no_object_weight": 0.1,
+    "num_points": 4096
+  },
+  "status": "passed",
+  "phase": null,
+  "deformable_attention_impl": "msda_impl.CudaDeformableAttention",
+  "parameters_total": 114357222,
+  "parameters_trainable": 28687590,
+  "parameters_by_part": {
+    "vit_backbone": {
+      "total": 85669632,
+      "trainable": 0
+    },
+    "pixel_decoder": {
+      "total": 8991168,
+      "trainable": 8991168
+    },
+    "transformer_decoder": {
+      "total": 9723910,
+      "trainable": 9723910
+    },
+    "vit_adapter_excluding_vit": {
+      "total": 9972512,
+      "trainable": 9972512
+    }
+  },
+  "optimizer_groups": [
+    {
+      "n_params": 28568640,
+      "lr": 0.0001,
+      "weight_decay": 0.05
+    },
+    {
+      "n_params": 118950,
+      "lr": 0.0001,
+      "weight_decay": 0.0
+    }
+  ],
+  "memory_after_build_GiB": 0.4377608299255371,
+  "steps": [
+    {
+      "step": 1,
+      "seconds": 2.6025043288245797,
+      "phases": {
+        "data": 0.017965327948331833,
+        "forward": 1.0404112506657839,
+        "loss": 0.1579677639529109,
+        "backward": 0.8351935492828488,
+        "optimizer": 0.5479407291859388
+      },
+      "losses": [
+        74.10916137695312
+      ],
+      "grad_norm": 283.3826904296875,
+      "peak_allocated_GiB": 30.418333530426025,
+      "peak_reserved_GiB": 35.41796875
+    },
+    {
+      "step": 2,
+      "seconds": 1.864490075968206,
+      "phases": {
+        "data": 0.00035969074815511703,
+        "forward": 1.0250825947150588,
+        "loss": 0.12321441527456045,
+        "backward": 0.7075337832793593,
+        "optimizer": 0.007420163601636887
+      },
+      "losses": [
+        74.03517150878906
+      ],
+      "grad_norm": 281.0438232421875,
+      "peak_allocated_GiB": 30.638020038604736,
+      "peak_reserved_GiB": 35.4765625
+    },
+    {
+      "step": 3,
+      "seconds": 1.2532959021627903,
+      "phases": {
+        "data": 0.00021896697580814362,
+        "forward": 0.4644322833046317,
+        "loss": 0.08411406446248293,
+        "backward": 0.6949624549597502,
+        "optimizer": 0.008309140801429749
+      },
+      "losses": [
+        73.47531127929688
+      ],
+      "grad_norm": 264.4386901855469,
+      "peak_allocated_GiB": 30.638020038604736,
+      "peak_reserved_GiB": 35.4765625
+    },
+    {
+      "step": 4,
+      "seconds": 1.2588195651769638,
+      "phases": {
+        "data": 0.0002285996451973915,
+        "forward": 0.466126455925405,
+        "loss": 0.08588165044784546,
+        "backward": 0.6978154610842466,
+        "optimizer": 0.007697879336774349
+      },
+      "losses": [
+        72.31147766113281
+      ],
+      "grad_norm": 226.0729522705078,
+      "peak_allocated_GiB": 30.638020038604736,
+      "peak_reserved_GiB": 35.4765625
+    },
+    {
+      "step": 5,
+      "seconds": 1.2577656097710133,
+      "phases": {
+        "data": 0.00022606458514928818,
+        "forward": 0.46878472715616226,
+        "loss": 0.08464113902300596,
+        "backward": 0.6948146633803844,
+        "optimizer": 0.008013098500669003
+      },
+      "losses": [
+        70.90703582763672
+      ],
+      "grad_norm": 175.9485321044922,
+      "peak_allocated_GiB": 30.638020038604736,
+      "peak_reserved_GiB": 35.4765625
+    },
+    {
+      "step": 6,
+      "seconds": 1.2608434511348605,
+      "phases": {
+        "data": 0.00022420566529035568,
+        "forward": 0.46837636828422546,
+        "loss": 0.08619918767362833,
+        "backward": 0.6970589933916926,
+        "optimizer": 0.007829463109374046
+      },
+      "losses": [
+        69.68251037597656
+      ],
+      "grad_norm": 141.87562561035156,
+      "peak_allocated_GiB": 30.638020038604736,
+      "peak_reserved_GiB": 35.4765625
+    },
+    {
+      "step": 7,
+      "seconds": 1.2730301888659596,
+      "phases": {
+        "data": 0.00022326968610286713,
+        "forward": 0.46985219698399305,
+        "loss": 0.08853324688971043,
+        "backward": 0.7057076701894403,
+        "optimizer": 0.007723195478320122
+      },
+      "losses": [
+        69.18080139160156
+      ],
+      "grad_norm": 169.50201416015625,
+      "peak_allocated_GiB": 30.638020038604736,
+      "peak_reserved_GiB": 35.4765625
+    },
+    {
+      "step": 8,
+      "seconds": 1.2588385436683893,
+      "phases": {
+        "data": 0.00022172369062900543,
+        "forward": 0.4659844171255827,
+        "loss": 0.08514041267335415,
+        "backward": 0.6987417610362172,
+        "optimizer": 0.007642608135938644
+      },
+      "losses": [
+        68.43755340576172
+      ],
+      "grad_norm": 180.90455627441406,
+      "peak_allocated_GiB": 30.638020038604736,
+      "peak_reserved_GiB": 35.4765625
+    },
+    {
+      "step": 9,
+      "seconds": 1.2639802731573582,
+      "phases": {
+        "data": 0.0002198927104473114,
+        "forward": 0.4678926831111312,
+        "loss": 0.08487853407859802,
+        "backward": 0.7025444656610489,
+        "optimizer": 0.007503434084355831
+      },
+      "losses": [
+        66.97428894042969
+      ],
+      "grad_norm": 164.27001953125,
+      "peak_allocated_GiB": 30.638020038604736,
+      "peak_reserved_GiB": 35.4765625
+    },
+    {
+      "step": 10,
+      "seconds": 1.2706373250111938,
+      "phases": {
+        "data": 0.00022366177290678024,
+        "forward": 0.4686403051018715,
+        "loss": 0.08464867435395718,
+        "backward": 0.7087894231081009,
+        "optimizer": 0.007422398775815964
+      },
+      "losses": [
+        65.32880401611328
+      ],
+      "grad_norm": 114.51297760009766,
+      "peak_allocated_GiB": 30.638020038604736,
+      "peak_reserved_GiB": 35.4765625
+    },
+    {
+      "step": 11,
+      "seconds": 1.2649065190926194,
+      "phases": {
+        "data": 0.00022347737103700638,
+        "forward": 0.4672660296782851,
+        "loss": 0.08764226641505957,
+        "backward": 0.7006493592634797,
+        "optimizer": 0.008046204224228859
+      },
+      "losses": [
+        63.94928741455078
+      ],
+      "grad_norm": 77.50501251220703,
+      "peak_allocated_GiB": 30.638020038604736,
+      "peak_reserved_GiB": 35.4765625
+    },
+    {
+      "step": 12,
+      "seconds": 1.2715031756088138,
+      "phases": {
+        "data": 0.000250423327088356,
+        "forward": 0.47060180082917213,
+        "loss": 0.08450991101562977,
+        "backward": 0.70792630687356,
+        "optimizer": 0.007286921143531799
+      },
+      "losses": [
+        63.58061981201172
+      ],
+      "grad_norm": 123.17109680175781,
+      "peak_allocated_GiB": 30.638020038604736,
+      "peak_reserved_GiB": 35.4765625
+    },
+    {
+      "step": 13,
+      "seconds": 1.2651993222534657,
+      "phases": {
+        "data": 0.00021993927657604218,
+        "forward": 0.46859999001026154,
+        "loss": 0.08442762400954962,
+        "backward": 0.7034319899976254,
+        "optimizer": 0.007486266084015369
+      },
+      "losses": [
+        63.057777404785156
+      ],
+      "grad_norm": 100.08126068115234,
+      "peak_allocated_GiB": 30.638020038604736,
+      "peak_reserved_GiB": 35.4765625
+    }
+  ],
+  "images_per_optimizer_step": 7,
+  "mean_step_seconds": 1.2645523973740638,
+  "images_per_second_total": 5.535555517142679,
+  "images_per_second_per_gpu": 5.535555517142679,
+  "phase_mean_seconds_per_microbatch": {
+    "data": 0.00022612577304244043,
+    "forward": 0.468212497420609,
+    "loss": 0.08565026465803385,
+    "backward": 0.7017480093985796,
+    "optimizer": 0.0076651468873023985
+  },
+  "peak_allocated_GiB": 30.638020038604736,
+  "peak_reserved_GiB": 35.4765625,
+  "driver_used_GiB_at_end": 36.01702880859375,
+  "driver_free_GiB_at_end": 11.35498046875,
+  "all_losses_finite": true
+}

@@ -1,0 +1,45 @@
+{
+  "attn": "cuda",
+  "impl": "CudaDeformableAttention",
+  "device": "NVIDIA RTX 6000 Ada Generation",
+  "amp": "bf16",
+  "size": 1024,
+  "results": {
+    "batch1_predict_scores_single_scale": {
+      "status": "passed",
+      "images_per_iter": 1,
+      "iters": 20,
+      "seconds_per_iter": 0.06275568134151399,
+      "images_per_second": 15.934812253221166,
+      "peak_allocated_GiB": 1.3628010749816895,
+      "peak_reserved_GiB": 2.041015625
+    },
+    "batch1_model_forward_plus_scores": {
+      "status": "passed",
+      "images_per_iter": 1,
+      "iters": 20,
+      "seconds_per_iter": 0.062493437388911846,
+      "images_per_second": 16.001680204863064,
+      "peak_allocated_GiB": 1.3208088874816895,
+      "peak_reserved_GiB": 2.0
+    },
+    "batch8_model_forward_plus_scores": {
+      "status": "passed",
+      "images_per_iter": 8,
+      "iters": 5,
+      "seconds_per_iter": 0.5235853020101786,
+      "images_per_second": 15.279267712989542,
+      "peak_allocated_GiB": 6.558828830718994,
+      "peak_reserved_GiB": 11.51171875
+    },
+    "batch1_TTA_scales_0.75_1.0_1.25_x_flip (6 forwards)": {
+      "status": "passed",
+      "images_per_iter": 1,
+      "iters": 10,
+      "seconds_per_iter": 0.4013394495472312,
+      "images_per_second": 2.491656379974967,
+      "peak_allocated_GiB": 1.8452725410461426,
+      "peak_reserved_GiB": 3.18359375
+    }
+  }
+}
