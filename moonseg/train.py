@@ -6,6 +6,7 @@ import contextlib
 import json
 import math
 import time
+from itertools import islice
 from pathlib import Path
 
 import torch
@@ -65,6 +66,34 @@ def _gather_rng(world_size):
     return result
 
 
+def training_batch_plan(dataset_size, world_size, settings):
+    """Count complete optimizer updates when a minimum effective batch is required."""
+    batch_size = int(settings.get("batch_size", 1))
+    accumulation = int(settings.get("accumulation_steps", 1))
+    minimum = int(settings.get("min_effective_batch", 0))
+    if batch_size < 1 or accumulation < 1 or minimum < 0 or world_size < 1:
+        raise ValueError("batch_size, accumulation_steps and world_size must be positive; min_effective_batch cannot be negative")
+    effective = batch_size * world_size * accumulation
+    if effective < minimum:
+        raise ValueError(f"Effective batch {effective} is below train.min_effective_batch={minimum}; "
+                         "increase batch/accumulation or launch the configured number of GPUs")
+    strict = minimum > 0
+    samples_per_rank = dataset_size // world_size if strict else math.ceil(dataset_size / world_size)
+    loader_batches = samples_per_rank // batch_size if strict else math.ceil(samples_per_rank / batch_size)
+    updates = loader_batches // accumulation if strict else math.ceil(loader_batches / accumulation)
+    if updates < 1:
+        raise ValueError(f"Training split with {dataset_size} samples cannot form one complete "
+                         f"effective batch of {effective} under the current tail policy")
+    batches = updates * accumulation if strict else loader_batches
+    return {"batch_per_gpu": batch_size, "world_size": world_size, "accumulation_steps": accumulation,
+            "effective_batch": effective, "minimum_effective_batch": minimum,
+            "drop_incomplete_updates": strict, "microbatches_per_epoch": batches,
+            "optimizer_steps_per_epoch": updates,
+            "samples_used_per_epoch": updates * effective if strict else samples_per_rank * world_size,
+            "dropped_samples_per_epoch": dataset_size - updates * effective if strict else 0,
+            "tail_policy": "drop incomplete shuffled optimizer batch" if strict else "allow partial final update"}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", required=True)
@@ -87,23 +116,23 @@ def main():
             raise ValueError("Training and local validation manifests overlap")
         if set(config["data"].get("train_scenes", [])) & set(config["data"].get("val_scenes", [5])):
             raise ValueError("Scene-level train/validation split must be disjoint")
+    batch_plan = training_batch_plan(len(train_dataset), world_size, settings)
+    batch_size = batch_plan["batch_per_gpu"]
+    accumulation = batch_plan["accumulation_steps"]
     sampler = DistributedSampler(train_dataset, num_replicas=world_size, rank=rank,
-                                 shuffle=True, seed=seed, drop_last=False)
-    batch_size = int(settings.get("batch_size", 1))
-    accumulation = int(settings.get("accumulation_steps", 1))
-    if batch_size < 1 or accumulation < 1:
-        raise ValueError("batch_size and accumulation_steps must be positive")
+                                 shuffle=True, seed=seed, drop_last=batch_plan["drop_incomplete_updates"])
     workers = int(settings.get("num_workers", 4))
     loader = DataLoader(train_dataset, batch_size=batch_size, sampler=sampler,
                         num_workers=workers, collate_fn=collate_samples, pin_memory=device.type == "cuda",
-                        worker_init_fn=seed_worker, persistent_workers=False)
+                        worker_init_fn=seed_worker, persistent_workers=False,
+                        drop_last=batch_plan["drop_incomplete_updates"])
     resume_path = args.resume or settings.get("resume")
     from .models import build_criterion, build_model
     model = build_model(config, load_backbone=not bool(resume_path)).to(device)
     criterion = build_criterion(config).to(device)
     optimizer = make_optimizer(model, settings)
     epochs = int(settings.get("epochs", 80))
-    total_steps = epochs * math.ceil(len(loader) / accumulation)
+    total_steps = epochs * batch_plan["optimizer_steps_per_epoch"]
     scheduler = make_scheduler(optimizer, total_steps, settings)
     amp = settings.get("amp", "bf16")
     scaler = torch.amp.GradScaler("cuda", enabled=device.type == "cuda" and amp == "fp16")
@@ -114,6 +143,8 @@ def main():
             raise ValueError("Epoch-boundary resume requires the checkpoint's WORLD_SIZE")
         if checkpoint["total_steps"] != total_steps:
             raise ValueError("Epoch-boundary resume requires unchanged epochs, batch size, accumulation and dataset length")
+        if checkpoint.get("batch_plan", batch_plan) != batch_plan:
+            raise ValueError("Epoch-boundary resume requires an unchanged effective batch and incomplete-update policy")
         for section in ("model", "loss", "data"):
             if checkpoint["config"].get(section) != config.get(section):
                 raise ValueError(f"Epoch-boundary resume requires unchanged {section} configuration")
@@ -140,23 +171,26 @@ def main():
     if rank == 0:
         output.mkdir(parents=True, exist_ok=True)
         write_json(config, output / "resolved_config.json")
+        write_json(batch_plan, output / "batch_plan.json")
         write_json({**data_snapshot,
                     "note": "Only explicit official allowlist samples admitted; public discovery grants no training permission."},
                    output / "data_provenance.json")
         print(f"Training {len(train_dataset)} official samples; world_size={world_size}; "
               f"effective_batch={batch_size * world_size * accumulation}; device={device}; amp={amp}", flush=True)
+        print(json.dumps(batch_plan), flush=True)
     for epoch in range(start_epoch, epochs):
         sampler.set_epoch(epoch)
         model.train()
         optimizer.zero_grad(set_to_none=True)
         epoch_loss = torch.zeros(2, device=device, dtype=torch.float64)
         started = time.monotonic()
-        for index, batch in enumerate(loader):
+        batches_per_epoch = batch_plan["microbatches_per_epoch"]
+        for index, batch in enumerate(islice(loader, batches_per_epoch)):
             images = batch["images"].to(device, non_blocking=True)
             targets = batch["targets"].to(device, non_blocking=True)
             group_start = (index // accumulation) * accumulation
-            group_size = min(accumulation, len(loader) - group_start)
-            update = (index + 1) % accumulation == 0 or index + 1 == len(loader)
+            group_size = min(accumulation, batches_per_epoch - group_start)
+            update = (index + 1) % accumulation == 0 or index + 1 == batches_per_epoch
             sync = contextlib.nullcontext() if update or world_size == 1 else model.no_sync()
             with sync:
                 with amp_context(device, amp):
@@ -206,7 +240,7 @@ def main():
                      "scheduler": scheduler.state_dict(), "scaler": scaler.state_dict(),
                      "rng_states": states, "epoch": epoch, "global_step": global_step,
                      "best_miou": best_miou, "world_size": world_size, "total_steps": total_steps,
-                     "config": config, "sampler_epoch": epoch, "data_snapshot": data_snapshot,
+                     "config": config, "sampler_epoch": epoch, "data_snapshot": data_snapshot, "batch_plan": batch_plan,
                      "resume_scope": "Complete state at epoch boundary; use same config/world size. CUDA grid_sample backward is nondeterministic; bitwise replay is not guaranteed."}
             atomic_torch_save(state, output / "last.pt")
             if improved:

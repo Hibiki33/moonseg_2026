@@ -5,7 +5,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from PIL import Image, ImageEnhance, ImageOps
+from PIL import Image, ImageOps
 from torch.utils.data import Dataset
 
 from .labels import decode_label
@@ -25,11 +25,35 @@ class MoonDataset(Dataset):
                                      config.get("official_allowlist"), need_label=True)
         self.mean = np.asarray(config.get("mean", [0.485, 0.456, 0.406]), np.float32)
         self.std = np.asarray(config.get("std", [0.229, 0.224, 0.225]), np.float32)
+        self.train_mode = config.get("train_mode", "full_image")
         if self.training:
-            if any(int(size) <= 0 or int(size) % 32 for size in config.get("crop_size", [512, 1024])):
-                raise ValueError("Training crop dimensions must be positive multiples of 32")
-            if int(config.get("crop_attempts", 10)) < 1:
-                raise ValueError("crop_attempts must be at least 1")
+            if self.train_mode not in ("full_image", "random_resize_crop"):
+                raise ValueError("data.train_mode must be full_image or random_resize_crop")
+            size_key = "image_size" if self.train_mode == "full_image" else "crop_size"
+            size = config.get(size_key, [1024, 1024])
+            if len(size) != 2 or any(int(value) != value or value <= 0 or value % 32 for value in size):
+                raise ValueError(f"data.{size_key} must contain two positive multiples of 32 in [H,W] order")
+            if self.train_mode == "random_resize_crop":
+                if int(config.get("crop_attempts", 10)) < 1:
+                    raise ValueError("crop_attempts must be at least 1")
+                low, high = map(float, config.get("resize_range", [0.5, 2.0]))
+                if not 0 < low <= high:
+                    raise ValueError("resize_range must be positive and ordered")
+                if not 0 < float(config.get("cat_max_ratio", 0.75)) <= 1:
+                    raise ValueError("cat_max_ratio must be in (0,1]")
+            probability = float(config.get("photometric_probability", 0.5))
+            for key in ("hflip_probability", "photometric_probability",
+                        "brightness_probability", "contrast_probability"):
+                default = 0.5 if key == "hflip_probability" else probability
+                if not 0 <= float(config.get(key, default)) <= 1:
+                    raise ValueError(f"data.{key} must be in [0,1]")
+            brightness = float(config.get("brightness_delta", 16.0))
+            if not 0 <= brightness <= 255:
+                raise ValueError("brightness_delta must be in [0,255]")
+            contrast = config.get("contrast_range", [0.9, 1.1])
+            if (len(contrast) != 2 or not 0 <= float(contrast[0]) <= float(contrast[1])
+                    or not np.isfinite(contrast).all()):
+                raise ValueError("contrast_range must contain two finite, nonnegative ordered values")
 
     def __len__(self):
         return len(self.records)
@@ -50,7 +74,43 @@ class MoonDataset(Dataset):
                 "sample_id": str(record["sample_id"]), "scene": int(record["scene"])}
 
     def augment(self, image, label):
-        crop_h, crop_w = self.config.get("crop_size", [512, 1024])
+        if self.train_mode == "full_image":
+            # Keep the complete field of view. In particular, legacy crop/zoom
+            # settings cannot implicitly turn full-image training into crops.
+            height, width = map(int, self.config.get("image_size", [1024, 1024]))
+            if image.size != (width, height):
+                image = image.resize((width, height), Image.Resampling.BILINEAR)
+                label = label.resize((width, height), Image.Resampling.NEAREST)
+        else:
+            image, label = self._random_resize_crop(image, label)
+        if random.random() < float(self.config.get("hflip_probability", 0.5)):
+            image, label = ImageOps.mirror(image), ImageOps.mirror(label)
+        image = self._photometric(image)
+        return image, label
+
+    def _photometric(self, image):
+        """Brightness/contrast subset of DINOv3/MMSeg PhotoMetricDistortion.
+
+        Each operation has its own probability, without an outer random gate.
+        photometric_probability supplies the default for both operation gates;
+        brightness_probability/contrast_probability can override them separately.
+        The reduced intensity ranges are local baseline hyperparameters.
+        """
+        probability = float(self.config.get("photometric_probability", 0.5))
+        pixels = np.asarray(image)
+        if random.random() < float(self.config.get("brightness_probability", probability)):
+            delta = float(self.config.get("brightness_delta", 16.0))
+            pixels = np.clip(pixels.astype(np.float32) + random.uniform(-delta, delta),
+                             0, 255).astype(np.uint8)
+        if random.random() < float(self.config.get("contrast_probability", probability)):
+            low, high = map(float, self.config.get("contrast_range", [0.9, 1.1]))
+            pixels = np.clip(pixels.astype(np.float32) * random.uniform(low, high),
+                             0, 255).astype(np.uint8)
+        return Image.fromarray(pixels)
+
+    def _random_resize_crop(self, image, label):
+        """Optional scale jitter and class-balanced crop; never used in full_image."""
+        crop_h, crop_w = map(int, self.config.get("crop_size", [1024, 1024]))
         base_h, base_w = self.config.get("resize_size", [crop_h, crop_w])
         low, high = self.config.get("resize_range", [0.5, 2.0])
         # Preserve terrain geometry. At scale=1, the resized image covers the reference crop.
@@ -73,15 +133,6 @@ class MoonDataset(Dataset):
             if len(counts) > 1 and counts.max() / counts.sum() < maximum:
                 break
         image, label = image.crop(box), label.crop(box)
-        if random.random() < float(self.config.get("hflip_probability", 0.5)):
-            image, label = ImageOps.mirror(image), ImageOps.mirror(label)
-        # Mild photometric changes retain the geometry and strong lunar shadows.
-        if random.random() < float(self.config.get("photometric_probability", 0.5)):
-            image = ImageEnhance.Brightness(image).enhance(random.uniform(0.9, 1.1))
-            image = ImageEnhance.Contrast(image).enhance(random.uniform(0.9, 1.1))
-            gamma = random.uniform(0.9, 1.1)
-            table = [round(255 * (value / 255) ** gamma) for value in range(256)]
-            image = image.point(table * 3)
         return image, label
 
 

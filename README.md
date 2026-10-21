@@ -2,12 +2,12 @@
 
 LuSNAR 月面五类语义分割第一版。类别编号固定为月壤 0、岩石 1、撞击坑 2、山体 3、天空 4；输入仅左相机 RGB。比赛信息见 [challenge.md](challenge.md)，模型细节见 [docs/model.md](docs/model.md)。
 
-当前先核对论文实现细节，逐项证据与差距见 [论文对照表](docs/paper_alignment.md)。已有YAML是工程配置，能通过显存/流程检查不代表已经对齐作者的训练配方；本轮只整理依据，未继续改参数或启动训练。
+当前方案为用户确认的1024×1024整图训练、双卡梯度累积、全局有效batch至少64。增强来源见 [增强调研](docs/augmentation_research.md)，指标定义见 [评测说明](docs/metrics.md)；[论文对照表](docs/paper_alignment.md)保留论文事实、比赛规则与工程选择的边界。
 
 ## 当前状态（2026-10-21）
 
-- 已实现数据准备、开发/最终训练配置、双卡训练、验证、双卡滑窗推理和预测检查打包；默认 DINOv3 ViT-B/16，骨干冻结，Adapter 和 Mask2Former 从头训练。
-- 已收录固定版本的完整 DINOv3 官方源码，并下载、转换和严格加载ModelScope ViT-B/16预训练权重；默认512×1024/BF16单卡前向与反向已通过，峰值allocated约3.38GiB。
+- 已实现数据准备、开发/最终训练配置、双卡训练、验证、双卡整图推理和预测检查打包；默认 DINOv3 ViT-B/16，骨干冻结，Adapter 和 Mask2Former 从头训练。
+- 固定版本DINOv3源码及ModelScope预训练权重已就绪；完整1024×1024模型在物理GPU0/7上通过每卡4、累积8步的真实AdamW更新验证。
 - **uv 独立管理 Python 3.12.15** 的 `.venv` 已安装，`uv.lock` 已生成，`uv pip check` 通过；不借用外部 Conda 解释器。
 - 九个LuSNAR原始包已完整下载，共52,301,555,752字节；已整理8002对训练RGB/标签与5004张测试RGB。资产位于 `/home/disk02/wjj/moonseg`，仓库通过 `data`、`ckpts` 软链接访问。
 - 已实际读取官方评价与提交要求，详见 `challenge.md`。具体场景权重尚未公布；官方训练包计划10月22日起发放，正式样本清单尚未取得。
@@ -95,19 +95,19 @@ uv run --no-sync python tools/prepare_data.py \
 bash scripts/train.sh configs/moonseg_vitb16.yaml
 
 # 从完整epoch边界恢复，保持配置及数据清单一致
-bash scripts/train.sh configs/moonseg_vitb16.yaml --resume runs/moonseg_vitb16/last.pt
+bash scripts/train.sh configs/moonseg_vitb16.yaml --resume runs/moonseg_vitb16_1024/last.pt
 
 # 场景5本地诊断，mIoU不是排行榜分数
 CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=0,7 uv run --no-sync python -m torch.distributed.run \
   --standalone --nproc_per_node=2 -m moonseg.evaluate \
-  --config configs/moonseg_vitb16.yaml --checkpoint runs/moonseg_vitb16/best.pt
+  --config configs/moonseg_vitb16.yaml --checkpoint runs/moonseg_vitb16_1024/best.pt
 
 # 方案冻结后，用全部官方训练场景重新训练
 bash scripts/train.sh configs/moonseg_vitb16_final.yaml
 
 # 双卡自动预测，输出原尺寸8位单通道PNG
 bash scripts/predict.sh configs/moonseg_vitb16_final.yaml \
-  runs/moonseg_vitb16_final/last.pt data/manifests/test.json \
+  runs/moonseg_vitb16_1024_final/last.pt data/manifests/test.json \
   --official-test-allowlist data/official/test_allowlist.json
 
 # 校验完整覆盖、尺寸、PNG模式、值域，并按官方目录打包；不执行上传
@@ -117,20 +117,25 @@ uv run --no-sync python tools/package_submission.py \
   --predictions runs/predictions --archive submissions/predictions.zip
 ```
 
-默认 512×1024 crop、每 GPU batch=12、无梯度累积（`accumulation_steps: 1`）、bf16、AdamW 和 warmup+poly 学习率，全局batch为24。学习率维持1e-4；warmup调整为250个优化器更新，对应约6000张训练图像，与此前配置的样本曝光量一致。80 epoch 是初始实验参数，尚无真实数据验证依据。增强包括保持宽高比的随机缩放、类别比例约束裁剪、水平翻转及轻度亮度/对比度/gamma。多尺度/翻转 TTA 可在配置中开启，先用场景5衡量收益与开销。更多选择见 [docs/baseline.md](docs/baseline.md)。
+默认 `train_mode: full_image`、`image_size: [1024,1024]`，保留完整视野；原图已是1024×1024时不重采样。推理使用整图、单尺度、无翻转TTA。随机缩放/裁剪只能通过显式 `random_resize_crop` 模式启用，默认不做。增强为同步水平翻转0.5、独立亮度扰动0.5（RGB像素加性±16）和独立对比度扰动0.5（乘性0.9–1.1），标签不做光度变换；gamma、HSV扰动和外部图像合成均未启用。算子来源与本项目收窄的强度范围详见 [增强调研](docs/augmentation_research.md)。
 
-2026-10-21在物理GPU0、7上补测完整默认模型、512×1024、BF16、冻结骨干、无梯度累积；每档运行6个AdamW更新，吞吐按后4步统计，包含优化器状态：
+每卡batch=4，2卡，累积8步：`4×2×8=64`张图像参与每次优化器更新。使用BF16、AdamW、LR1e-4、warmup+poly；warmup94步对应6016张图像，约保持此前6000张图像的工程预热预算。80 epoch、学习率和预热量仍是初始超参数，不声称来自LuSNAR论文或已经验证精度最佳。
 
-| 每卡batch | 全局batch | 每卡峰值allocated | 每卡峰值reserved | 双卡合计吞吐 |
-|---:|---:|---:|---:|---:|
-| 8 | 16 | 24.01 GiB | 27.59 GiB | 约15.77张/秒 |
-| **12（默认）** | **24** | **35.62 GiB** | **39.65 GiB** | **约15.70张/秒** |
+`min_effective_batch: 64`在启动时校验有效batch，单卡沿用此配置会因仅有32而报错。训练只进行完整的累积更新：分布式采样、microbatch及epoch尾部不完整组会丢弃，避免最后一次更新小于64。每轮重新打乱，实际使用/跳过的样本数写入 `batch_plan.json`；例如6403张训练图像每轮用6400张、跳过3张，8002张则用8000张、跳过2张。具体数量以官方清单为准。梯度只在第8次反向传播同步，裁剪、优化器和调度器各更新一次。
 
-两档吞吐基本持平；选择每卡12，将batch增大并保留约8GiB显存余量。结果见 `/home/disk02/wjj/moonseg/verification/ddp_batch_{8,12}_no_accumulation.json`。这是合成张量短程训练实测，吞吐不含真实图像读取与增强；峰值不含完整验证、存盘阶段及长程分配变化，reserved也不包含全部驱动/NCCL直接申请的内存。更改batch后不能使用旧配置checkpoint做完整状态续训，须开启新实验。
+2026-10-21，完整1024×1024模型、BF16、冻结骨干、真实AdamW状态的双卡实测：
 
-LuSNAR原始RGB和标签为1024×1024；公开论文v3没有给出分割训练crop。当前512×1024由本项目选择，不能称为LuSNAR官方训练尺寸。`ckpts`中的safetensors和pth是同一个DINOv3 ViT-B/16的不同格式，文件对应关系见 [docs/weights.md](docs/weights.md)。
+| 每卡batch | 实测累积步数 | 实测有效batch | 每卡峰值allocated | 每卡峰值reserved | 双卡合计吞吐 |
+|---:|---:|---:|---:|---:|---:|
+| 4（容量对比） | 1 | 8 | 23.97 GiB | 27.68 GiB | 约8.40张/秒 |
+| 6（容量对比） | 1 | 12 | 35.55 GiB | 41.01 GiB | 约8.29张/秒 |
+| **4（默认）** | **8** | **64** | **24.09 GiB** | **27.72 GiB** | **约8.51张/秒** |
 
-预测ZIP只包含 `test/Moon_2/submission/*.png`、`test/Moon_4/submission/*.png`、`test/Moon_9/submission/*.png`。mIoU按场景累积混淆矩阵，并只平均参考标签中出现的类别；参考标签缺类不能按预测结果扩张平均类别集合。完整评分与一次提交限制见 `challenge.md`。仓库同时提供顶层 `train.py`、`predict.py` 作为复现入口。
+每卡6没有吞吐收益，设备可用显存仅剩约5.7GiB；默认组合仍余约19GiB。默认组合验证了5个实际优化器更新，前2个预热、后3个统计。完整报告在 `/home/disk02/wjj/moonseg/verification/1024_batch_selection.json`。这些是合成输入的短程结果，吞吐不含真实读图与增强，不能当作精度或长跑显存保证。累积64描述优化器有效batch；Adapter的普通BatchNorm仍按每卡microbatch=4统计，不等同一次前向64张。
+
+此配置使用新输出目录。旧512×1024配置的checkpoint不能用来做完整状态续训。LuSNAR原始图像/标签为1024×1024，但公开v3未给出训练crop；当前整图设定来自用户确认。`ckpts`中的safetensors和pth是同一个DINOv3模型的不同格式，见 [权重说明](docs/weights.md)。
+
+预测ZIP只包含 `test/Moon_2/submission/*.png`、`test/Moon_4/submission/*.png`、`test/Moon_9/submission/*.png`。mIoU按场景累积混淆矩阵，并只平均参考标签中出现的类别；参考标签缺类不能按预测结果扩张平均类别集合。现在同时输出mAcc、每类accuracy/recall、每类GT支持数及pixel accuracy，定义见 [指标说明](docs/metrics.md)；这些补充指标不替代比赛主指标。完整评分与一次提交限制见 `challenge.md`。仓库同时提供顶层 `train.py`、`predict.py` 作为复现入口。
 
 ## Git
 
@@ -145,8 +150,8 @@ git status
 
 ## 验证边界
 
-uv环境及依赖检查已通过；ModelScope真实safetensors的211个张量已转换为188个官方原生state_dict张量并严格加载。实际预训练DINOv3+Adapter+Mask2Former在RTX 6000 Ada上完成128×128和512×1024/B1的BF16前向与反向，全部已有梯度有限，原始冻结骨干无梯度。完整尺寸单批峰值allocated为3.38GiB、reserved为4.11GiB；这不是带优化器状态和梯度累积的训练显存上限。
+uv环境及依赖检查已通过；ModelScope真实权重已严格加载。默认完整1024×1024模型已完成双卡容量比较和有效batch64的5次AdamW更新，所有损失与裁剪前梯度范数有限，冻结骨干无梯度。完整视野与增强几何同步、mAcc/缺类/全ignore等CPU检查通过，报告在 `/home/disk02/wjj/moonseg/verification/full_image_data_metrics.json`。
 
-双卡流程已用真实预训练骨干及缩小的分割头通过：2个epoch训练、完整epoch状态恢复、分布式评估、双卡预测、官方ZIP目录检查。该流程使用64×64训练裁剪及65×81验证/推理图像，验证记录在 `/home/disk02/wjj/moonseg/verification/pipeline.json`。恢复后两rank的随机状态、调度器和优化器步数一致；CUDA计算未保证逐位确定性，恢复运行与连续运行的数值存在小幅差异。
+完整1024×1024配置的CLI集成检查包括两轮训练、epoch尾部不足64的处理、断点恢复、含mAcc的分布式验证、整图预测与官方ZIP打包。结果记录在 `/home/disk02/wjj/moonseg/verification/full1024_integration.json`。恢复完整epoch状态不保证CUDA逐位确定性。
 
 上述运行仅使用临时合成数据，未进行正式比赛训练或报告比赛精度；未添加unittest或仓库测试文件。正式训练前仍需取得组织方样本清单，按官方范围准备训练与验证索引。

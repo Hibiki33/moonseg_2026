@@ -112,7 +112,37 @@ and [criterion](https://github.com/facebookresearch/Mask2Former/blob/main/mask2f
 with valid-pixel sampling added for semantic ignore labels. The criterion is a
 local implementation and does not import detectron2.
 
-## Verification and limits
+## Current 1024x1024 configuration
+
+The current full-image configuration uses physical GPUs 0 and 7, BF16, a frozen
+DINOv3 backbone, batch 4 per GPU and eight gradient-accumulation microbatches:
+each optimizer update receives 64 images. Training enforces a minimum effective
+batch of 64 and drops incomplete shuffled epoch tails. Whole-image inference is
+the default. The adapter and Mask2Former retain their full default dimensions
+and layer counts; these measurements do not use the earlier reduced smoke-test head.
+
+Five real AdamW updates at this configuration passed, including allocated
+optimizer state and finite pre-clipping gradient norms. After two warmup updates,
+the three measured updates processed 8.51 images/second across both GPUs. Peak
+allocated memory was 24.09 GiB/GPU and peak reserved memory 27.72 GiB/GPU. A batch-6
+capacity comparison reserved 41.01 GiB/GPU without showing higher throughput.
+See `/home/disk02/wjj/moonseg/verification/1024_batch_selection.json` for both
+candidates, complete accumulation measurements, and CUDA/NCCL memory boundaries.
+
+Gradient accumulation extends the optimizer batch, not each forward pass's
+BatchNorm statistics. The adapter's ordinary training BatchNorm uses four images
+per rank. Mask loss normalization also uses each distributed microbatch's target
+mask count, so accumulation need not exactly equal normalizing one concatenated
+64-image batch when images contain different class counts.
+
+The complete 1024 configuration also passed the training CLI, incomplete-tail
+handling, epoch resume, mAcc reporting, distributed evaluation/prediction and
+official ZIP packaging on temporary synthetic inputs. Its report is
+`/home/disk02/wjj/moonseg/verification/full1024_integration.json`. These checks
+establish execution and memory feasibility; they do not measure LuSNAR accuracy
+or long-run training performance.
+
+## Earlier verification and limits
 
 Temporary CPU smoke runs used PyTorch 2.5.1, native official random ViT-B/16 and
 the real official adapter/pixel/transformer modules. The default model has

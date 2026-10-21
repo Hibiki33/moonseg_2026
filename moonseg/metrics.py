@@ -29,15 +29,24 @@ class SegmentationMetrics:
     def compute(self):
         matrix = self.confusion.double()
         intersection = matrix.diag()
-        union = matrix.sum(0) + matrix.sum(1) - intersection
+        support = matrix.sum(1)
+        union = matrix.sum(0) + support - intersection
         # Official C_s includes only classes present in this scene's ground truth.
         # Predicting an absent class still contributes FN to the actual GT class.
-        valid = matrix.sum(1) > 0
+        valid = support > 0
         ious = torch.where(valid, intersection / union.clamp_min(1), torch.nan)
+        recalls = torch.where(valid, intersection / support.clamp_min(1), torch.nan)
         mean = ious[valid].mean().item() if valid.any() else None
+        class_recall = {name: (recalls[index].item() if valid[index] else None)
+                        for index, name in enumerate(CLASS_NAMES[:self.num_classes])}
         return {"mIoU": mean,
+                "mAcc": recalls[valid].mean().item() if valid.any() else None,
                 "class_IoU": {name: (ious[index].item() if valid[index] else None)
                               for index, name in enumerate(CLASS_NAMES[:self.num_classes])},
+                "class_accuracy": class_recall.copy(),
+                "class_recall": class_recall,
+                "class_support": {name: int(support[index].item())
+                                  for index, name in enumerate(CLASS_NAMES[:self.num_classes])},
                 "pixel_accuracy": (intersection.sum() / matrix.sum()).item() if matrix.sum() else None,
                 "confusion_matrix": self.confusion.cpu().tolist(),
                 "absent_class_policy": "Average only classes present in ground truth; sky is included when present.",

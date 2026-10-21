@@ -1,36 +1,38 @@
-# 既有工程配置与参考来源
+# 1024×1024 第一版训练方案
 
-当前先进行论文实现细节核对，见 [paper_alignment.md](paper_alignment.md)。以下记录此前已实现的工程配置，不能当作LuSNAR作者配方或已经确认的最终实验方案。TGRS终稿优先；未取得终稿正文时，按用户允许暂用arXiv v3。这里不因文献缺项再新增或替换默认参数。
+当前方案按用户确认采用1024×1024整图训练，DINOv3 ViT-B/16 + 官方ViT-Adapter组件 + Mask2Former。冻结原始DINOv3，训练Adapter和分割头。论文、比赛与工程选择的区别见 [paper_alignment.md](paper_alignment.md)；具体增强调研和固定源码链接见 [augmentation_research.md](augmentation_research.md)。
 
-采用 DINOv3 ViT-B/16（LVD-1689M 通用预训练）+ 官方 ViT-Adapter 组件 + Mask2Former。先冻结原始 ViT，训练空间先验、可变形特征提取和分割头。显存/吞吐实测后可以把配置中的 `backbone` 与权重改为 ViT-L/16；本次未运行 ViT-L。全部超参数先在训练池内场景5验证。
+LuSNAR作者公开仓库尚未提供可复现的2D分割训练脚本。TGRS终稿优先，本次未取得正文，按用户允许暂参考arXiv v3。论文原图为1024×1024，但没有报告训练crop、增强与优化器配方；以下设置不能声称是LuSNAR原作者实现。
 
-原始官方 LuSNAR 仓库可核实的是类别颜色和数据布局说明，没有找到可直接复用的训练脚本或完整增强配方。论文里的训练/测试划分与比赛不同。本项目以下增强来自常见分割训练做法和任务特点，不声称是 LuSNAR 官方实现。
-
-2026-10-21再次检查[项目页的Code链接](https://luoxubo.github.io/LuSNAR-dataset/)及[作者仓库完整文件树](https://github.com/zqyu9/LuSNAR-dataset)：当前仅有 `README.md`、`index.html`、网页静态资源，只有 `main` 分支，没有tags或releases，未找到分割训练入口、模型实现、训练配置或增强代码。README虽然写有code released，但公开文件不足以复现其分割实验；[询问SegFormer具体型号的issue #18](https://github.com/zqyu9/LuSNAR-dataset/issues/18)也尚无回复。
-
-可参考的实现来自模型作者：我们直接复用DINOv3官方Adapter和Mask2Former组件；[Mask2Former ADE20K配置](https://github.com/facebookresearch/Mask2Former/blob/main/configs/ade20k/semantic-segmentation/Base-ADE20K-SemanticSegmentation.yaml)包含AdamW、poly学习率、随机缩放/裁剪及颜色增强；[SegFormer官方数据pipeline](https://github.com/NVlabs/SegFormer/blob/master/local_configs/_base_/datasets/ade20k_repeat.py)包含0.5–2.0随机缩放、`cat_max_ratio=0.75`裁剪、水平翻转、光度扰动和255 padding。当前增强参考这些公开做法，但它们不是LuSNAR专用配方。LuSNAR类别0为有效月壤，因此不能照搬ADE20K的 `reduce_zero_label=True`。
-
-尺寸核对：LuSNAR公开论文v3的表IV与数据说明明确原始RGB/语义标签为 **1024×1024**；IV-A没有报告分割训练裁剪尺寸，全文也没有512这一尺寸。因此 **512×1024是本项目选定的初始训练crop，不是论文配置**。其用意是在较少像素计算量下保留横向上下文，但尚未通过验证集消融证明优于512×512或1024×1024。
-
-| 策略 | 第一版设置 | 目的与后续检查 |
+| 项目 | 当前默认 | 依据与边界 |
 |---|---|---|
-| 空间增强 | 等比例随机缩放 0.5–2.0，512×1024 crop | 兼顾岩石尺寸变化与横向地形上下文；不拉伸原始图像 |
-| 类别约束裁剪 | 单类最多约75%，最多尝试10次 | 减少大片月壤/天空主导；条件无法满足时使用末次裁剪 |
-| 翻转 | 仅水平翻转，概率0.5 | 保留上下地形关系；不默认垂直翻转或大角度旋转 |
-| 光照 | brightness/contrast/gamma 各0.9–1.1，概率0.5 | 轻度变化阴影与曝光；不注入外部背景 |
-| 标签处理 | RGB精确映射，nearest resize，padding=255 | 避免RGB插值污染类别；天空4始终是有效类 |
-| 优化 | AdamW，LR 1e-4，warmup+poly，梯度裁剪0.1 | 先训练Adapter和head；骨干解冻时仅其LR乘0.1 |
-| 批量 | 每卡12，双卡全局24，无梯度累积 | 512×1024/BF16实测每卡allocated35.62GiB、reserved39.65GiB |
-| Warmup | 250个优化器更新 | 与原配置保持约6000张图像曝光量；保持基础LR1e-4，未盲目按batch比例放大学习率 |
-| 损失 | Hungarian匹配，类别CE/BCE/Dice权重2/5/5，no-object 0.1 | 按类构造目标mask，辅助层监督，忽略padding |
-| 推理 | 重叠滑窗512×1024，stride341×682 | 保留原分辨率的细小目标，重叠区平均语义分数 |
+| 训练视野 | `full_image`，1024×1024 | 用户确认；原图同尺寸时不重采样，完整保留画面 |
+| 随机几何 | 仅同步水平翻转，p=0.5 | 所查DINOv3/Mask2Former/SegFormer实现均采用；保持上下结构 |
+| 亮度 | 独立p=0.5，加性像素偏移U[-16,16] | DINOv3/MMSeg算子；强度由源码±32收窄，尚无本任务增益结论 |
+| 对比度 | 独立p=0.5，RGB乘U[0.9,1.1] | 同上；强度由源码0.5–1.5收窄 |
+| 光度顺序 | uint8 RGB亮度→clip/量化→对比度→clip/量化，再normalize | 标签不做光度变换；没有外层概率门控或gamma |
+| 可选裁剪 | 仅显式`random_resize_crop`模式启用 | 默认不随机缩放、不选crop，不把裁剪伪装成整图 |
+| 标签 | 比赛ID0–4，mask最近邻；ignore255仅用于无效/补齐区域 | 天空与月壤均为有效类别，不能照搬ADE20K reduce_zero_label |
+| 归一化 | ImageNet mean/std | 与DINOv3预训练骨干输入约定一致 |
+| 批量 | 每卡4 × 2卡 × 累积8 = 全局有效64 | 真实完整模型双卡验证；启动检查`min_effective_batch:64` |
+| epoch尾部 | 只做完整64张更新，按每轮随机顺序跳过不足组 | 不允许最后一次优化器更新偷偷变成小batch；日志记录使用/跳过数量 |
+| 优化 | AdamW、LR1e-4、weight decay0.05、poly0.9、clip0.1 | 当前初始工程设置，待验证集选择 |
+| Warmup | 94次优化器更新，即6016张图像 | 约保持既有6000张预热图像预算；不是论文设置 |
+| 损失 | Mask2Former Hungarian + CE/BCE/Dice权重2/5/5，辅助层监督 | 与所选模型结构相符；不是LuSNAR的SegFormer配方 |
+| 训练预算 | 80 epoch，BF16 | 初始预算，尚无正式数据验证结果 |
+| 验证/推理 | 整图、单尺度、无flip TTA | `sliding_window:false`；输出恢复原输入尺寸 |
+| 报告 | mIoU、各类IoU、mAcc、各类accuracy/recall/support、pixel accuracy | [metrics.md](metrics.md)定义；主比赛指标仍是场景加权mIoU |
 
-建议按顺序做小规模消融：固定第一版；调整crop与分辨率；在训练集统计岩石/撞击坑比例后决定是否需要稀有类采样；对比冻结骨干与低学习率解冻；最后再测 `[0.75,1.0,1.25]` 多尺度和水平翻转 TTA。当前没有实现 Copy-Paste、伪标签或额外数据训练；如后续加入，增强源仍必须限于官方训练清单。
+## 批量选择的实测依据
 
-每次实验保存配置、正式样本清单快照、各类IoU与混淆矩阵、训练状态和随机状态。比较模型时同时看岩石/撞击坑IoU和场景5 mIoU。场景9虽然权重更高，但不能读取其公开标签来设计增强或选模型。
+物理GPU0/7均为RTX 6000 Ada 48GB，固定PCI顺序。每卡4的1024²容量测试约8.40张/秒（双卡总计），每卡6追加预热后的结果约8.29张/秒；后者没有更高吞吐，却将预留显存提高到41.01GiB，仅余约5.7GiB设备可用空间。
 
-参考：
+选择每卡4、累积8后，实际执行5次AdamW更新（2次预热、3次计时），双卡约8.51张/秒，每卡峰值allocated24.09GiB、reserved27.72GiB，实际设备尚余约19GiB。报告为 `/home/disk02/wjj/moonseg/verification/1024_batch_selection.json`。这是合成输入的短程容量/流程验证，不是精度证据，吞吐不包含真实读图与增强。
 
-- [DINOv3 官方语义分割实现](https://github.com/facebookresearch/dinov3/tree/main/dinov3/eval/segmentation)。
-- [Mask2Former 官方配置](https://github.com/facebookresearch/Mask2Former/blob/main/mask2former/config.py)及[criterion](https://github.com/facebookresearch/Mask2Former/blob/main/mask2former/modeling/criterion.py)。
-- [LuSNAR 官方项目](https://github.com/zqyu9/LuSNAR-dataset)及[论文](https://arxiv.org/abs/2407.06512)。
+累积64只说明每次优化器更新累计的图像数：Adapter的普通BatchNorm仍按每卡microbatch=4计算统计；损失中的mask数量也按当前分布式microbatch归一化。因此不宣称与一次前向64张严格数学或逐位等价。
+
+## 实验顺序
+
+正式样本清单到位后，只在训练池内开发：场景1/3/6/7/8训练、场景5验证；模型选择结束再用1/3/5/6/7/8重训。首先检查无随机增强、仅水平翻转、翻转加轻量光度三个版本，保持模型、训练预算与有效batch一致，观察每类IoU及mAcc。后续才单独讨论标准强度光度、随机resize/crop或TTA。
+
+所有增强源仅限正式训练RGB及其对应标签，不能读取2/4/9测试标签来选择增强或参数。公开场景池索引仍不是组织方的正式样本清单。更改图像模式、有效batch或增强配置后，使用新实验目录，不从旧512配置做完整状态续训。
