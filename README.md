@@ -115,9 +115,16 @@ uv run --no-sync python tools/package_submission.py \
   --predictions runs/predictions --archive submissions/predictions.zip
 ```
 
-默认 512×1024 crop、每 GPU batch=1、梯度累积 2、bf16、AdamW 和 warmup+poly 学习率；80 epoch 是初始实验参数，尚无真实数据验证依据。增强包括保持宽高比的随机缩放、类别比例约束裁剪、水平翻转及轻度亮度/对比度/gamma。多尺度/翻转 TTA 可在配置中开启，先用场景5衡量收益与开销。更多选择见 [docs/baseline.md](docs/baseline.md)。
+默认 512×1024 crop、每 GPU batch=12、无梯度累积（`accumulation_steps: 1`）、bf16、AdamW 和 warmup+poly 学习率，全局batch为24。学习率维持1e-4；warmup调整为250个优化器更新，对应约6000张训练图像，与此前配置的样本曝光量一致。80 epoch 是初始实验参数，尚无真实数据验证依据。增强包括保持宽高比的随机缩放、类别比例约束裁剪、水平翻转及轻度亮度/对比度/gamma。多尺度/翻转 TTA 可在配置中开启，先用场景5衡量收益与开销。更多选择见 [docs/baseline.md](docs/baseline.md)。
 
-双卡有效batch为 `1×2卡×2累积=4`。2026-10-21补测完整默认模型、512×1024、BF16、冻结骨干，并实际执行4次AdamW更新：GPU0和7每卡峰值allocated为3.82GiB、reserved为3.93GiB，包含优化器状态。结果见 `/home/disk02/wjj/moonseg/verification/default_ddp_memory.json`。这是合成张量短程训练实测，不含完整验证、存盘阶段及长程分配变化；reserved也不包含全部驱动/NCCL直接申请的内存。当前batch是保守初始值，没有测试48GB卡的batch上限。
+2026-10-21在物理GPU0、7上补测完整默认模型、512×1024、BF16、冻结骨干、无梯度累积；每档运行6个AdamW更新，吞吐按后4步统计，包含优化器状态：
+
+| 每卡batch | 全局batch | 每卡峰值allocated | 每卡峰值reserved | 双卡合计吞吐 |
+|---:|---:|---:|---:|---:|
+| 8 | 16 | 24.01 GiB | 27.59 GiB | 约15.77张/秒 |
+| **12（默认）** | **24** | **35.62 GiB** | **39.65 GiB** | **约15.70张/秒** |
+
+两档吞吐基本持平；选择每卡12，将batch增大并保留约8GiB显存余量。结果见 `/home/disk02/wjj/moonseg/verification/ddp_batch_{8,12}_no_accumulation.json`。这是合成张量短程训练实测，吞吐不含真实图像读取与增强；峰值不含完整验证、存盘阶段及长程分配变化，reserved也不包含全部驱动/NCCL直接申请的内存。更改batch后不能使用旧配置checkpoint做完整状态续训，须开启新实验。
 
 LuSNAR原始RGB和标签为1024×1024；公开论文v3没有给出分割训练crop。当前512×1024由本项目选择，不能称为LuSNAR官方训练尺寸。`ckpts`中的safetensors和pth是同一个DINOv3 ViT-B/16的不同格式，文件对应关系见 [docs/weights.md](docs/weights.md)。
 

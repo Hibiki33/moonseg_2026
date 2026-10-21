@@ -34,13 +34,14 @@ train:
   output_dir: runs/moonseg_vitb16_final
   seed: 42
   epochs: 80
-  batch_size: 1
-  accumulation_steps: 2
+  batch_size: 12
+  accumulation_steps: 1
   num_workers: 4
   lr: 0.0001
   backbone_lr_multiplier: 0.1
   weight_decay: 0.05
-  warmup_iters: 1500
+  # 250 updates x global batch 24 preserves the previous 6000-image warmup.
+  warmup_iters: 250
   warmup_ratio: 0.001
   poly_power: 0.9
   amp: bf16
