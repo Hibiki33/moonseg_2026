@@ -4,6 +4,8 @@ LuSNAR 月面五类语义分割第一版。类别编号固定为月壤 0、岩�
 
 当前方案为用户确认的1024×1024整图训练、双卡梯度累积、全局有效batch严格大于64。增强来源见 [增强调研](docs/augmentation_research.md)，指标定义见 [评测说明](docs/metrics.md)；[论文对照表](docs/paper_alignment.md)保留论文事实、比赛规则与工程选择的边界。
 
+未来独立研究的外部数据资料见 [五组月面数据调研](docs/external_datasets/README.md)：LunarSeg/LuSeg、LuMon Chang’e-3、Apollo、DFKI Rocks and Craters、POLAR/POLAR-Sim，包含来源、标签、许可、下载入口与待核实项。
+
 ## 当前状态（2026-10-21）
 
 - 已实现数据准备、开发/最终训练配置、双卡训练、验证、双卡整图推理和预测检查打包；默认 DINOv3 ViT-B/16，骨干冻结，Adapter 和 Mask2Former 从头训练。

@@ -192,6 +192,10 @@ result.zip
 
 [LuSNAR 论文 v3（IV-A，表 V）](https://arxiv.org/html/2407.06512v3#S4.SS1)比较了 DeepLabV3+、MobileNetV3、U-Net、PointRend 和 SegFormer，SegFormer 的 mIoU 为 89.96%。但该实验训练场景为 1、2、4、6、8、9，测试场景为 3、5、7，**不同于本比赛划分**，不能沿用其训练清单或将论文分数当作本比赛基线。论文另有场景 1–3 训练、4–9 测试的泛化实验，也不属于本比赛。官方仓库当前可见内容主要是介绍网页与静态资源，未找到可直接复用的分割训练入口；论文未给出可核实的完整增强配方和 SegFormer 型号，不能将自行选择的增强称作官方实现。只用官方训练 RGB/mask 进行同步裁剪、缩放、翻转和颜色扰动，可按现有比赛资料实施，具体强度属于项目超参数。
 
+## 外部数据储备
+
+外部数据储备另见 [月面外部数据调研](docs/external_datasets/README.md)。这是用户要求的未来独立研究资料与下载入口，未将外部数据接入本次比赛的数据清单；具体资料的公开可获取性不改变上文比赛范围。
+
 ## 论文实现对齐记录
 
 以2026年TGRS终稿（[DOI:10.1109/TGRS.2026.3720373](https://doi.org/10.1109/TGRS.2026.3720373)）为优先依据；本次未取得出版社正文，按用户允许暂用arXiv v3核对。详细的“论文原文位置—当前实现—明确差异—未报告项”见 [docs/paper_alignment.md](docs/paper_alignment.md)。v3未报告某项，不代表终稿也未报告；原始1024×1024尺寸不能推断出作者的训练crop。用户随后确认本项目采用1024×1024整图、补充mAcc、梯度累积且有效batch严格大于64；这是本项目方案。增强参考实现、源码版本和取舍记录在 [docs/augmentation_research.md](docs/augmentation_research.md)，不将其归为LuSNAR作者配方。

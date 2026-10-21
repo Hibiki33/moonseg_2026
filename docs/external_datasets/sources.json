@@ -1,0 +1,226 @@
+{
+  "schema_version": 1,
+  "checked_at": "2026-10-21",
+  "purpose": "future_independent_research_inventory",
+  "max_concurrent_grok_tasks": 2,
+  "bulk_storage_root": "/home/disk02/wjj/moonseg/external_data",
+  "research_records_root": "/home/disk02/wjj/moonseg/research/external_datasets/2026-10-21",
+  "datasets": [
+    {
+      "id": "lunarseg_luseg",
+      "report": "lunarseg_luseg.md",
+      "domain": "synthetic_lunar",
+      "project_url": "https://github.com/nubot-nudt/LuSeg",
+      "paper_url": "https://arxiv.org/abs/2503.11409",
+      "landing_url": "https://drive.google.com/drive/folders/1u5eHiEPSuPZm1nmjdD4iixaATTorBbI8",
+      "published_sample_groups": 5143,
+      "sample_count_basis": "paper; scenario subtotals inconsistent; archive not fully counted",
+      "image_size_width_height": [
+        640,
+        480
+      ],
+      "label_schema": {
+        "0": "background",
+        "1": "negative_obstacle",
+        "2": "positive_obstacle"
+      },
+      "data_license": "not_confirmed",
+      "code_license": "MIT",
+      "assets": [
+        {
+          "name": "LunarSeg.rar",
+          "url": "https://drive.usercontent.google.com/download?id=1CBmJ66_igKMIFvtp5Qb2czxUEFq3hak2&export=download&confirm=t",
+          "bytes": 1404494257,
+          "verification": "Grok HTTP Range headers and partial archive headers"
+        }
+      ],
+      "bulk_downloaded": false,
+      "competition_training_allowed": false,
+      "suggested_storage_subdirectory": "lunarseg"
+    },
+    {
+      "id": "lumon_change3",
+      "report": "lumon_change3.md",
+      "domain": "real_lunar_surface",
+      "project_url": "https://github.com/MetuLuMon/LuMon-depth",
+      "paper_url": "https://arxiv.org/abs/2604.09352",
+      "landing_url": "https://huggingface.co/datasets/LuMonDepth/ChangE-3",
+      "hf_repo": "LuMonDepth/ChangE-3",
+      "revision": "f776d8c355253a1d58da45dc56f561a06d2872fa",
+      "metadata_url": "https://huggingface.co/api/datasets/LuMonDepth/ChangE-3",
+      "mirror_metadata_url": "https://hf-mirror.com/api/datasets/LuMonDepth/ChangE-3",
+      "file_counts": {
+        "images": 168,
+        "depth": 168,
+        "masks": 168
+      },
+      "image_size_width_height": [
+        2352,
+        1728
+      ],
+      "label_schema": null,
+      "other_labels": [
+        "stereo_pseudo_depth",
+        "binary_mask_semantics_conflict_validity_vs_dark_cache"
+      ],
+      "data_license": "MIT in dataset card; upstream imagery rights not confirmed",
+      "code_license": "not_confirmed",
+      "assets": [],
+      "bulk_downloaded": false,
+      "competition_training_allowed": false,
+      "suggested_storage_subdirectory": "lumon_change3"
+    },
+    {
+      "id": "nasa_apollo",
+      "report": "nasa_apollo.md",
+      "domain": "real_lunar_surface",
+      "landing_url": "https://www.lpi.usra.edu/resources/apollo/catalog/70mm/",
+      "surface_missions": [
+        11,
+        12,
+        14,
+        15,
+        16,
+        17
+      ],
+      "selected_image_count": null,
+      "label_schema": null,
+      "data_license": "NASA media guidelines; asset-specific terms for scans and derivatives",
+      "code_license": null,
+      "assets": [
+        {
+          "name": "as11-40-5874_collection",
+          "url": "https://images-assets.nasa.gov/image/as11-40-5874/collection.json",
+          "verification": "Grok read asset listing; sample only, not full catalog"
+        },
+        {
+          "name": "as11-40-5874.jpg",
+          "url": "https://images-assets.nasa.gov/image/as11-40-5874/as11-40-5874~orig.jpg",
+          "bytes": 2236993,
+          "verification": "Grok HEAD; upload asset is not necessarily an unprocessed scan"
+        }
+      ],
+      "bulk_downloaded": false,
+      "competition_training_allowed": false,
+      "suggested_storage_subdirectory": "apollo"
+    },
+    {
+      "id": "dfki_rocks_craters",
+      "report": "dfki_rocks_craters.md",
+      "domain": "DFKI_facility_capture_per_publisher; full_capture_provenance_unconfirmed",
+      "landing_url": "https://zenodo.org/records/14673237",
+      "doi": "10.5281/zenodo.14673237",
+      "metadata_url": "https://zenodo.org/api/records/14673237",
+      "image_size_width_height": [
+        640,
+        640
+      ],
+      "image_size_basis": "publisher and preprocessing metadata; all COCO test JSON records",
+      "data_license": "CC-BY-4.0",
+      "code_license": "not_confirmed",
+      "label_schemas": {
+        "yolo": {
+          "0": "crater",
+          "1": "rock"
+        },
+        "coco_test": {
+          "0": "rock_unused_in_test_annotations",
+          "1": "crater",
+          "2": "rock"
+        }
+      },
+      "source_stem_candidates": 736,
+      "source_stem_note": "Filename grouping only; unique original image count not verified. Stem intersections: train/valid 259, train/test 249, valid/test 75, all three 63.",
+      "assets": [
+        {
+          "name": "Dataset_coco.zip",
+          "url": "https://zenodo.org/api/records/14673237/files/Dataset_coco.zip/content",
+          "bytes": 72191694,
+          "jpeg_counts": {
+            "train": 2578,
+            "valid": 313,
+            "test": 307
+          },
+          "verification": "Grok Range directory and small label reads; parent recounted saved central directory"
+        },
+        {
+          "name": "Dataset_yolo.zip",
+          "url": "https://zenodo.org/api/records/14673237/files/Dataset_yolo.zip/content",
+          "bytes": 186819579,
+          "jpeg_counts": {
+            "train": 7734,
+            "valid": 313,
+            "test": 307
+          },
+          "verification": "Grok Range directory and small label reads; parent recounted saved central directory"
+        }
+      ],
+      "bulk_downloaded": false,
+      "competition_training_allowed": false,
+      "suggested_storage_subdirectory": "dfki_rocks_craters"
+    },
+    {
+      "id": "polar_polarsim",
+      "report": "polar_polarsim.md",
+      "domain": "earth_laboratory_lunar_analog",
+      "landing_url": "https://ti.arc.nasa.gov/dataset/IRG_PolarDB/",
+      "extension_project_url": "https://github.com/uwsbel/POLAR-Sim",
+      "extension_doi": "10.5061/dryad.ksn02v7hf",
+      "extension_file_listing_url": "https://datadryad.org/dataset/doi:10.5061/dryad.ksn02v7hf/linkset.json",
+      "git_tree_revision": "593ed65c901bb53a05dc0a7363f5192d1171b85d",
+      "primary_terrains": 12,
+      "extra_terrains": [
+        13
+      ],
+      "stereo_pair_count_exact": null,
+      "stereo_pair_count_statement": "NASA: over 2500; extension paper: approximately 2600",
+      "image_size_width_height": [
+        1936,
+        1216
+      ],
+      "color_mode": "monochrome_12_effective_bits_in_16bit_PNG",
+      "extension_label_file_counts": {
+        "segmentation_txt": 3977,
+        "bbox_txt_including_classes": 3985,
+        "bbox_classes_txt": 12,
+        "bbox_candidate_labels_before_deduplication": 3973
+      },
+      "label_schema": {
+        "0": "background",
+        "1": "ground",
+        "2": "rock",
+        "3": "shadow"
+      },
+      "rendered_mask_values": {
+        "0": "background",
+        "86": "ground",
+        "128": "rock",
+        "43": "shadow"
+      },
+      "bbox_label_schema": {
+        "0": "rock",
+        "1": "shadow"
+      },
+      "data_license": "NASA original: not confirmed; extension LICENSE/Dryad CC0-1.0, conflicting README BSD-3 statement",
+      "code_license": "CC0-1.0 LICENSE; README BSD-3 conflict retained",
+      "assets": [
+        {
+          "name": "dataset_public_release.zip",
+          "url": "https://ti.arc.nasa.gov/dataset/IRG_PolarDB/PolarDB_download/dataset_public_release.zip",
+          "bytes": 11738549533,
+          "verification": "Grok HEAD; not downloaded"
+        },
+        {
+          "name": "Terrain01_LargeOnly.zip",
+          "url": "https://ti.arc.nasa.gov/dataset/IRG_PolarDB/PolarDB_download/Terrain01_LargeOnly.zip",
+          "bytes": 748321473,
+          "verification": "Grok HEAD; not downloaded"
+        }
+      ],
+      "access_notes": "NASA HEAD succeeded. Dryad listing available but file_stream returned 403 in Grok probes; Box directory not enumerated.",
+      "bulk_downloaded": false,
+      "competition_training_allowed": false,
+      "suggested_storage_subdirectory": "polar"
+    }
+  ]
+}
