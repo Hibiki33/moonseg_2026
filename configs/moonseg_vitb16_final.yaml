@@ -1,0 +1,57 @@
+# Final retraining after method selection. Scene 5 joins training; no local validation.
+# Training duration must be chosen on the development split, never on test scenes 2,4,9.
+model:
+  backbone: vitb16
+  backbone_weights: ckpts/dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth
+  freeze_backbone: true
+  num_classes: 5
+  num_queries: 100
+  hidden_dim: 256
+  decoder_layers: 6
+  encoder_layers: 6
+loss:
+  ce_weight: 2.0
+  mask_weight: 5.0
+  dice_weight: 5.0
+  no_object_weight: 0.1
+  num_points: 12544
+data:
+  root: data/LuSNAR
+  train_manifest: data/manifests/final_train.json
+  official_allowlist: data/official/train_allowlist.json
+  train_scenes: [1, 3, 5, 6, 7, 8]
+  val_scenes: []
+  crop_size: [512, 1024]
+  resize_size: [512, 1024]
+  resize_range: [0.5, 2.0]
+  cat_max_ratio: 0.75
+  crop_attempts: 10
+  hflip_probability: 0.5
+  photometric_probability: 0.5
+  mean: [0.485, 0.456, 0.406]
+  std: [0.229, 0.224, 0.225]
+train:
+  output_dir: runs/moonseg_vitb16_final
+  seed: 42
+  epochs: 80
+  batch_size: 1
+  accumulation_steps: 2
+  num_workers: 4
+  lr: 0.0001
+  backbone_lr_multiplier: 0.1
+  weight_decay: 0.05
+  warmup_iters: 1500
+  warmup_ratio: 0.001
+  poly_power: 0.9
+  amp: bf16
+  grad_clip: 0.1
+  validate: false
+  save_every: 10
+  log_every: 20
+  resume: null
+inference:
+  sliding_window: true
+  crop_size: [512, 1024]
+  stride: [341, 682]
+  scales: [1.0]
+  flip: false

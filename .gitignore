@@ -1,0 +1,22 @@
+# Datasets, checkpoints, local environments, and generated runs
+/data
+/ckpts
+/outputs/
+/runs/
+/predictions/
+/submissions/
+/manifests/
+/.venv/
+/.cache/
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.pth
+*.pt
+*.safetensors
+*.zip
+*.tar.gz
+*.aria2
+.env
+.env.*
+!.env.example
