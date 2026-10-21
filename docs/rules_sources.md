@@ -11,7 +11,8 @@
 | [LuSNAR 官方 GitHub](https://github.com/zqyu9/LuSNAR-dataset) | 此前已读取 README 与文件列表；根目录主要为 README.md、index.html、static | 支持五类颜色表、左相机示意目录、1024×1024 原始分辨率；此前未找到实际分割训练脚本，不能据 README 的“code released”文字编造训练入口 |
 | [LuSNAR Hugging Face 文件列表](https://huggingface.co/datasets/xuboluo2001/LuSNAR/tree/main) | 此前已读取，列出 Moon_1.zip 至 Moon_9.zip | 支持原始场景包名称；不是比赛官方样本清单。包含评测场景标签的上游包不构成训练授权 |
 | [LuSNAR 论文 arXiv v3，IV-A](https://arxiv.org/html/2407.06512v3#S4.SS1) | 此前已读取，v3 日期为 2024-09-26；表 V 比较五个 2D 模型 | SegFormer mIoU 89.96%，其训练/测试划分与本比赛不同；未发现完整训练增强配方或明确 SegFormer B0/B5 型号，论文成绩不是本比赛排行榜基线 |
-| [官方仓库 SegFormer 型号问题 #18](https://github.com/zqyu9/LuSNAR-dataset/issues/18) | 此前 Issues 列表可见问题标题“实验部分的 segformer 用的是 b0 吗？还是更大的模型？”；正文未成功读取 | 问题标题不是作者答复，不能据此断言具体型号 |
+| [TGRS期刊记录](https://ieeexplore.ieee.org/document/11643283/)及[Crossref元数据](https://api.crossref.org/works/10.1109/TGRS.2026.3720373) | 已确认2026年TGRS卷64、DOI10.1109/TGRS.2026.3720373；出版社页面/PDF请求未取得正文 | 期刊终稿优先，但不能把arXiv v3的未报告项直接当作终稿结论；按用户允许在无法取得终稿时暂用v3，详见paper_alignment.md |
+| [官方仓库 SegFormer 型号问题 #18](https://github.com/zqyu9/LuSNAR-dataset/issues/18) | 已读取正文及API记录，提问B0/B2复现，当前无评论回复 | 这是读者提问，不是作者答复，不能据此断言具体型号 |
 
 ## 当前官网的直接证据
 
