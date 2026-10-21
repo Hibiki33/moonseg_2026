@@ -9,6 +9,11 @@ from pathlib import Path
 TRAIN_SCENES = frozenset((1, 3, 5, 6, 7, 8))
 TEST_SCENES = frozenset((2, 4, 9))
 
+OFFICIAL_TRAIN_KIND = "official_train_manifest"
+DEVELOPMENT_KIND = "public_development_manifest"
+# Manifest kind -> provenance string reported by MoonDataset.provenance.
+PROVENANCE = {OFFICIAL_TRAIN_KIND: "official_allowlist", DEVELOPMENT_KIND: "public_development_pool"}
+
 
 def scene_number(value):
     match = re.fullmatch(r"(?:Moon[_-]?)?(\d+)", str(value), flags=re.IGNORECASE)
@@ -55,11 +60,12 @@ def read_allowlist(path):
 
 
 def is_allowed(record, allowlist):
-    return (int(record["scene"]), str(record["sample_id"])) in allowlist or (None, str(record["sample_id"])) in allowlist
+    return ((scene_number(record["scene"]), str(record["sample_id"])) in allowlist
+            or (None, str(record["sample_id"])) in allowlist)
 
 
 def require_complete_allowlist(records, allowlist):
-    keys = {(int(record["scene"]), str(record["sample_id"])) for record in records}
+    keys = {(scene_number(record["scene"]), str(record["sample_id"])) for record in records}
     ids = {key[1] for key in keys}
     missing = [(scene, sample_id) for scene, sample_id in allowlist
                if (sample_id not in ids if scene is None else (scene, sample_id) not in keys)]
@@ -89,14 +95,48 @@ def validate_sample(record, root, need_label, allowed_scenes):
             raise FileNotFoundError(path)
 
 
-def load_manifest(path, root, allowed_scenes, official_allowlist=None, need_label=True):
+def manifest_kind(path):
+    value = json.loads(Path(path).read_text(encoding="utf-8"))
+    return value.get("kind") if isinstance(value, dict) else None
+
+
+def manifest_provenance(path):
+    """'official_allowlist' or 'public_development_pool' for a labelled manifest."""
+    kind = manifest_kind(path)
+    if kind not in PROVENANCE:
+        raise ValueError(f"Manifest kind {kind!r} carries no training provenance: {path}")
+    return PROVENANCE[kind]
+
+
+def load_manifest(path, root, allowed_scenes, official_allowlist=None, need_label=True,
+                  allow_development_pool=False):
+    """Validate and return manifest records.
+
+    Labelled use (need_label=True) admits two kinds only:
+    - official_train_manifest: requires the organizer allowlist (official_allowlist).
+    - public_development_manifest: only with allow_development_pool=True (config key
+      data.development_pool). These come from the public LuSNAR training-scene pool
+      (scenes 1,3,5,6,7,8) for method development; official_allowlist may then be None.
+      The final submission model must be retrained on the organizer's list.
+    Whenever an allowlist is supplied, every record must be a member, whatever the kind.
+    """
     value = json.loads(Path(path).read_text(encoding="utf-8"))
     if not isinstance(value, dict) or "samples" not in value:
         raise ValueError("Manifest must be a JSON object with a samples list")
-    if need_label and value.get("kind") != "official_train_manifest":
-        raise ValueError("Training/evaluation requires an official_train_manifest; public discovery is not an official sample list")
-    if need_label and official_allowlist is None:
-        raise ValueError("Set data.official_allowlist to the explicit organizer training sample list")
+    kind = value.get("kind")
+    development = False
+    if need_label:
+        if kind == DEVELOPMENT_KIND:
+            if not allow_development_pool:
+                raise ValueError("This is a public_development_manifest (public LuSNAR training-scene pool). "
+                                 "Set data.development_pool: true to opt in for method development; "
+                                 "the final submission model must use the organizer's official list")
+            development = True
+        elif kind != OFFICIAL_TRAIN_KIND:
+            raise ValueError("Training/evaluation requires an official_train_manifest (or an opted-in "
+                             "public_development_manifest); public discovery is not an official sample list")
+        elif official_allowlist is None:
+            raise ValueError("Set data.official_allowlist to the explicit organizer training sample list")
     allowlist = read_allowlist(official_allowlist) if official_allowlist else None
     root = Path(root)
     records = value["samples"]
@@ -104,6 +144,9 @@ def load_manifest(path, root, allowed_scenes, official_allowlist=None, need_labe
         raise ValueError(f"Empty manifest: {path}")
     seen = set()
     for record in records:
+        if development and scene_number(record["scene"]) not in TRAIN_SCENES:
+            # Belt and braces: test scenes 2/4/9 can never enter the development pool.
+            raise ValueError(f"Development pool contains a non-training scene: {record['scene']}")
         validate_sample(record, root, need_label, allowed_scenes)
         key = str(record["sample_id"])
         if key in seen:

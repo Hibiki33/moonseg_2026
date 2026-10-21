@@ -11,24 +11,36 @@ import torch.distributed as dist
 import torch.nn.functional as F
 from PIL import Image
 
-from .data.manifest import TEST_SCENES, load_manifest, read_allowlist, require_complete_allowlist
-from .utils import amp_context, init_distributed, load_checkpoint, load_config, write_json
+from .data.manifest import TEST_SCENES, load_manifest, read_allowlist, require_complete_allowlist, scene_number
+from .utils import load_partial_state_dict, amp_context, init_distributed, load_checkpoint, load_config, write_json
+
+WEIGHTS_KEYS = ("auto", "model", "ema_model")
+SCORE_POSTPROCESS = ("pred_masks logits bilinearly upsampled to the padded input size first, then sigmoid, "
+                     "then einsum with softmax class probabilities[..., :num_classes] (DINOv3 m2f predict/"
+                     "Mask2Former semantic inference order)")
 
 
-def semantic_scores(outputs, size):
-    class_prob = outputs["pred_logits"].float().softmax(-1)[..., :5]
-    mask_prob = outputs["pred_masks"].float().sigmoid()
-    scores = torch.einsum("bqc,bqhw->bchw", class_prob, mask_prob)
-    return F.interpolate(scores, size=size, mode="bilinear", align_corners=False)
+def semantic_scores(outputs, size, num_classes=5):
+    """Mask2Former semantic scores at `size`.
+
+    Upsample mask logits before the sigmoid, as upstream DINOv3 (heads/mask2former_head.py
+    predict() + eval/segmentation/inference.py) and Mask2Former sem_seg_postprocess do.
+    The trailing no-object class is dropped by keeping the first num_classes probabilities.
+    """
+    mask_logits = outputs["pred_masks"].float()
+    if tuple(mask_logits.shape[-2:]) != tuple(size):
+        mask_logits = F.interpolate(mask_logits, size=tuple(size), mode="bilinear", align_corners=False)
+    class_prob = outputs["pred_logits"].float().softmax(-1)[..., :num_classes]
+    return torch.einsum("bqc,bqhw->bchw", class_prob, mask_logits.sigmoid())
 
 
 @torch.inference_mode()
-def _forward_scores(model, image, mode="none", multiple=32):
+def _forward_scores(model, image, mode="none", multiple=32, num_classes=5):
     height, width = image.shape[-2:]
     image = F.pad(image, (0, (-width) % multiple, 0, (-height) % multiple))
     with amp_context(image.device, mode):
         output = model(image)
-    return semantic_scores(output, image.shape[-2:])[..., :height, :width]
+    return semantic_scores(output, image.shape[-2:], num_classes)[..., :height, :width]
 
 
 def _positions(length, crop, stride):
@@ -39,15 +51,16 @@ def _positions(length, crop, stride):
 
 
 @torch.inference_mode()
-def predict_scores(model, image, inference, amp="none"):
-    """image: normalized BCHW with batch=1; returns Bx5xHxW scores."""
+def predict_scores(model, image, inference, amp="none", num_classes=5):
+    """image: normalized BCHW with batch=1; returns B x num_classes x H x W scores."""
     if image.shape[0] != 1:
         raise ValueError("Sliding-window/TTA inference accepts one image at a time")
+    num_classes = int(num_classes)
     original_size = image.shape[-2:]
     scales = inference.get("scales", [1.0])
     if not scales or any(float(scale) <= 0 for scale in scales):
         raise ValueError("inference.scales must be a nonempty list of positive values")
-    combined = torch.zeros((1, 5, *original_size), device=image.device, dtype=torch.float32)
+    combined = torch.zeros((1, num_classes, *original_size), device=image.device, dtype=torch.float32)
     count = 0
     for scale in scales:
         scaled_size = tuple(max(1, round(length * float(scale))) for length in original_size)
@@ -56,16 +69,16 @@ def predict_scores(model, image, inference, amp="none"):
             source = scaled.flip(-1) if flip else scaled
             crop_size = inference.get("crop_size") if inference.get("sliding_window", True) else None
             if crop_size is None:
-                scores = _forward_scores(model, source, amp)
+                scores = _forward_scores(model, source, amp, num_classes=num_classes)
             else:
                 crop_h, crop_w = map(int, crop_size)
                 stride_h, stride_w = map(int, inference.get("stride", [crop_h * 2 // 3, crop_w * 2 // 3]))
-                scores = torch.zeros((1, 5, *scaled_size), device=image.device, dtype=torch.float32)
+                scores = torch.zeros((1, num_classes, *scaled_size), device=image.device, dtype=torch.float32)
                 coverage = torch.zeros((1, 1, *scaled_size), device=image.device, dtype=torch.float32)
                 for top in _positions(scaled_size[0], crop_h, stride_h):
                     for left in _positions(scaled_size[1], crop_w, stride_w):
                         bottom, right = min(top + crop_h, scaled_size[0]), min(left + crop_w, scaled_size[1])
-                        tile = _forward_scores(model, source[..., top:bottom, left:right], amp)
+                        tile = _forward_scores(model, source[..., top:bottom, left:right], amp, num_classes=num_classes)
                         scores[..., top:bottom, left:right] += tile
                         coverage[..., top:bottom, left:right] += 1
                 scores /= coverage
@@ -85,7 +98,40 @@ def normalize_image(image, data):
 
 def prediction_path(record):
     sample_id = str(record["sample_id"])
-    return Path("test") / f"Moon_{record['scene']}" / "submission" / f"{sample_id}.png"
+    return Path("test") / f"Moon_{scene_number(record['scene'])}" / "submission" / f"{sample_id}.png"
+
+
+def select_weights(checkpoint, weights_key="auto"):
+    """Return (state_dict, used_key, message).
+
+    auto: checkpoint['best_source'] if present (else 'model'); if that entry is absent,
+    fall back to 'model'. An explicit 'model' or 'ema_model' must exist in the checkpoint.
+    """
+    if weights_key not in WEIGHTS_KEYS:
+        raise ValueError(f"weights key must be one of {WEIGHTS_KEYS}")
+    if not isinstance(checkpoint, dict):
+        raise ValueError("Checkpoint must be a dictionary with a 'model' state_dict")
+    if weights_key == "auto":
+        requested = str(checkpoint.get("best_source") or "model")  # None when trained without validation
+        if isinstance(checkpoint.get(requested), dict):
+            used = requested
+            message = f"weights: '{used}' (auto; best_source={checkpoint.get('best_source')!r})"
+        else:
+            used = "model"
+            message = (f"weights: 'model' (auto fallback; best_source={checkpoint.get('best_source')!r} "
+                       f"is not a state_dict in this checkpoint)")
+    else:
+        used = weights_key
+        message = f"weights: '{used}' (explicit --weights-key)"
+    if not isinstance(checkpoint.get(used), dict):
+        raise KeyError(f"Checkpoint has no '{used}' state_dict; available keys: {sorted(checkpoint)}")
+    return checkpoint[used], used, message
+
+
+def _json_scalar(value):
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    return value.item() if hasattr(value, "item") else str(value)
 
 
 def main():
@@ -95,6 +141,8 @@ def main():
     parser.add_argument("--manifest", required=True, help="Complete unlabeled official test manifest")
     parser.add_argument("--output", required=True)
     parser.add_argument("--official-test-allowlist", required=True)
+    parser.add_argument("--weights-key", choices=WEIGHTS_KEYS, default="auto",
+                        help="auto: checkpoint best_source (fallback model); or force model / ema_model")
     parser.add_argument("--device", help="Explicit device for single-process inference; incompatible with multiple torchrun ranks")
     args = parser.parse_args()
     if args.device is not None and int(os.environ.get("WORLD_SIZE", "1")) > 1:
@@ -110,10 +158,16 @@ def main():
                             args.official_test_allowlist, need_label=False)
     require_complete_allowlist(records, read_allowlist(args.official_test_allowlist))
     from .models import build_model
-    model = build_model(config, load_backbone=False).to(device)
+    num_classes = int(config.get("model", {}).get("num_classes", 5))
+    model = build_model(config, load_backbone=True).to(device)
     checkpoint = load_checkpoint(args.checkpoint)
-    model.load_state_dict(checkpoint["model"], strict=True)
+    state, weights_key, message = select_weights(checkpoint, args.weights_key)
+    if rank == 0:
+        print(f"{message}; checkpoint={args.checkpoint}", flush=True)
+    load_partial_state_dict(model, state, weights_key)
     model.eval()
+    inference = config.get("inference", {})
+    amp = config.get("train", {}).get("amp", "none")
     output = Path(args.output)
     output.mkdir(parents=True, exist_ok=True)
     predictions = []
@@ -123,14 +177,14 @@ def main():
         with Image.open(Path(config["data"]["root"]) / record["image"]) as handle:
             image = handle.convert("RGB")
         tensor = normalize_image(image, config["data"]).to(device)
-        scores = predict_scores(model, tensor, config.get("inference", {}), config.get("train", {}).get("amp", "none"))
+        scores = predict_scores(model, tensor, inference, amp, num_classes)
         mask = scores.argmax(1)[0].cpu().numpy().astype(np.uint8)
         relative = prediction_path(record)
         target = output / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         Image.fromarray(mask).save(target)
-        predictions.append((index, {"scene": record["scene"], "sample_id": record["sample_id"],
-                                   "prediction": str(relative), "width": image.width, "height": image.height}))
+        predictions.append((index, {"scene": scene_number(record["scene"]), "sample_id": record["sample_id"],
+                                   "prediction": relative.as_posix(), "width": image.width, "height": image.height}))
         print(f"[rank {rank}; sample {index + 1}/{len(records)}] {target}", flush=True)
     if world_size > 1:
         gathered = [None] * world_size if rank == 0 else None
@@ -141,8 +195,16 @@ def main():
         predictions.sort(key=lambda item: item[0])
         if [index for index, _ in predictions] != list(range(len(records))):
             raise RuntimeError("Distributed prediction index has missing or duplicated samples")
+        settings = {"sliding_window": bool(inference.get("sliding_window", True)) and inference.get("crop_size") is not None,
+                    "crop_size": inference.get("crop_size"), "stride": inference.get("stride"),
+                    "scales": [float(scale) for scale in inference.get("scales", [1.0])],
+                    "flip": bool(inference.get("flip", False)), "amp": amp, "num_classes": num_classes,
+                    "pad_multiple": 32, "score_postprocess": SCORE_POSTPROCESS, "world_size": world_size}
         write_json({"kind": "prediction_index", "layout": "test/Moon_i/submission/<sample_id>.png",
                     "packaging_status": "Official prediction layout; validate complete files with tools/package_submission.py before submitting.",
+                    "checkpoint": str(args.checkpoint), "weights_key": weights_key,
+                    "weights_key_requested": args.weights_key, "best_source": _json_scalar(checkpoint.get("best_source")),
+                    "checkpoint_epoch": _json_scalar(checkpoint.get("epoch")), "inference": settings,
                     "predictions": [record for _, record in predictions]}, output / "prediction_index.json")
     if dist.is_initialized():
         dist.destroy_process_group()

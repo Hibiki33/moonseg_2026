@@ -2,9 +2,11 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 export CUDA_DEVICE_ORDER=PCI_BUS_ID
-export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0,7}"
+# Unset -> GPUs 0,7; explicitly empty (CUDA_VISIBLE_DEVICES=) means CPU only; -1 also works.
+export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES-0,7}"
 if [[ $# -lt 3 ]]; then
-  echo "Usage: $0 CONFIG CHECKPOINT TEST_MANIFEST [--output runs/predictions] [other predict options]" >&2
+  echo "Usage: $0 CONFIG CHECKPOINT TEST_MANIFEST --official-test-allowlist OFFICIAL_TEST_LIST [--output runs/predictions] [--weights-key auto|model|ema_model] [other predict options]" >&2
+  echo "  --official-test-allowlist is required: the organizer's complete fixed test sample list." >&2
   exit 2
 fi
 config="$1"
