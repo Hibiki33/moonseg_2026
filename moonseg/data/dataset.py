@@ -203,7 +203,9 @@ class MoonDataset(Dataset):
         Each operation has its own probability, without an outer random gate.
         photometric_probability supplies the default for both operation gates;
         brightness_probability/contrast_probability can override them separately.
-        The reduced intensity ranges are local baseline hyperparameters.
+        brightness_delta and contrast_range come from the config (the baseline sets the
+        standard DINOv3/MMSeg strengths, +/-32 and 0.5-1.5); when omitted they default to
+        the code fallback values below (+/-16 and 0.9-1.1).
         """
         probability = float(self.config.get("photometric_probability", 0.5))
         pixels = np.asarray(pixels)

@@ -10,7 +10,7 @@ public_development_manifest files from the public LuSNAR training-scene pool
 (scenes 1,3,5,6,7,8 only) for method development before the organizer's list
 arrives. Loaders accept them only with data.development_pool: true. Test scenes
 2/4/9 never receive labels, and the final submission model must be retrained on
-the organizer's list. See docs/development_pool.md.
+the organizer's list. See docs/data.md.
 """
 from __future__ import annotations
 
@@ -133,7 +133,7 @@ def main():
     parser.add_argument("--official-source", help="Organizer list URL or supplied file provenance, stored in manifests")
     parser.add_argument("--development-pool", action="store_true",
                         help="Also write public_development_manifest files (dev_*.json) from public training scenes "
-                             "1,3,5,6,7,8 for method development only; see docs/development_pool.md")
+                             "1,3,5,6,7,8 for method development only; see docs/data.md")
     parser.add_argument("--validate-labels", action="store_true",
                         help="Validate colors/dimensions of admitted official training samples, or with "
                              "--development-pool of all discovered training-scene labels (never test scenes)")
