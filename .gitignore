@@ -2,10 +2,11 @@
 /data
 /ckpts
 /outputs/
-/runs/
+/runs
 /predictions/
 /submissions/
 /manifests/
+/build/
 /.venv
 /.cache
 __pycache__/

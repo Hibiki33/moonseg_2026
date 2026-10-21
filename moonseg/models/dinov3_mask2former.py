@@ -1,17 +1,30 @@
-"""Official DINOv3 ViT-Adapter and Mask2Former, without custom CUDA ops."""
+"""Official DINOv3 ViT-Adapter and Mask2Former.
+
+Deformable attention uses the official compiled MultiScaleDeformableAttention CUDA extension when it
+is available (``model.deformable_attention: auto|cuda``), otherwise the pure-PyTorch grid_sample path.
+"""
 
 from __future__ import annotations
 
 import importlib
 import importlib.util
+import json
+import math
+import os
 import sys
 import types
+import warnings
 from contextlib import nullcontext
 from pathlib import Path
 
 import torch
 from torch import nn
+from torch.autograd.function import once_differentiable
 from torch.nn import functional as F
+
+DEFORMABLE_ATTENTION_MODES = ("auto", "cuda", "torch")
+# Built by scripts/build_ops.sh; override with model.deformable_attention_extension_dir or MOONSEG_MSDA_DIR.
+DEFAULT_EXTENSION_DIR = Path(__file__).resolve().parents[2] / "build" / "ms_deform_attn"
 
 
 def _official_modules(source: str | Path):
@@ -68,6 +81,89 @@ def _enable_torch_deformable_attention(ops):
             return result.to(value.dtype)
 
     ops.MSDeformAttnFunction = TorchDeformableAttention
+    return TorchDeformableAttention
+
+
+def _load_deformable_attention_extension(directory=None):
+    """Import the compiled official extension; return (module, None) or (None, reason)."""
+    directory = Path(directory or os.environ.get("MOONSEG_MSDA_DIR") or DEFAULT_EXTENSION_DIR).expanduser()
+    manifest = directory / "build_manifest.json"
+    if manifest.is_file():
+        built = json.loads(manifest.read_text(encoding="utf-8"))
+        if built.get("torch") != torch.__version__:
+            return None, (f"{directory} was built for torch {built.get('torch')}, running {torch.__version__}; "
+                          "rerun scripts/build_ops.sh")
+    if directory.is_dir() and str(directory) not in sys.path:
+        sys.path.insert(0, str(directory))
+    try:
+        import MultiScaleDeformableAttention as extension  # noqa: N813
+    except (ImportError, OSError) as error:  # missing, or built for another torch/CUDA/Python ABI
+        return None, f"{type(error).__name__}: {error}"
+    return extension, None
+
+
+def _enable_cuda_deformable_attention(ops, extension):
+    """Official compiled forward and backward (ops/functions/ms_deform_attn_func.py semantics).
+
+    The kernels dispatch float/double only, so inputs are cast to FP32 exactly like the PyTorch
+    path; BF16 autocast outside this call is unaffected. CPU tensors use the PyTorch path.
+    """
+    torch_path = _enable_torch_deformable_attention(ops)
+
+    class CompiledFunction(torch.autograd.Function):
+        @staticmethod
+        def forward(ctx, value, spatial_shapes, level_start_index, locations, weights, im2col_step):
+            ctx.im2col_step = im2col_step
+            output = extension.ms_deform_attn_forward(value, spatial_shapes, level_start_index,
+                                                      locations, weights, im2col_step)
+            ctx.save_for_backward(value, spatial_shapes, level_start_index, locations, weights)
+            return output
+
+        @staticmethod
+        @once_differentiable
+        def backward(ctx, grad_output):
+            value, spatial_shapes, level_start_index, locations, weights = ctx.saved_tensors
+            grad_value, grad_locations, grad_weights = extension.ms_deform_attn_backward(
+                value, spatial_shapes, level_start_index, locations, weights,
+                grad_output.contiguous(), ctx.im2col_step)
+            return grad_value, None, None, grad_locations, grad_weights, None
+
+    class CudaDeformableAttention:
+        @staticmethod
+        def apply(value, spatial_shapes, level_start_index, locations, weights, im2col_step):
+            if not value.is_cuda:
+                return torch_path.apply(value, spatial_shapes, level_start_index, locations, weights, im2col_step)
+            # The kernel requires batch % min(batch, im2col_step) == 0.
+            step = math.gcd(value.shape[0], int(im2col_step))
+            with torch.autocast(device_type="cuda", enabled=False):
+                result = CompiledFunction.apply(
+                    value.float().contiguous(), spatial_shapes.contiguous(), level_start_index.contiguous(),
+                    locations.float().contiguous(), weights.float().contiguous(), step)
+            return result.to(value.dtype)
+
+    ops.MSDeformAttnFunction = CudaDeformableAttention
+    return CudaDeformableAttention
+
+
+def _select_deformable_attention(ops, settings):
+    # Process-wide: this patches the official module, so the last built model's mode applies to all.
+    mode = str(settings.get("deformable_attention", "auto")).lower()
+    if mode not in DEFORMABLE_ATTENTION_MODES:
+        raise ValueError("model.deformable_attention must be auto, cuda or torch")
+    if mode == "torch":
+        _enable_torch_deformable_attention(ops)
+        return "torch", "configured PyTorch grid_sample path"
+    extension, reason = _load_deformable_attention_extension(settings.get("deformable_attention_extension_dir"))
+    if extension is None:
+        if mode == "cuda":
+            raise RuntimeError("model.deformable_attention=cuda but the compiled MultiScaleDeformableAttention "
+                               f"extension is unavailable ({reason}). Run scripts/build_ops.sh.")
+        warnings.warn(f"Compiled MultiScaleDeformableAttention unavailable ({reason}); "
+                      "using the slower, more memory-hungry PyTorch deformable attention.", stacklevel=2)
+        _enable_torch_deformable_attention(ops)
+        return "torch", "PyTorch grid_sample fallback"
+    _enable_cuda_deformable_attention(ops, extension)
+    return "cuda", f"compiled {extension.__file__}; CPU tensors use PyTorch grid_sample"
 
 
 def _batch_norm(module):
@@ -93,7 +189,8 @@ def _build_adapter(adapter_module, backbone, settings):
             c2, c3, c4 = self._add_level_embed(c2, c3, c4)
             length2, length3 = c2.shape[1], c3.shape[1]
             spatial = torch.cat((c2, c3, c4), dim=1)
-            context = torch.no_grad() if self.freeze_backbone else nullcontext()
+            # Frozen leading blocks record no graph even without no_grad: their inputs need no grad.
+            context = nullcontext() if self.backbone_trainable else torch.no_grad()
             with context:
                 layers = self.backbone.get_intermediate_layers(
                     images, n=self.interaction_indexes, return_class_token=True
@@ -120,8 +217,11 @@ def _build_adapter(adapter_module, backbone, settings):
 
         def train(self, mode=True):
             super().train(mode)
-            if self.freeze_backbone:
-                self.backbone.eval()
+            # The original ViT always stays in eval mode, also when (partly) fine tuned. The hub ViT has
+            # pos_embed_rope_rescale_coords=2: a pretraining-time random RoPE coordinate rescale that runs
+            # only in training mode and must not run during segmentation fine tuning. The ViT has no
+            # BatchNorm, so eval mode affects only that jitter and drop path (rate 0 in the hub configs).
+            self.backbone.eval()
             return self
 
     depth = len(backbone.blocks)
@@ -136,7 +236,21 @@ def _build_adapter(adapter_module, backbone, settings):
         with_cp=bool(settings.get("gradient_checkpointing", True)),
     )
     adapter.freeze_backbone = bool(settings.get("freeze_backbone", True))
+    unfreeze = settings.get("unfreeze_last_blocks", 0)
+    if isinstance(unfreeze, bool) or not isinstance(unfreeze, int) or not 0 <= unfreeze <= depth:
+        raise ValueError(f"model.unfreeze_last_blocks must be an integer in [0, {depth}]")
+    if unfreeze and not adapter.freeze_backbone:
+        raise ValueError("model.unfreeze_last_blocks needs freeze_backbone=true; freeze_backbone=false trains the whole ViT")
+    if unfreeze and indices[-1] != depth - 1:
+        raise ValueError("model.unfreeze_last_blocks needs the final ViT block as the last interaction index; "
+                         "later blocks would receive no gradient")
     adapter.backbone.requires_grad_(not adapter.freeze_backbone)
+    if unfreeze:
+        # Only the last blocks and the final norm applied to every extracted layer. Patch embedding,
+        # class/storage/mask tokens stay frozen; RoPE periods are a buffer, never trained.
+        for module in (*adapter.backbone.blocks[-unfreeze:], adapter.backbone.norm):
+            module.requires_grad_(True)
+    adapter.backbone_trainable = any(parameter.requires_grad for parameter in adapter.backbone.parameters())
     if not settings.get("adapter_sync_batchnorm", False):
         _batch_norm(adapter.spm)
         for index in range(1, 5):
@@ -199,7 +313,7 @@ def build_model(config: dict, load_backbone: bool = True) -> DINOv3Mask2Former:
         raise ValueError("model.backbone must be vitb16 or vitl16")
     source = settings.get("dinov3_repo", Path(__file__).resolve().parents[2] / "third_party/dinov3")
     backbones, adapter_module, pixel_module, decoder_module, ops = _official_modules(source)
-    _enable_torch_deformable_attention(ops)
+    deformable_attention, attention_detail = _select_deformable_attention(ops, settings)
     backbone = getattr(backbones, "dinov3_" + architecture)(pretrained=False)
     if load_backbone:
         weights = settings.get("backbone_weights")
@@ -228,4 +342,8 @@ def build_model(config: dict, load_backbone: bool = True) -> DINOv3Mask2Former:
         dim_feedforward=int(settings.get("dim_feedforward", 2048)), dec_layers=decoder_layers,
         pre_norm=False, mask_dim=dimension, enforce_input_project=False,
     )
-    return DINOv3Mask2Former(adapter, pixel_decoder, decoder)
+    model = DINOv3Mask2Former(adapter, pixel_decoder, decoder)
+    model.deformable_attention = deformable_attention  # "cuda" or "torch"; plain attribute, not in state_dict
+    if int(os.environ.get("RANK", "0")) == 0:
+        print(f"MoonSeg deformable attention: {deformable_attention} ({attention_detail})", flush=True)
+    return model

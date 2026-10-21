@@ -3,6 +3,8 @@
 Follows facebookresearch/Mask2Former's HungarianMatcher and SetCriterion.
 Targets are semantic class masks (one target for each class present in an image).
 Only valid pixel centers are sampled, so padding/ignore=255 cannot enter the loss.
+Valid pixel indices are computed once per image; point sampling needs no further
+host synchronization.
 """
 
 from __future__ import annotations
@@ -24,11 +26,18 @@ def _sample(logits: torch.Tensor, coordinates: torch.Tensor) -> torch.Tensor:
     )[:, 0, :, 0]
 
 
-def _coordinates(valid: torch.Tensor, count: int) -> torch.Tensor:
-    locations = valid.nonzero(as_tuple=False)
-    selected = locations[torch.randint(len(locations), (count,), device=valid.device)]
+def _coordinates(target: dict, shape: tuple[int, ...]) -> torch.Tensor:
+    """Uniform random valid pixel centers as normalized (x, y) with shape [*shape, 2]."""
+    valid = target["valid_mask"]
     height, width = valid.shape
-    return torch.stack(((selected[:, 1] + 0.5) / width, (selected[:, 0] + 0.5) / height), -1)
+    if target["all_valid"]:
+        flat = torch.randint(height * width, shape, device=valid.device)
+    else:
+        indices = target["valid_indices"]
+        if indices.numel() == 0:
+            raise ValueError("Cannot sample points from an entirely ignored image")
+        flat = indices[torch.randint(indices.numel(), shape, device=valid.device)]
+    return torch.stack(((flat % width + 0.5) / width, (flat // width + 0.5) / height), -1)
 
 
 def _target_points(masks: torch.Tensor, coords: torch.Tensor) -> torch.Tensor:
@@ -83,6 +92,11 @@ class Mask2FormerCriterion(nn.Module):
             # Drop targets entirely inside ignored regions, including fully ignored images.
             keep = (masks * valid[None]).flatten(1).sum(1) > 0
             target["labels"], target["masks"] = labels[keep], masks[keep]
+            # Cache valid pixel indices once per image (one host sync) for all point sampling.
+            flat = valid.flatten()
+            target["all_valid"] = bool(flat.all())
+            target["valid_indices"] = None if target["all_valid"] else flat.nonzero()[:, 0]
+            target["has_valid"] = target["all_valid"] or target["valid_indices"].numel() > 0
         return prepared
 
     @torch.no_grad()
@@ -94,7 +108,8 @@ class Mask2FormerCriterion(nn.Module):
                 empty = torch.empty(0, dtype=torch.long, device=logits.device)
                 matches.append((empty, empty))
                 continue
-            coordinates = _coordinates(target["valid_mask"], self.num_points)
+            # Matching shares one set of valid points among all query/target pairs, as upstream.
+            coordinates = _coordinates(target, (self.num_points,))
             predicted = _sample(masks.float(), coordinates)
             truth = _target_points(target["masks"], coordinates)
             cost_ce = -logits.float().softmax(-1)[:, target["labels"]]
@@ -111,27 +126,31 @@ class Mask2FormerCriterion(nn.Module):
 
     def _losses(self, outputs, targets, normalizer):
         matches = self._match(outputs, targets)
-        logits, masks = outputs["pred_logits"].float(), outputs["pred_masks"].float()
+        logits, masks = outputs["pred_logits"].float(), outputs["pred_masks"]
         classes = torch.full(logits.shape[:2], self.num_classes, dtype=torch.long, device=logits.device)
-        valid_images = torch.tensor([bool(t["valid_mask"].any()) for t in targets], device=logits.device)
-        zero = logits.sum() * 0 + masks.sum() * 0
+        valid_images = torch.tensor([t["has_valid"] for t in targets], device=logits.device)
+        # Keeps every mask logit in the graph; mean cannot overflow FP16 like a sum of [B,Q,h,w].
+        zero = logits.sum() * 0 + masks.mean().float() * 0
         mask_loss, dice_loss = zero, zero
         for batch_index, (query_indices, target_indices) in enumerate(matches):
             target = targets[batch_index]
             classes[batch_index, query_indices] = target["labels"][target_indices]
             if query_indices.numel() == 0:
                 continue
-            predicted = masks[batch_index, query_indices]
+            # Cast only the matched queries, never the complete [B,Q,h,w] mask logits.
+            predicted = masks[batch_index, query_indices].float()
             truth = target["masks"][target_indices]
             with torch.no_grad():
+                # Mask2Former get_uncertain_point_coords_with_randomness: candidate and random
+                # points are drawn independently for each matched mask, here from valid pixels.
+                count = predicted.shape[0]
                 candidate_count = max(self.num_points, int(self.num_points * self.oversample_ratio))
-                candidate = _coordinates(target["valid_mask"], candidate_count)
+                candidate = _coordinates(target, (count, candidate_count))
                 uncertainty = -_sample(predicted, candidate).abs()
                 important_count = int(self.num_points * self.importance_sample_ratio)
                 uncertain_indices = uncertainty.topk(important_count, dim=1).indices
-                important = candidate[uncertain_indices]
-                random = _coordinates(target["valid_mask"], self.num_points - important_count)
-                random = random[None].expand(predicted.shape[0], -1, -1)
+                important = candidate.gather(1, uncertain_indices[..., None].expand(-1, -1, 2))
+                random = _coordinates(target, (count, self.num_points - important_count))
                 coordinates = torch.cat((important, random), dim=1)
                 truth_points = _target_points(truth, coordinates)
             predicted_points = _sample(predicted, coordinates)
