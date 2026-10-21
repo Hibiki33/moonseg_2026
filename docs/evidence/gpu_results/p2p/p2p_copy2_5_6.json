@@ -1,0 +1,54 @@
+{
+  "0->1": [
+    {
+      "mismatched": 67092480,
+      "fraction": 0.999755859375,
+      "untouched(-7)": 67092480,
+      "zeros": 0,
+      "nan": 0,
+      "GBps": 4.043882247484088
+    },
+    {
+      "mismatched": 67108864,
+      "fraction": 1.0,
+      "untouched(-7)": 67108864,
+      "zeros": 0,
+      "nan": 0,
+      "GBps": 4.317377508697606
+    },
+    {
+      "mismatched": 67092480,
+      "fraction": 0.999755859375,
+      "untouched(-7)": 67092480,
+      "zeros": 0,
+      "nan": 0,
+      "GBps": 4.320184571325651
+    }
+  ],
+  "1->0": [
+    {
+      "mismatched": 67108864,
+      "fraction": 1.0,
+      "untouched(-7)": 67108864,
+      "zeros": 0,
+      "nan": 0,
+      "GBps": 2.5915046030746907
+    },
+    {
+      "mismatched": 67092480,
+      "fraction": 0.999755859375,
+      "untouched(-7)": 67092480,
+      "zeros": 0,
+      "nan": 0,
+      "GBps": 4.318877977130157
+    },
+    {
+      "mismatched": 67108864,
+      "fraction": 1.0,
+      "untouched(-7)": 67108864,
+      "zeros": 0,
+      "nan": 0,
+      "GBps": 2.725931285755333
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 # 比赛规则与数据来源核对
 
-核实日期：**2026-10-21（UTC+8）**。本文记录实际读取的来源、可支持的事实和仍未取得的内容。此前沙箱 DNS 失败已由本次标准 `curl` 成功访问替代，不再据此把整份官方规则列为未知。
+核实日期：**2026-10-21（UTC+8）**。本文记录比赛规则实际读取的来源、可支持的事实和仍未取得的内容；比赛规则正文见 [challenge.md](../challenge.md)。
 
 | 来源 | 核对结果 | 用途与限制 |
 |---|---|---|
@@ -8,11 +8,9 @@
 | [SPA 入口 index-Cxly3Qme.js](https://insight.onescience.cn/assets/index-Cxly3Qme.js) | 成功读取，比赛路由懒加载 CompetitionPage-uKTt9A4g.js | 将页面入口与具体比赛模块关联；资源名可能随部署更新 |
 | [比赛页面模块 CompetitionPage-uKTt9A4g.js](https://insight.onescience.cn/assets/CompetitionPage-uKTt9A4g.js) | 成功读取，含 MoonSeg 文案 `Hr`、评价渲染函数 `di`、概述赛程 `Fr`、数据说明 `Lr`、提交界面 `qr` | 本次评分公式、缺类集合、同分、截止、目录、材料和次数的直接证据，确为本赛事页面实际使用的内容 |
 | [比赛详情 API](https://insight.onescience.cn/api/competition/event/detail?event_id=c2f557a58ff2e9f4265d56f112a7e01) 与 [规则 API](https://insight.onescience.cn/api/competition/rules?event_id=c2f557a58ff2e9f4265d56f112a7e01) | 未登录请求均返回 `Authentication required!` / `unauthorized` | 未取得账户授权状态、完整登录后规则或技术协议；不得声称已核实这些内容 |
-| [LuSNAR 官方 GitHub](https://github.com/zqyu9/LuSNAR-dataset) | 此前已读取 README 与文件列表；根目录主要为 README.md、index.html、static | 支持五类颜色表、左相机示意目录、1024×1024 原始分辨率；此前未找到实际分割训练脚本，不能据 README 的“code released”文字编造训练入口 |
-| [LuSNAR Hugging Face 文件列表](https://huggingface.co/datasets/xuboluo2001/LuSNAR/tree/main) | 此前已读取，列出 Moon_1.zip 至 Moon_9.zip | 支持原始场景包名称；不是比赛官方样本清单。包含评测场景标签的上游包不构成训练授权 |
-| [LuSNAR 论文 arXiv v3，IV-A](https://arxiv.org/html/2407.06512v3#S4.SS1) | 此前已读取，v3 日期为 2024-09-26；表 V 比较五个 2D 模型 | SegFormer mIoU 89.96%，其训练/测试划分与本比赛不同；未发现完整训练增强配方或明确 SegFormer B0/B5 型号，论文成绩不是本比赛排行榜基线 |
-| [TGRS期刊记录](https://ieeexplore.ieee.org/document/11643283/)及[Crossref元数据](https://api.crossref.org/works/10.1109/TGRS.2026.3720373) | 已确认2026年TGRS卷64、DOI10.1109/TGRS.2026.3720373；出版社页面/PDF请求未取得正文 | 期刊终稿优先，但不能把arXiv v3的未报告项直接当作终稿结论；按用户允许在无法取得终稿时暂用v3，详见paper_alignment.md |
-| [官方仓库 SegFormer 型号问题 #18](https://github.com/zqyu9/LuSNAR-dataset/issues/18) | 已读取正文及API记录，提问B0/B2复现，当前无评论回复 | 这是读者提问，不是作者答复，不能据此断言具体型号 |
+| [LuSNAR 官方 GitHub](https://github.com/zqyu9/LuSNAR-dataset) | 已读取 README 与文件列表；根目录只有 README.md、index.html、static | 支持五类颜色表、左相机示意目录、1024×1024 原始分辨率；没有分割训练或评测代码，README 的基线表与论文矛盾（见 [paper_alignment.md](paper_alignment.md#公开代码与第三方结果)） |
+| [LuSNAR Hugging Face 文件列表](https://huggingface.co/datasets/xuboluo2001/LuSNAR/tree/main) | 已读取，列出 Moon_1.zip 至 Moon_9.zip | 支持原始场景包名称；不是比赛官方样本清单。包含评测场景标签的上游包不构成训练授权 |
+| LuSNAR 论文：[arXiv v3](https://arxiv.org/html/2407.06512v3)、[TGRS 终稿](https://ieeexplore.ieee.org/document/11643283/)、[issue #18](https://github.com/zqyu9/LuSNAR-dataset/issues/18) | 版本、可读范围与表 V/VII 见 [paper_alignment.md](paper_alignment.md) | 论文划分与本比赛不同，论文成绩不是本比赛排行榜基线；终稿正文未取得 |
 
 ## 当前官网的直接证据
 
@@ -44,6 +42,6 @@
 
 ## 文档与实现的边界
 
-challenge.md 原有比赛正文保留，新增核对部分已据当前官网替换旧的“未能访问”状态。官方已定义的场景像素计数、参考标签类别集合、归一化加权公式、提交路径及脚本材料清单不再标为项目猜测；项目自定的CLI参数、默认权重、模型及增强强度仍属实现选择。
+challenge.md 原有比赛正文保留，其后的核对补充据当前官网写成。官方已定义的场景像素计数、参考标签类别集合、归一化加权公式、提交路径及脚本材料清单不再标为项目猜测；项目自定的CLI参数、默认权重、模型及增强强度仍属实现选择。
 
-来源记录不转载受限数据链接或提取密码。报名与数据访问仍须按官方流程审核；上游公开许可证或公开可下载状态不能覆盖比赛对训练样本、测试真值和非公开材料的限制。此前核对过的上游仓库、HF和论文条目沿用并明确标记“此前”，本次新增联网核实集中于比赛官网。
+来源记录不转载受限数据链接或提取密码。报名与数据访问仍须按官方流程审核；上游公开许可证或公开可下载状态不能覆盖比赛对训练样本、测试真值和非公开材料的限制。上游仓库、HF 和论文条目沿用此前的核对，联网核实集中于比赛官网。

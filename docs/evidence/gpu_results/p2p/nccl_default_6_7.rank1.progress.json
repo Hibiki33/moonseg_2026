@@ -1,0 +1,92 @@
+{
+  "NCCL_P2P_DISABLE": null,
+  "tag": "nccl_default_6_7",
+  "world_size": 2,
+  "CUDA_VISIBLE_DEVICES": "6,7",
+  "CUDA_DEVICE_ORDER": "PCI_BUS_ID",
+  "torch": "2.7.1+cu126",
+  "nccl": "2.26.2",
+  "status": "ok",
+  "stage": "done",
+  "can_device_access_peer": [
+    [
+      true,
+      false
+    ],
+    [
+      false,
+      true
+    ]
+  ],
+  "init_seconds": 0.3911187909543514,
+  "devices": [
+    {
+      "rank": 0,
+      "name": "NVIDIA RTX A6000",
+      "uuid": "d5e7669a-511e-925f-cc3f-d23bde2b6cef",
+      "pci_bus_id": null,
+      "pci_device_id": null,
+      "total_MiB": 48539
+    },
+    {
+      "rank": 1,
+      "name": "NVIDIA RTX 6000 Ada Generation",
+      "uuid": "a8ecdaa9-88ae-d4b7-f87e-b013ef33b516",
+      "pci_bus_id": null,
+      "pci_device_id": null,
+      "total_MiB": 48508
+    }
+  ],
+  "results": {
+    "grad_28.7M_fp32": {
+      "numel": 28700000,
+      "bytes": 114800000,
+      "warmup": 5,
+      "iters": 20,
+      "first_result_correct_all_ranks": true,
+      "post_timing_consistent_finite": true,
+      "per_rank_mean_median_min_seconds": [
+        [
+          0.01993440664373338,
+          0.019998720169067383,
+          0.01703628730773926
+        ],
+        [
+          0.0199348627589643,
+          0.019999744415283204,
+          0.01704140853881836
+        ]
+      ],
+      "mean_seconds_slowest_rank": 0.0199348627589643,
+      "algbw_GBps_mean": 5.758755472162797,
+      "algbw_GBps_median": 5.740073353751125,
+      "algbw_GBps_best": 6.736532355204023,
+      "busbw_GBps_mean": 5.758755472162797
+    },
+    "1GiB_256M_fp32": {
+      "numel": 268435456,
+      "bytes": 1073741824,
+      "warmup": 5,
+      "iters": 20,
+      "first_result_correct_all_ranks": true,
+      "post_timing_consistent_finite": true,
+      "per_rank_mean_median_min_seconds": [
+        [
+          0.1728888879995793,
+          0.17863168334960938,
+          0.15336344909667968
+        ],
+        [
+          0.17288927268236876,
+          0.17867263793945312,
+          0.15337881469726564
+        ]
+      ],
+      "mean_seconds_slowest_rank": 0.17288927268236876,
+      "algbw_GBps_mean": 6.210575169534508,
+      "algbw_GBps_median": 6.009548167995702,
+      "algbw_GBps_best": 7.000587572144943,
+      "busbw_GBps_mean": 6.210575169534508
+    }
+  }
+}

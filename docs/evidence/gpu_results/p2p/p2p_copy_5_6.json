@@ -1,0 +1,29 @@
+{
+  "CUDA_VISIBLE_DEVICES": "5,6",
+  "devices": [
+    {
+      "name": "NVIDIA RTX A6000",
+      "uuid": "bc3b6f53-b1dd-94dc-508c-04819399b297"
+    },
+    {
+      "name": "NVIDIA RTX A6000",
+      "uuid": "d5e7669a-511e-925f-cc3f-d23bde2b6cef"
+    }
+  ],
+  "can_device_access_peer": {
+    "0->1": true,
+    "1->0": true
+  },
+  "0->1": {
+    "stage": "done",
+    "first_copy_s": 0.0651586577296257,
+    "correct": false,
+    "GBps": 2.71304284341918
+  },
+  "1->0": {
+    "stage": "done",
+    "first_copy_s": 0.06235993001610041,
+    "correct": true,
+    "GBps": 2.827141758916674
+  }
+}
