@@ -48,9 +48,9 @@ train:
   output_dir: runs/dnv3_va_m2f_vith16plus_e25
   seed: 42
   epochs: 25
-  # Per-GPU memory for H+ is not measured yet; 4 x 2 GPUs x 8 keeps the effective batch at 64.
-  batch_size: 4
-  accumulation_steps: 8
+  # Measured 2026-10-22 on a 49140 MiB A6000: batch 8 peaks at 42.95 / 46.45 GiB (about 1 GiB headroom), same speed as batch 4; user chose 8 x 2 GPUs x 4 = 64.
+  batch_size: 8
+  accumulation_steps: 4
   # 8 x 2 GPUs x 4 = 64 images per update (user requirement: at least 64).
   min_effective_batch: 64
   num_workers: 4
