@@ -1,0 +1,17 @@
+{
+ "config": "configs/dnv3_va_m2f_vith16plus.yaml",
+ "batch": 8,
+ "accum": 1,
+ "size": 1024,
+ "params_total": 885060390,
+ "params_trainable": 44426790,
+ "reserved_after_first_half_gib": 46.453125,
+ "reserved_after_eval_gib": 9.736328125,
+ "reserved_at_end_gib": 44.15234375,
+ "status": "ok",
+ "img_per_s": 2.354048610664245,
+ "sec_per_update": 3.39840051040519,
+ "peak_allocated_gib": 42.9495153427124,
+ "peak_reserved_gib": 46.453125,
+ "last_loss": 47.566795349121094
+}
