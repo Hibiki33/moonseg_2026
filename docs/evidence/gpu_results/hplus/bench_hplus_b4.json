@@ -1,0 +1,14 @@
+{
+ "config": "configs/dnv3_va_m2f_vith16plus.yaml",
+ "batch": 4,
+ "accum": 1,
+ "size": 1024,
+ "params_total": 885060390,
+ "params_trainable": 44426790,
+ "status": "ok",
+ "img_per_s": 2.3449746972200534,
+ "sec_per_update": 1.7057753351206582,
+ "peak_allocated_gib": 23.376154899597168,
+ "peak_reserved_gib": 26.8203125,
+ "last_loss": 61.88624572753906
+}
