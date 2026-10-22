@@ -10,7 +10,7 @@
 | [比赛详情 API](https://insight.onescience.cn/api/competition/event/detail?event_id=c2f557a58ff2e9f4265d56f112a7e01) 与 [规则 API](https://insight.onescience.cn/api/competition/rules?event_id=c2f557a58ff2e9f4265d56f112a7e01) | 未登录请求均返回 `Authentication required!` / `unauthorized` | 未取得账户授权状态、完整登录后规则或技术协议；不得声称已核实这些内容 |
 | [LuSNAR 官方 GitHub](https://github.com/zqyu9/LuSNAR-dataset) | 已读取 README 与文件列表；根目录只有 README.md、index.html、static | 支持五类颜色表、左相机示意目录、1024×1024 原始分辨率；没有分割训练或评测代码，README 的基线表与论文矛盾（见 [paper_alignment.md](paper_alignment.md#公开代码与第三方结果)） |
 | [LuSNAR Hugging Face 文件列表](https://huggingface.co/datasets/xuboluo2001/LuSNAR/tree/main) | 已读取，列出 Moon_1.zip 至 Moon_9.zip | 支持原始场景包名称；不是比赛官方样本清单。包含评测场景标签的上游包不构成训练授权 |
-| LuSNAR 论文：[arXiv v3](https://arxiv.org/html/2407.06512v3)、[TGRS 终稿](https://ieeexplore.ieee.org/document/11643283/)、[issue #18](https://github.com/zqyu9/LuSNAR-dataset/issues/18) | 版本、可读范围与表 V/VII 见 [paper_alignment.md](paper_alignment.md) | 论文划分与本比赛不同，论文成绩不是本比赛排行榜基线；终稿正文未取得 |
+| LuSNAR 论文：[arXiv v3](https://arxiv.org/html/2407.06512v3)、[TGRS 终稿](https://ieeexplore.ieee.org/document/11643283/)、[issue #18](https://github.com/zqyu9/LuSNAR-dataset/issues/18) | 版本、可读范围与表 V/VII 见 [paper_alignment.md](paper_alignment.md) | 论文划分与本比赛不同，论文成绩不是本比赛排行榜基线；终稿出版社版本已由用户提供（见 [references.md](references.md)），[paper_alignment.md](paper_alignment.md) 以其为准 |
 
 ## 当前官网的直接证据
 

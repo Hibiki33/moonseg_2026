@@ -16,7 +16,7 @@ LuSNAR 月面五类语义分割。类别编号固定为月壤 0、岩石 1、撞
 |---|---|
 | [docs/training.md](docs/training.md) | 当前配方与每项理由、batch 计划、验证协议、GPU 放置、墙钟时间、参考配方与文献证据 |
 | [docs/data.md](docs/data.md) | 数据实测（格式与调色板、像素下限、类别分布、光照、标注惯例、目标尺寸、时间冗余、验证场景）、开发池边界、清单工具 |
-| [docs/model.md](docs/model.md) | 模型结构、损失、兼容性改动、CUDA 扩展、EMA/采样/解冻/验证抽样选项、checkpoint 格式 |
+| [docs/model.md](docs/model.md) | 模型结构、损失、兼容性改动、CUDA 扩展、采样/解冻/验证抽样选项、验证损失、checkpoint 格式 |
 | [docs/augmentation_research.md](docs/augmentation_research.md) | 增强默认值与可选算子的精确语义、源码依据、文献 |
 | [docs/gpu_topology.md](docs/gpu_topology.md) | 主机 GPU 拓扑、P2P 故障与启动约定、显存与吞吐容量 |
 | [docs/metrics.md](docs/metrics.md) | 评测指标定义 |
@@ -73,7 +73,7 @@ bash scripts/bootstrap.sh --only weights --weights-provider modelscope --backbon
   checkpoints/
     dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth
     dinov3_vitl16_pretrain_lvd1689m-8aa4cbdd.pth
-  runs/                       # 训练输出（last.pt/best.pt/日志），不放 NAS
+  runs/                       # 训练输出（last.pt/best_miou.pt/best_loss.pt/日志），不放 NAS
 
 本仓库/.cache -> /home/disk02/wjj/moonseg/.cache
 本仓库/.venv  -> /home/disk02/wjj/moonseg/.venv
@@ -125,14 +125,14 @@ CUDA_VISIBLE_DEVICES=5,6 NCCL_P2P_DISABLE=1 PYTHON=.venv/bin/python \
 CUDA_VISIBLE_DEVICES=5,6 NCCL_P2P_DISABLE=1 PYTHON=.venv/bin/python \
   bash scripts/train.sh configs/dnv3_va_m2f_vitb16.yaml --resume runs/dnv3_va_m2f_vitb16/last.pt
 
-# 场景 5 全量本地评估（不是排行榜分数）；--weights auto 按 checkpoint 的 best_source 选 model/ema_model
+# 场景 5 全量本地评估（不是排行榜分数），同时输出验证损失；--weights auto 即 model（旧 checkpoint 的 ema_model 需显式指定）
 CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=0,7 uv run --no-sync python -m torch.distributed.run \
   --standalone --nproc_per_node=2 -m moonseg.evaluate \
-  --config configs/dnv3_va_m2f_vitl16.yaml --checkpoint runs/dnv3_va_m2f_vitl16/best.pt
+  --config configs/dnv3_va_m2f_vitl16.yaml --checkpoint runs/dnv3_va_m2f_vitl16/best_miou.pt
 
 # 双卡预测，输出原尺寸 8 位单通道 PNG；--weights-key auto|model|ema_model
 bash scripts/predict.sh configs/dnv3_va_m2f_vitb16.yaml \
-  runs/dnv3_va_m2f_vitb16/best.pt data/manifests/test.json \
+  runs/dnv3_va_m2f_vitl16/best_miou.pt data/manifests/test.json \
   --official-test-allowlist data/official/test_allowlist.json
 
 # 校验完整覆盖、尺寸、PNG 模式、值域，并按官方目录打包；不执行上传

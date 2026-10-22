@@ -1,6 +1,6 @@
 # 参考文献与第三方工作档案
 
-核对日期：2026-10-21。本文登记两类材料：A 是使用 LuSNAR 数据的第三方工作，逐项记录任务、划分、模型和报告数字，并判断能否与比赛的按场景划分对照；B 是本仓库文档引用的方法论文。表中数字均摘自原文或作者发布的结果文件，"未核实"表示没能读到正文或原文未写明；"推断"表示本文自己的判断，不是原作者的说法。
+核对日期：2026-10-21；2026-10-22 补登 LuSNAR 的 TGRS 终稿。本文登记两类材料：A 是使用 LuSNAR 数据的第三方工作，逐项记录任务、划分、模型和报告数字，并判断能否与比赛的按场景划分对照；B 是本仓库文档引用的方法论文。表中数字均摘自原文或作者发布的结果文件，"未核实"表示没能读到正文或原文未写明；"推断"表示本文自己的判断，不是原作者的说法。
 
 ## 存档方式
 
@@ -10,7 +10,9 @@
 
 arXiv 从主机下载只有约 20–35 KB/s；LuSNAR v3（17,869,228 字节）、DINOv3（15,823,906 字节）和 LuMon（23,023,708 字节）三个 PDF 首次抓取时未完成，已于 2026-10-22 01:37（UTC+8）用 `curl -C -` 续传补齐并校验 `%PDF`/`%%EOF`，`index.json` 中的 sha256 与字节数已更新；当前 `references/` 内没有 `.part` 文件。
 
-只存合法公开的文件：arXiv、开放获取出版物（CC BY）、课程报告页、学位论文开放库和 Zenodo 复现包。没有下载任何付费墙 PDF 或数据集文件；Zenodo 复现包按其 README 不含 LuSNAR 图像，只有代码、权重、帧清单和结果表。
+只存合法公开的文件：arXiv、开放获取出版物（CC BY）、课程报告页、学位论文开放库和 Zenodo 复现包。唯一的例外是用户提供的 LuSNAR TGRS 出版社 PDF（见下段）；本项目自己没有下载任何付费墙 PDF 或数据集文件；Zenodo 复现包按其 README 不含 LuSNAR 图像，只有代码、权重、帧清单和结果表。
+
+LuSNAR TGRS 终稿：`references/LuSNAR_A_Lunar_Segmentation_Navigation_and_Reconstruction_Dataset_Based_on_Multisensor_for_Autonomous_Exploration.pdf`，6,700,959 字节，23 页，sha256 `336e056a71a0e693a286058880f0de05dabcfd7eaafa8bbdf68204b75e8fce8b`，文件修改时间 2026-10-22 12:06:53（UTC+8），即 index.json 中的 fetched_at 2026-10-22T04:06:53Z。这是用户提供的出版社版本，由 IEEE Xplore 机构授权下载，每页页脚为 "Authorized licensed use limited to: BEIHANG UNIVERSITY. Downloaded on October 22,2026 at 04:06:02 UTC from IEEE Xplore"，首页版权声明写明 "republication/redistribution requires IEEE permission"。它只在本地用于核对，不入库、不转发、不上传，文件名保留用户提供时的原名。
 
 ## A. 使用 LuSNAR 的第三方工作
 
@@ -18,7 +20,7 @@ arXiv 从主机下载只有约 20–35 KB/s；LuSNAR v3（17,869,228 字节）�
 
 受阻情况：Semantic Scholar 的关键词检索与全文 snippet 检索持续返回 429，网站页面返回 403；OpenReview API、Google Scholar 和 export.arxiv.org 从主机超时；ScienceDirect 返回 403（LESFormer、ISPRS 两篇无法核实）；IOP 直连只返回验证页、publications.polymtl.ca 直连超时，这两份 PDF 改由网页抓取工具取得；PMC 页面为 reCAPTCHA，改读 Frontiers 原站。
 
-结论：公开渠道只有一项（Padilla Romero 的 Zenodo 复现包）给出**按场景留出**的 2D 五类分割结果；其余 2D 分割数字或者划分未写明，或者测试帧与训练帧来自同一批场景，不能与比赛划分对照。场景 9 有两份独立的第三方证据：Zenodo 复现包中只用场景 5/6/7 训练的模型在场景 9 上撞击坑 IoU 0.2432，BEA-RandLA-Net 的 3D 点云撞击坑 IoU 在场景 9 为 67.84/76.56、场景 5 为 86.08/91.62。两者都与论文表 VII 场景 9 撞击坑 19.19 的结论一致：场景 9 的撞击坑是最难的类别。
+结论：公开渠道只有一项（Padilla Romero 的 Zenodo 复现包）给出**按场景留出**的 2D 五类分割结果；其余 2D 分割数字或者划分未写明，或者测试帧与训练帧来自同一批场景，不能与比赛划分对照。场景 9 有两份独立的第三方证据：Zenodo 复现包中只用场景 5/6/7 训练的模型在场景 9 上撞击坑 IoU 0.2432，BEA-RandLA-Net 的 3D 点云撞击坑 IoU 在场景 9 为 67.84/76.56、场景 5 为 86.08/91.62。两者都与论文表 VII 场景 9 撞击坑 19.19（TGRS 终稿与 arXiv v3 相同）的结论一致：场景 9 的撞击坑是最难的类别。
 
 ### A1. 2D 语义分割（与比赛同任务）
 
@@ -51,7 +53,7 @@ Wu 报告的其他设置：增强为水平翻转、±10° 旋转、亮度/对比
 | 工作 | 年份 | 发布形式 | 任务 | 划分 | 关键数字 | 本地文件 | 结论 |
 |---|---|---|---|---|---|---|---|
 | J. Liu 等, *BEA-RandLA-Net: a boundary-enhanced and globally-aware network for lunar surface obstacle detection from point clouds* | 2026 | J. Phys.: Conf. Ser. 3240, 012038（AIPC 2026，CC BY 4.0） | 3D 点云三类分割（月壤/撞击坑/岩石） | **按场景**：训练 1/2/3/6/7，验证 4/8，测试 5/9 | 场景 5 mIoU 93.22→95.26；场景 9 87.84→89.45；场景 9 撞击坑 67.84→76.56 | `references/2026_jpcs_3240_012038_liu_bea_randla_net_lusnar_pointcloud.pdf` | 任务不同，不可比；佐证场景 9 撞击坑最难 |
-| Sekmen 等, *LuMon: A Comprehensive Benchmark and Development Suite with Novel Datasets for Lunar Monocular Depth Estimation* | 2026 | arXiv 2604.09352v1；CVPR 2026 AI4Space Workshop | 单目深度 | **按场景**：训练 Moon_2/3/4/5/7/9，验证 Moon_6，测试 Moon_1/8 | DAv2-FT 在 LuSNAR 测试集 δ1 0.93、AbsRel 0.07、RMSE 1.07；零样本 DAv2 0.31/0.45/2.89 | 未完成（`references/2026_cvprw_arxiv_2604.09352v1_lumon_lusnar_depth.pdf`，内容依据 arXiv HTML） | 深度任务，不可比；权重 `LuMonDepth/DAv2-FT-LuSNAR` |
+| Sekmen 等, *LuMon: A Comprehensive Benchmark and Development Suite with Novel Datasets for Lunar Monocular Depth Estimation* | 2026 | arXiv 2604.09352v1；CVPR 2026 AI4Space Workshop | 单目深度 | **按场景**：训练 Moon_2/3/4/5/7/9，验证 Moon_6，测试 Moon_1/8 | DAv2-FT 在 LuSNAR 测试集 δ1 0.93、AbsRel 0.07、RMSE 1.07；零样本 DAv2 0.31/0.45/2.89 | `references/2026_cvprw_arxiv_2604.09352v1_lumon_lusnar_depth.pdf`（已续传补齐；本行内容当时依据 arXiv HTML） | 深度任务，不可比；权重 `LuMonDepth/DAv2-FT-LuSNAR` |
 | Pérez-Ramos 等, *Zero-shot semantic landmark-based visual odometry using foundation models for unstructured planetary exploration* | 2026 | Front. Robot. AI, 10.3389/frobt.2026.1819714（CC BY） | 视觉里程计（SAM + DINOv2） | 只用 Moon_1/2/3，各 100 帧 | ATE RMSE：Moon_3 1.93 m、Moon_2 4.88 m、Moon_1 5.70 m；无 IoU | `references/2026_frobt_1819714_perezramos_sam_dinov2_vo_lusnar.pdf` | 非分割；只有阴影下 SAM 表现的定性观察 |
 | *MoonGS: High-quality Representation of the Lunar Surface via Gaussian Splatting Using Robust Depth Features from Image Pairs* | 2026 | arXiv 2610.07110（代码 InRobots/MoonBlender） | 稀疏视角 3DGS 新视角合成 | "the last 4 of the 9 scenes" 作训练和验证，256×256 | 摘要称比前馈 NeRF/3DGS 基线 PSNR +4.9 dB | 无 | 无关 |
 | Dai、Casadesus Vila、Gao, *Visual SLAM with DEM Anchoring for Lunar Surface Navigation* | 2026 | arXiv 2603.17229；IEEE Aerospace Conf. 2026 | 视觉 SLAM | 九个场景逐一评测，用 LiDAR 累积构造局部 DEM | 表 I 逐场景 RPE/ATE | 无 | 无关 |
@@ -76,7 +78,8 @@ Wu 报告的其他设置：增强为水平翻转、±10° 旋转、亮度/对比
 
 | 论文 | arXiv | 本地文件 | 本仓库引用原因 |
 |---|---|---|---|
-| LuSNAR: A Lunar Segmentation, Navigation and Reconstruction Dataset based on Multi-sensor for Autonomous Exploration | 2407.06512v3 | `references/2024_arxiv_2407.06512v3_lusnar.pdf` | 数据集原论文：类别、场景网格、表 V/VII 基线和误差分析均以此版为据（[paper_alignment.md](paper_alignment.md)、[data.md](data.md)）；TGRS 终稿（10.1109/TGRS.2026.3720373）未取得全文 |
+| LuSNAR: A Lunar Segmentation, Navigation, and Reconstruction Dataset Based on Multisensor for Autonomous Exploration（TGRS 终稿） | 无；IEEE TGRS vol. 64, art. 4706723（2026），DOI 10.1109/TGRS.2026.3720373 | `references/LuSNAR_A_Lunar_Segmentation_Navigation_and_Reconstruction_Dataset_Based_on_Multisensor_for_Autonomous_Exploration.pdf`（出版社 PDF，用户提供，不转发） | 数据集论文的主要依据：类别、场景网格、表 III，表 V/VII/IX 基线，误差分析和嫦娥实拍实验（[paper_alignment.md](paper_alignment.md)、[data.md](data.md)） |
+| LuSNAR: A Lunar Segmentation, Navigation and Reconstruction Dataset based on Multi-sensor for Autonomous Exploration（arXiv 预印本） | 2407.06512v3 | `references/2024_arxiv_2407.06512v3_lusnar.pdf` | 事实层面已被 TGRS 终稿取代，只用于版本差异核对和终稿没有涉及的内容（[paper_alignment.md](paper_alignment.md#终稿相对-arxiv-v3-的变化)） |
 | DINOv3 | 2508.10104v1 | `references/2025_arxiv_2508.10104v1_dinov3.pdf` | 冻结骨干 ViT-B/16、ViT-L/16（LVD-1689M）及其分割适配做法（[model.md](model.md)、[weights.md](weights.md)、[training.md](training.md)） |
 | Masked-attention Mask Transformer for Universal Image Segmentation（Mask2Former） | 2112.01527v3 | `references/2022_cvpr_arxiv_2112.01527v3_mask2former.pdf` | 分割头、匹配损失 CE/BCE/Dice = 2/5/5、12,544 个采样点、lr 与训练长度参照 |
 | Vision Transformer Adapter for Dense Predictions（ViT-Adapter） | 2205.08534v4 | `references/2023_iclr_arxiv_2205.08534v4_vit_adapter.pdf` | 连接冻结 DINOv3 与 Mask2Former 的适配器；80k 训练长度参照 |
@@ -85,7 +88,9 @@ Wu 报告的其他设置：增强为水平翻转、±10° 旋转、亮度/对比
 | HRDA | 2204.13132v2 | `references/2022_eccv_arxiv_2204.13132v2_hrda.pdf` | 上下文 crop 尺度对分割的影响，支撑保持 1024 整图、只做温和尺度抖动 |
 | ShadowCast: On-the-Fly Context-Aware Shadow Augmentation for Remote Sensing Image Segmentation | 2610.23440v2 | `references/2026_arxiv_2610.23440v2_shadowcast.pdf` | 阴影增强的文献证据（[augmentation_research.md](augmentation_research.md#文献证据)）；本项目的阴影不是其实现 |
 | LuSeg: Efficient Negative and Positive Obstacles Segmentation via Contrast-Driven Multi-Modal Feature Fusion on the Lunar | 2503.11409v1 | `references/2025_iros_arxiv_2503.11409v1_luseg.pdf` | 月面 RGB-D 障碍分割（LunarSeg 数据集，不是 LuSNAR），其增强代码核查见 [external_datasets/lunarseg_luseg.md](external_datasets/lunarseg_luseg.md) |
-| SegFormer | 2105.15203v3 | `references/2021_neurips_arxiv_2105.15203v3_segformer.pdf` | LuSNAR 表 V 最佳基线（mIoU 89.96）；[training.md](training.md) 中的轻量异构候选 |
-| PointRend: Image Segmentation as Rendering | 1912.08193v2 | `references/2020_cvpr_arxiv_1912.08193v2_pointrend.pdf` | LuSNAR 表 V 基线，撞击坑 IoU 最高（82.45） |
+| SegFormer | 2105.15203v3 | `references/2021_neurips_arxiv_2105.15203v3_segformer.pdf` | LuSNAR 表 V 基线（mIoU 89.96，是原有五个模型中最高的，终稿中低于 SAM2/SAM3），也是表 VII 泛化实验和表 IX 嫦娥实验使用的模型；[training.md](training.md) 中的轻量异构候选 |
+| PointRend: Image Segmentation as Rendering | 1912.08193v2 | `references/2020_cvpr_arxiv_1912.08193v2_pointrend.pdf` | LuSNAR 表 V 基线，月壤（99.07）和天空（99.70）IoU 最高；它在 v3 中最高的撞击坑 IoU 82.45，终稿中被 SAM3 的 85.12 超过 |
+
+TGRS 终稿表 V 新增的 SAM2（arXiv 2408.00714）和 SAM3（arXiv 2511.16719）只作为论文基线登记，没有存档；本仓库不使用这两个模型。
 
 ShadowCast 的 arXiv 号已核对：2610.23440 即 Yoon 等的 *ShadowCast: On-the-Fly Context-Aware Shadow Augmentation for Remote Sensing Image Segmentation*（当前 v2），与 [augmentation_research.md](augmentation_research.md#文献证据) 引用的是同一篇。已对照 v2 正文核实 DeepLabV3+ 在 LoveDA 上 43.29→44.89、RandomShadow 43.67，以及表 S1 默认阴影长度 (5, 30)、衰减 (0.5, 0.8)；该文档中的其余数字（10 种架构、OCRNet、InternImage 增益）没有逐一核对。
