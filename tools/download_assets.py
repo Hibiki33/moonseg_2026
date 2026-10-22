@@ -18,9 +18,17 @@ REPO = Path(__file__).resolve().parents[1]
 DINOV3_REVISION = "6876159a11b4df116f30f667f8c9888617df0751"
 DATASET_REVISION = "df281ef5139f78a21a162d684186efd3c2ae3437"
 DATASET_ID = "xuboluo2001/LuSNAR"
+# Official Meta file names (dinov3/hub/backbones.py URL pattern and per-architecture hash).
 NATIVE_NAMES = {
     "vitb16": "dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth",
     "vitl16": "dinov3_vitl16_pretrain_lvd1689m-8aa4cbdd.pth",
+    "vith16plus": "dinov3_vith16plus_pretrain_lvd1689m-7c1da9a5.pth",
+}
+# Pinned commits of the ModelScope facebook/dinov3-<backbone>-pretrain-lvd1689m repositories.
+MODELSCOPE_REVISIONS = {
+    "vitb16": "23d0280ae6ee4ced592a3459674ad027d3c18906",
+    "vitl16": "99b6205b0321c4d9726dd072d8c6a80aa6be72df",
+    "vith16plus": "98b7096b2938406ade58801a0bf75eca3198b5bd",
 }
 
 
@@ -196,12 +204,13 @@ def main():
     parser.add_argument("--dns-resolver", help="Optional HTTPS JSON DNS endpoint for curl CAS downloads")
     parser.add_argument("--resolve-host", action="append", default=[], help="curl HOST:PORT:ADDRESS override, TLS remains verified")
     parser.add_argument("--extract", action="store_true")
-    parser.add_argument("--backbone", choices=("vitb16", "vitl16"), default="vitb16")
+    parser.add_argument("--backbone", choices=tuple(NATIVE_NAMES), default="vitb16")
     parser.add_argument("--weights-provider", choices=("modelscope", "hf", "meta"), default="modelscope")
-    parser.add_argument("--modelscope-revision", default="23d0280ae6ee4ced592a3459674ad027d3c18906")
+    parser.add_argument("--modelscope-revision", help="ModelScope commit; default: pinned commit of --backbone")
     parser.add_argument("--plan", action="store_true", help="Print configuration without network or filesystem changes")
     args = parser.parse_args()
     args.storage = args.storage.expanduser().absolute()
+    args.modelscope_revision = args.modelscope_revision or MODELSCOPE_REVISIONS[args.backbone]
     if len(args.scenes) != len(set(args.scenes)) or not set(args.scenes) <= set(range(1, 10)):
         parser.error("Scenes must be unique integers from 1 through 9")
     if args.jobs < 1 or not 1 <= args.connections <= 16:

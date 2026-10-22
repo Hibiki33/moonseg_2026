@@ -1,9 +1,11 @@
-"""Convert a local Transformers DINOv3 ViT-B/L snapshot to Meta's state_dict.
+"""Convert a local Transformers DINOv3 ViT-B/L/H+ snapshot to Meta's state_dict.
 
 Mapping reference (accessed 2026-10-21):
 https://github.com/huggingface/transformers/blob/main/src/transformers/models/dinov3_vit/convert_dinov3_vit_to_hf.py
 The original HF conversion discards masked K biases; this restores zeros there,
 not their original serialized values. Effective attention remains unchanged.
+ViT-H+ uses a SwiGLU MLP: HF down_proj(silu(gate_proj(x)) * up_proj(x)) equals
+native SwiGLUFFN w3(silu(w1(x)) * w2(x)), so gate_proj->w1, up_proj->w2, down_proj->w3.
 """
 from __future__ import annotations
 
@@ -17,14 +19,20 @@ from pathlib import Path
 import torch
 
 ROOT = Path(__file__).resolve().parents[1]
-SIZES = {"vitb16": (768, 12, 12), "vitl16": (1024, 24, 16)}
+# width, depth, heads, HF intermediate_size, gated (SwiGLU) MLP. The H+ hidden size is
+# native SwiGLUFFN's int(1280 * ffn_ratio 6 * 2/3) = 5120 (already a multiple of align_to=8).
+SIZES = {
+    "vitb16": (768, 12, 12, 3072, False),
+    "vitl16": (1024, 24, 16, 4096, False),
+    "vith16plus": (1280, 32, 20, 5120, True),
+}
 
 
 def check_config(config: dict, arch: str) -> None:
-    width, depth, heads = SIZES[arch]
+    width, depth, heads, intermediate, gated = SIZES[arch]
     required = {
         "model_type": "dinov3_vit", "hidden_size": width,
-        "intermediate_size": 4 * width, "num_hidden_layers": depth,
+        "intermediate_size": intermediate, "num_hidden_layers": depth,
         "num_attention_heads": heads, "num_register_tokens": 4,
     }
     defaults = {
@@ -34,6 +42,11 @@ def check_config(config: dict, arch: str) -> None:
         "layer_norm_eps": 1e-5, "pos_embed_shift": None,
         "pos_embed_jitter": None, "pos_embed_rescale": 2.0,
     }
+    if gated:
+        # Transformers defaults to a non-gated GELU MLP; the SwiGLU variant must state both.
+        for name, expected in (("use_gated_mlp", True), ("hidden_act", "silu")):
+            del defaults[name]
+            required[name] = expected
     for name, expected in required.items():
         if config.get(name) != expected:
             raise ValueError(f"config {name}: expected {expected!r}, got {config.get(name)!r}")
@@ -85,7 +98,9 @@ def read_snapshot(directory: Path) -> dict[str, torch.Tensor]:
 
 def convert_state(state: dict[str, torch.Tensor], model, arch: str) -> dict[str, torch.Tensor]:
     """Fail on unknown, missing, duplicate or incorrectly shaped tensors."""
-    width, depth, _ = SIZES[arch]
+    width, depth, heads, _, gated = SIZES[arch]
+    mlp_names = ({"gate_proj": "w1", "up_proj": "w2", "down_proj": "w3"} if gated
+                 else {"up_proj": "fc1", "down_proj": "fc2"})
     expected = model.state_dict()
     output: dict[str, torch.Tensor] = {}
     parts: dict[tuple[int, str], dict[str, torch.Tensor]] = {}
@@ -137,8 +152,8 @@ def convert_state(state: dict[str, torch.Tensor], model, arch: str) -> dict[str,
             destination = tail.replace("attention.o_proj", "attn.proj")
         elif re.fullmatch(r"layer_scale[12]\.lambda1", tail):
             destination = f"ls{tail[len('layer_scale')]}.gamma"
-        elif re.fullmatch(r"mlp\.(up_proj|down_proj)\.(weight|bias)", tail):
-            destination = tail.replace("up_proj", "fc1").replace("down_proj", "fc2")
+        elif (mlp := re.fullmatch(r"mlp\.([a-z_]+)\.(weight|bias)", tail)) and mlp[1] in mlp_names:
+            destination = f"mlp.{mlp_names[mlp[1]]}.{mlp[2]}"
         if destination is None:
             raise ValueError(f"Unknown layer tensor: {key}")
         put(f"blocks.{index}.{destination}", value)
@@ -163,7 +178,7 @@ def convert_state(state: dict[str, torch.Tensor], model, arch: str) -> dict[str,
     # HF drops this deterministic persistent buffer. Use the official initializer.
     from dinov3.layers.rope_position_encoding import RopePositionEmbedding
 
-    rope = RopePositionEmbedding(width, num_heads=SIZES[arch][2], base=100.0, dtype=torch.float32)
+    rope = RopePositionEmbedding(width, num_heads=heads, base=100.0, dtype=torch.float32)
     put("rope_embed.periods", rope.periods)
     missing = expected.keys() - output.keys()
     if missing:

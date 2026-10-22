@@ -23,6 +23,8 @@ from torch.autograd.function import once_differentiable
 from torch.nn import functional as F
 
 DEFORMABLE_ATTENTION_MODES = ("auto", "cuda", "torch")
+# Official hub ViTs (dinov3/hub/backbones.py): B 768x12, L 1024x24, H+ 1280x32 with a SwiGLU MLP.
+BACKBONES = ("vitb16", "vitl16", "vith16plus")
 # Built by scripts/build_ops.sh; override with model.deformable_attention_extension_dir or MOONSEG_MSDA_DIR.
 DEFAULT_EXTENSION_DIR = Path(__file__).resolve().parents[2] / "build" / "ms_deform_attn"
 
@@ -225,13 +227,18 @@ def _build_adapter(adapter_module, backbone, settings):
             return self
 
     depth = len(backbone.blocks)
-    indices = settings.get("interaction_indexes", [4, 11, 17, 23] if depth == 24 else [2, 5, 8, 11])
+    # Upstream FOUR_EVEN_INTERVALS (dinov3/eval/segmentation/models/__init__.py): the paper's ViT-L set,
+    # otherwise the last block of each quarter (depth 12 -> [2, 5, 8, 11], depth 32 -> [7, 15, 23, 31]).
+    default_indices = [4, 11, 17, 23] if depth == 24 else [i * (depth // 4) - 1 for i in range(1, 5)]
+    indices = settings.get("interaction_indexes", default_indices)
     if len(indices) != 4 or sorted(set(indices)) != list(indices) or indices[-1] >= depth or indices[0] < 0:
         raise ValueError("ViT-Adapter requires four increasing valid backbone interaction indexes")
     adapter = TrainableDINOv3Adapter(
         backbone, interaction_indexes=indices,
         conv_inplane=int(settings.get("adapter_conv_dim", 64)),
-        deform_num_heads=int(settings.get("adapter_heads", 12 if backbone.embed_dim == 768 else 16)),
+        # 64 channels per deformable head as for B (12) and L (16); H+ 1280 -> 20, a power-of-2 head
+        # size that upstream MSDeformAttn prefers (16 heads would give 80 and warn).
+        deform_num_heads=int(settings.get("adapter_heads", backbone.embed_dim // 64)),
         drop_path_rate=float(settings.get("adapter_drop_path", 0.1)),
         with_cp=bool(settings.get("gradient_checkpointing", True)),
     )
@@ -309,8 +316,8 @@ class DINOv3Mask2Former(nn.Module):
 def build_model(config: dict, load_backbone: bool = True) -> DINOv3Mask2Former:
     settings = config.get("model", {})
     architecture = str(settings.get("backbone", "vitb16")).removeprefix("dinov3_")
-    if architecture not in ("vitb16", "vitl16"):
-        raise ValueError("model.backbone must be vitb16 or vitl16")
+    if architecture not in BACKBONES:
+        raise ValueError(f"model.backbone must be one of {', '.join(BACKBONES)}")
     source = settings.get("dinov3_repo", Path(__file__).resolve().parents[2] / "third_party/dinov3")
     backbones, adapter_module, pixel_module, decoder_module, ops = _official_modules(source)
     deformable_attention, attention_detail = _select_deformable_attention(ops, settings)
