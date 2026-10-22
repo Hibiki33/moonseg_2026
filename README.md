@@ -16,6 +16,7 @@ LuSNAR 月面五类语义分割。类别编号固定为月壤 0、岩石 1、撞
 |---|---|
 | [docs/training.md](docs/training.md) | 当前配方与每项理由、batch 计划、验证协议、GPU 放置、墙钟时间、参考配方与文献证据 |
 | [docs/data.md](docs/data.md) | 数据实测（格式与调色板、像素下限、类别分布、光照、标注惯例、目标尺寸、时间冗余、验证场景）、开发池边界、清单工具 |
+| [docs/handover.md](docs/handover.md) | 交接文档：现状、实验结果、保守消融阶梯、大胆创新设计、决策规则、操作手册与流程规则 |
 | [docs/model.md](docs/model.md) | 模型结构、损失、兼容性改动、CUDA 扩展、采样/解冻/验证抽样选项、验证损失、checkpoint 格式 |
 | [docs/augmentation_research.md](docs/augmentation_research.md) | 增强默认值与可选算子的精确语义、源码依据、文献 |
 | [docs/gpu_topology.md](docs/gpu_topology.md) | 主机 GPU 拓扑、P2P 故障与启动约定、显存与吞吐容量 |
