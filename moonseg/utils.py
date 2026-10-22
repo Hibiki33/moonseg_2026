@@ -1,7 +1,6 @@
-"""Configuration, reproducibility, distributed training, EMA and checkpoint helpers."""
+"""Configuration, reproducibility, distributed training and checkpoint helpers."""
 from __future__ import annotations
 
-import copy
 import json
 import os
 import random
@@ -60,74 +59,28 @@ def unwrap_model(model):
     return model.module if hasattr(model, "module") else model
 
 
-class ModelEMA:
-    """Exponential moving average of the trainable parameters; buffers are copied, not averaged.
-
-    Frozen parameters are shared with the source model (never copied), so the extra memory is the
-    trainable parameters plus buffers. Its state dict omits the frozen ViT tensors like the model's.
-    Build it from the DDP-synchronized model so every rank starts from identical weights.
-    """
-
-    def __init__(self, model, decay):
-        if isinstance(decay, bool) or not 0 < float(decay) < 1:
-            raise ValueError("train.ema.decay must be in (0, 1)")
-        model = unwrap_model(model)
-        self.decay = float(decay)
-        self.names = [name for name, parameter in model.named_parameters() if parameter.requires_grad]
-        shared = {id(parameter): parameter for parameter in model.parameters() if not parameter.requires_grad}
-        self.module = copy.deepcopy(model, shared).eval()
-        for name, parameter in self.module.named_parameters():
-            if name in self.names:
-                parameter.requires_grad_(False)
-
-    @torch.no_grad()
-    def update(self, model):
-        source = dict(unwrap_model(model).named_parameters())
-        target = dict(self.module.named_parameters())
-        for name in self.names:
-            target[name].lerp_(source[name].detach(), 1.0 - self.decay)
-        self.copy_buffers(model)
-
-    @torch.no_grad()
-    def copy_buffers(self, model):
-        source = dict(unwrap_model(model).named_buffers())
-        for name, buffer in self.module.named_buffers():
-            buffer.copy_(source[name])
-
-    # Every EMA parameter has requires_grad=False, so pass the source model's trainable names:
-    # unfrozen ViT blocks (model.unfreeze_last_blocks) must be saved and required like the model's.
-    def state_dict(self):
-        return partial_state_dict(self.module, self.names)
-
-    def load_state_dict(self, state):
-        load_partial_state_dict(self.module, state, "ema_model", self.names)
-
-
 FROZEN_BACKBONE_PREFIX = "backbone.backbone."
 
 
-def _trainable_names(model, trainable=None):
-    if trainable is None:
-        return {name for name, parameter in model.named_parameters() if parameter.requires_grad}
-    return set(trainable)
+def _trainable_names(model):
+    return {name for name, parameter in model.named_parameters() if parameter.requires_grad}
 
 
-def partial_state_dict(model, trainable=None):
+def partial_state_dict(model):
     """State dict without the frozen pretrained DINOv3 tensors.
 
     Every tensor under ``backbone.backbone.`` that is not a trainable parameter (frozen weights and
     the deterministic RoPE/bias-mask buffers) is omitted; they are restored from
     ``model.backbone_weights`` when the model is rebuilt. Trainable ViT tensors
-    (``model.unfreeze_last_blocks``/``freeze_backbone: false``) are kept. ``trainable`` overrides
-    the parameter names treated as trainable (default: those with requires_grad, e.g. not for EMA).
+    (``model.unfreeze_last_blocks``/``freeze_backbone: false``) are kept.
     """
     model = unwrap_model(model)
-    trainable = _trainable_names(model, trainable)
+    trainable = _trainable_names(model)
     return {key: value for key, value in model.state_dict().items()
             if not key.startswith(FROZEN_BACKBONE_PREFIX) or key in trainable}
 
 
-def load_partial_state_dict(model, state, label="model", trainable=None):
+def load_partial_state_dict(model, state, label="model"):
     """Load a checkpoint saved by partial_state_dict into a model built with the pretrained backbone.
 
     Only frozen ``backbone.backbone.`` tensors may be missing; any other missing key, any
@@ -137,7 +90,7 @@ def load_partial_state_dict(model, state, label="model", trainable=None):
     if not isinstance(state, dict):
         raise ValueError(f"Checkpoint '{label}' is not a state dict")
     model = unwrap_model(model)
-    trainable = _trainable_names(model, trainable)
+    trainable = _trainable_names(model)
     expected = model.state_dict().keys()
     # Checked before loading so a mismatched checkpoint never leaves a half-loaded model.
     tolerated = [key for key in expected if key not in state]

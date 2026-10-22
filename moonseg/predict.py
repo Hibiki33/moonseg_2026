@@ -104,25 +104,24 @@ def prediction_path(record):
 def select_weights(checkpoint, weights_key="auto"):
     """Return (state_dict, used_key, message).
 
-    auto: checkpoint['best_source'] if present (else 'model'); if that entry is absent,
-    fall back to 'model'. An explicit 'model' or 'ema_model' must exist in the checkpoint.
+    auto always resolves to 'model'. EMA was removed from training: a legacy checkpoint's
+    'ema_model' loads only when requested explicitly, and its best_source='ema_model' is ignored
+    with a note in the message. An explicit 'model' or 'ema_model' must exist in the checkpoint.
     """
     if weights_key not in WEIGHTS_KEYS:
         raise ValueError(f"weights key must be one of {WEIGHTS_KEYS}")
     if not isinstance(checkpoint, dict):
         raise ValueError("Checkpoint must be a dictionary with a 'model' state_dict")
     if weights_key == "auto":
-        requested = str(checkpoint.get("best_source") or "model")  # None when trained without validation
-        if isinstance(checkpoint.get(requested), dict):
-            used = requested
-            message = f"weights: '{used}' (auto; best_source={checkpoint.get('best_source')!r})"
-        else:
-            used = "model"
-            message = (f"weights: 'model' (auto fallback; best_source={checkpoint.get('best_source')!r} "
-                       f"is not a state_dict in this checkpoint)")
+        used = "model"
+        message = "weights: 'model' (auto)"
+        legacy = checkpoint.get("best_source")
+        if legacy not in (None, "model"):
+            message += (f"; note: legacy best_source={legacy!r} ignored because EMA was removed; "
+                        f"request {legacy!r} explicitly to load those weights")
     else:
         used = weights_key
-        message = f"weights: '{used}' (explicit --weights-key)"
+        message = f"weights: '{used}' (explicit)"
     if not isinstance(checkpoint.get(used), dict):
         raise KeyError(f"Checkpoint has no '{used}' state_dict; available keys: {sorted(checkpoint)}")
     return checkpoint[used], used, message
@@ -142,7 +141,7 @@ def main():
     parser.add_argument("--output", required=True)
     parser.add_argument("--official-test-allowlist", required=True)
     parser.add_argument("--weights-key", choices=WEIGHTS_KEYS, default="auto",
-                        help="auto: checkpoint best_source (fallback model); or force model / ema_model")
+                        help="auto = model; ema_model only for legacy checkpoints from runs with the removed train.ema")
     parser.add_argument("--device", help="Explicit device for single-process inference; incompatible with multiple torchrun ranks")
     args = parser.parse_args()
     if args.device is not None and int(os.environ.get("WORLD_SIZE", "1")) > 1:
@@ -203,7 +202,8 @@ def main():
         write_json({"kind": "prediction_index", "layout": "test/Moon_i/submission/<sample_id>.png",
                     "packaging_status": "Official prediction layout; validate complete files with tools/package_submission.py before submitting.",
                     "checkpoint": str(args.checkpoint), "weights_key": weights_key,
-                    "weights_key_requested": args.weights_key, "best_source": _json_scalar(checkpoint.get("best_source")),
+                    "weights_key_requested": args.weights_key, "selected_by": _json_scalar(checkpoint.get("selected_by")),
+                    "best_source": _json_scalar(checkpoint.get("best_source")),
                     "checkpoint_epoch": _json_scalar(checkpoint.get("epoch")), "inference": settings,
                     "predictions": [record for _, record in predictions]}, output / "prediction_index.json")
     if dist.is_initialized():

@@ -1,4 +1,4 @@
-"""DDP training with AMP, polynomial scheduling, EMA and complete epoch-boundary resume."""
+"""DDP training with AMP, polynomial scheduling, per-epoch validation (mIoU and loss) and complete epoch-boundary resume."""
 from __future__ import annotations
 
 import argparse
@@ -17,7 +17,7 @@ from torch.utils.data import DataLoader, DistributedSampler
 from .data import MoonDataset, collate_samples
 from .data.sampler import build_rare_class_sampler
 from .evaluate import evaluate_model, validation_indices
-from .utils import (ModelEMA, amp_context, atomic_torch_save, configure_torch_backends, init_distributed,
+from .utils import (amp_context, atomic_torch_save, configure_torch_backends, init_distributed,
                     load_partial_state_dict, partial_state_dict,
                     load_checkpoint, load_config, restore_rng, rng_state, seed_everything, seed_worker,
                     unwrap_model, write_json)
@@ -27,10 +27,12 @@ from .utils import (ModelEMA, amp_context, atomic_torch_save, configure_torch_ba
 NO_DECAY_NAMES = ("pos_embed", "cls_token", "register_tokens", "storage_tokens", "mask_token",
                   "level_embed", "level_encoding", "query_feat", "query_embed")
 TRAIN_DEFAULTS = {"tf32": True, "cudnn_benchmark": True, "eval_stride": 1,
-                  "ema": {"enabled": True, "decay": 0.999},
                   "sampling": {"mode": "uniform", "temperature": 0.01, "min_pixels": 1}}
-# Only last.pt holds these; best.pt is inference-only (see the save block in main()).
+# Only last.pt (and epoch_XXX.pt) hold these; best_miou.pt/best_loss.pt are inference-only.
 RESUME_KEYS = ("optimizer", "scheduler", "scaler", "rng_states")
+# Selection state saved in every checkpoint and restored on resume; recent_miou feeds miou_ma3.
+BEST_KEYS = ("best_miou", "best_miou_epoch", "best_loss", "best_loss_epoch", "recent_miou")
+MIOU_WINDOW = 3
 DEVELOPMENT_NOTE = ("development only; final submission model must be trained on the organizer's "
                     "official sample list")
 
@@ -72,6 +74,9 @@ def make_scheduler(optimizer, total_steps, settings):
 
 def resolve_train_settings(settings):
     """Fill defaults in place, so resolved_config.json and checkpoints record the values used."""
+    if "ema" in settings:
+        raise ValueError("train.ema was removed: training no longer keeps an EMA model (see docs/training.md). "
+                         "Delete the train.ema block from the config.")
     for key, default in TRAIN_DEFAULTS.items():
         if isinstance(default, dict):
             value = settings.get(key)
@@ -84,14 +89,50 @@ def resolve_train_settings(settings):
     stride = settings["eval_stride"]
     if isinstance(stride, bool) or not isinstance(stride, int) or stride < 1:
         raise ValueError("train.eval_stride must be a positive integer")
-    decay = settings["ema"]["decay"]
-    if not isinstance(settings["ema"]["enabled"], bool) or isinstance(decay, bool) or not 0 < float(decay) < 1:
-        raise ValueError("train.ema needs enabled: true|false and decay in (0, 1)")
     if settings["sampling"]["mode"] not in ("uniform", "rare_class"):
         raise ValueError("train.sampling.mode must be uniform or rare_class")
     if float(settings.get("grad_clip", 0.1)) < 0:
         raise ValueError("train.grad_clip must be nonnegative; 0 disables clipping")
     return settings
+
+
+def initial_best():
+    return {"best_miou": None, "best_miou_epoch": None, "best_loss": None, "best_loss_epoch": None,
+            "recent_miou": []}
+
+
+def update_best(best, epoch, miou, val_loss):
+    """Pure best-checkpoint bookkeeping for one validated epoch (1-based).
+
+    Returns (new_best, improved, miou_ma3). improved lists the snapshots to write now:
+    "best_miou" when mIoU is strictly higher than every earlier one, "best_loss" when the
+    validation loss is strictly lower; a missing or non-finite value never counts. miou_ma3 is the
+    mean mIoU of the last MIOU_WINDOW validations (None until there are that many), for
+    information only: it never selects a checkpoint.
+    """
+    best = {**best, "recent_miou": list(best["recent_miou"])}
+    improved, miou_ma3 = [], None
+    if miou is not None and math.isfinite(miou):
+        if best["best_miou"] is None or miou > best["best_miou"]:
+            best["best_miou"], best["best_miou_epoch"] = miou, epoch
+            improved.append("best_miou")
+        best["recent_miou"] = (best["recent_miou"] + [miou])[-MIOU_WINDOW:]
+        if len(best["recent_miou"]) == MIOU_WINDOW:
+            miou_ma3 = sum(best["recent_miou"]) / MIOU_WINDOW
+    if val_loss is not None and math.isfinite(val_loss):
+        if best["best_loss"] is None or val_loss < best["best_loss"]:
+            best["best_loss"], best["best_loss_epoch"] = val_loss, epoch
+            improved.append("best_loss")
+    return best, improved, miou_ma3
+
+
+def resumed_best(checkpoint):
+    """Selection state from last.pt; a legacy (EMA-era) checkpoint restarts it with a note."""
+    if all(key in checkpoint for key in BEST_KEYS):
+        return {key: checkpoint[key] for key in BEST_KEYS}, None
+    legacy = {key: checkpoint.get(key) for key in ("best_miou", "best_source", "best_epoch")}
+    return initial_best(), (f"legacy checkpoint ({legacy}): best_miou/best_loss tracking restarts at the next "
+                            "validation; its EMA weights are dropped and an existing best.pt is left untouched")
 
 
 def gradient_norm(parameters, max_norm):
@@ -197,14 +238,13 @@ def main():
     amp = settings.get("amp", "bf16")
     scaler = torch.amp.GradScaler("cuda", enabled=device.type == "cuda" and amp == "fp16")
     grad_clip = float(settings.get("grad_clip", 0.1))
-    start_epoch, global_step, best_miou, best_source, best_epoch = 0, 0, -1.0, None, None
-    checkpoint = None
+    start_epoch, global_step, best = 0, 0, initial_best()
     if resume_path:
         checkpoint = load_checkpoint(resume_path)
         absent = [key for key in RESUME_KEYS if key not in checkpoint]
         if absent:
-            raise ValueError(f"{resume_path} cannot be resumed: it has no {', '.join(absent)} state. best.pt is an "
-                             "inference-only snapshot (model/ema_model weights); resume from last.pt.")
+            raise ValueError(f"{resume_path} cannot be resumed: it has no {', '.join(absent)} state. best_miou.pt and "
+                             "best_loss.pt (and the legacy best.pt) are inference-only snapshots; resume from last.pt.")
         if checkpoint["world_size"] != world_size:
             raise ValueError("Epoch-boundary resume requires the checkpoint's WORLD_SIZE")
         if checkpoint["total_steps"] != total_steps:
@@ -216,7 +256,8 @@ def main():
                 raise ValueError(f"Epoch-boundary resume requires unchanged {section} configuration")
         if checkpoint["data_snapshot"] != data_snapshot:
             raise ValueError("Manifest sample membership, official allowlist or data provenance changed since checkpoint")
-        transient = {"resume", "output_dir", "log_every", "save_every"}
+        # Legacy checkpoints also recorded the removed train.ema; its weights are not restored.
+        transient = {"resume", "output_dir", "log_every", "save_every", "ema"}
         old_settings = {key: value for key, value in checkpoint["config"]["train"].items() if key not in transient}
         new_settings = {key: value for key, value in settings.items() if key not in transient}
         if old_settings != new_settings:
@@ -228,19 +269,15 @@ def main():
         scheduler.load_state_dict(checkpoint["scheduler"])
         scaler.load_state_dict(checkpoint["scaler"])
         start_epoch = checkpoint["epoch"] + 1
-        global_step, best_miou = checkpoint["global_step"], checkpoint["best_miou"]
-        best_source, best_epoch = checkpoint.get("best_source"), checkpoint.get("best_epoch")
+        global_step = checkpoint["global_step"]
+        best, legacy_note = resumed_best(checkpoint)
+        if legacy_note and rank == 0:
+            print(f"NOTE: {resume_path} is a {legacy_note}.", flush=True)
         restore_rng(checkpoint["rng_states"][rank])
+        del checkpoint
     if world_size > 1:
         model = DistributedDataParallel(model, device_ids=[device.index] if device.type == "cuda" else None,
                                         find_unused_parameters=False, broadcast_buffers=True)
-    # Built after DDP's rank-0 broadcast, so every rank's EMA starts from identical weights.
-    ema = ModelEMA(model, settings["ema"]["decay"]) if settings["ema"]["enabled"] else None
-    if ema is not None and checkpoint is not None:
-        if "ema_model" not in checkpoint:
-            raise ValueError("train.ema.enabled=true but the checkpoint has no ema_model state")
-        ema.load_state_dict(checkpoint["ema_model"])
-    del checkpoint
     output = Path(settings.get("output_dir", "runs/moonseg"))
     if rank == 0:
         runtime = {"deformable_attention": unwrap_model(model).deformable_attention,
@@ -257,7 +294,7 @@ def main():
         print(f"Training {len(train_dataset)} {'development-pool' if development else 'official'} samples; "
               f"world_size={world_size}; effective_batch={batch_size * world_size * accumulation}; device={device}; "
               f"amp={amp}; deformable_attention={runtime['deformable_attention']}; tf32={backends['tf32']}; "
-              f"cudnn_benchmark={backends['cudnn_benchmark']}; ema={settings['ema']}; "
+              f"cudnn_benchmark={backends['cudnn_benchmark']}; "
               f"sampling={settings['sampling']['mode']}; eval_stride={settings['eval_stride']}", flush=True)
         print(json.dumps(batch_plan), flush=True)
     for epoch in range(start_epoch, epochs):
@@ -294,8 +331,6 @@ def main():
                 if scaler.get_scale() >= previous_scale:
                     scheduler.step()
                     global_step += 1
-                    if ema is not None:
-                        ema.update(model)
                     grad_stats[0] += norm
                     grad_stats[1] = torch.maximum(grad_stats[1], norm)
                     grad_stats[2] += 1
@@ -307,27 +342,22 @@ def main():
                                       "elapsed_seconds": round(time.monotonic() - started, 1)}), flush=True)
         if dist.is_initialized():
             dist.all_reduce(epoch_loss)
-            # Adapter BatchNorm updates running statistics locally. Validate and save
-            # one consistent model; unwrapped validation forwards contain no collectives.
+            # Adapter BatchNorm updates running statistics locally. Validate and save one consistent
+            # model; unwrapped validation forwards and the unsynchronized validation loss contain
+            # no collectives (evaluate_model reduces its sums once at the end).
             for buffer in unwrap_model(model).buffers():
                 dist.broadcast(buffer, src=0)
-        if ema is not None:
-            ema.copy_buffers(model)
-        result = result_ema = stride = evaluated = None
-        improved = False
+        result = stride = evaluated = miou_ma3 = None
+        improved = []
         if val_dataset is not None and ((epoch + 1) % int(settings.get("eval_every", 1)) == 0 or epoch + 1 == epochs):
             # Intermediate validations may use every k-th record; the final epoch evaluates all.
             stride = 1 if epoch + 1 == epochs else settings["eval_stride"]
             indices = validation_indices(val_dataset, stride)
             evaluated = len(indices)
             inference = config.get("inference", {})
-            result = evaluate_model(model, val_dataset, device, inference, amp, rank, world_size, workers, indices)
-            if ema is not None:
-                result_ema = evaluate_model(ema.module, val_dataset, device, inference, amp,
-                                            rank, world_size, workers, indices)
-            for value, source in ((result, "model"), (result_ema, "ema_model")):
-                if value is not None and value["mIoU"] is not None and value["mIoU"] > best_miou:
-                    best_miou, best_source, best_epoch, improved = value["mIoU"], source, epoch + 1, True
+            result = evaluate_model(model, val_dataset, device, inference, amp, rank, world_size, workers, indices,
+                                    criterion)
+            best, improved, miou_ma3 = update_best(best, epoch + 1, result["mIoU"], result["val_loss"])
         grad_sum, grad_max, grad_count = grad_stats.tolist()
         states = _gather_rng(world_size)
         if rank == 0:
@@ -336,31 +366,30 @@ def main():
                        "grad_norm_mean": grad_sum / grad_count if grad_count else None,
                        "grad_norm_max": grad_max if grad_count else None,
                        "seconds": time.monotonic() - started, "eval_stride": stride, "evaluated_samples": evaluated,
-                       "best_miou": best_miou if best_source else None, "best_source": best_source,
-                       "validation": result, "validation_ema": result_ema}
+                       "val_loss": result["val_loss"] if result else None, "miou_ma3": miou_ma3,
+                       **{key: best[key] for key in BEST_KEYS if key != "recent_miou"},
+                       "saved_best": improved, "validation": result}
             with (output / "history.jsonl").open("a", encoding="utf-8") as stream:
                 stream.write(json.dumps(summary, ensure_ascii=False) + "\n")
             print(json.dumps(summary, ensure_ascii=False), flush=True)
             state = {"model": partial_state_dict(model), "optimizer": optimizer.state_dict(),
                      "scheduler": scheduler.state_dict(), "scaler": scaler.state_dict(),
-                     "rng_states": states, "epoch": epoch, "global_step": global_step,
-                     "best_miou": best_miou, "best_source": best_source, "best_epoch": best_epoch,
+                     "rng_states": states, "epoch": epoch, "global_step": global_step, **best,
                      "world_size": world_size, "total_steps": total_steps,
                      "config": config, "sampler_epoch": epoch, "data_snapshot": data_snapshot, "batch_plan": batch_plan,
                      "frozen_backbone": {"weights": config["model"].get("backbone_weights"),
                                          "note": "Frozen DINOv3 tensors are not stored; rebuild the model with "
                                                  "model.backbone_weights before loading these weights."},
-                     "resume_scope": "Complete state at epoch boundary, including EMA; use same config/world size. "
+                     "resume_scope": "Complete state at epoch boundary; use same config/world size. "
                                      "CUDA deformable-attention and grid_sample backward are nondeterministic; "
                                      "bitwise replay is not guaranteed."}
-            if ema is not None:
-                state["ema_model"] = ema.state_dict()
             atomic_torch_save(state, output / "last.pt")
-            if improved:
-                # Inference-only snapshot: no optimizer/scheduler/RNG state. Resume from last.pt.
-                inference_state = {key: value for key, value in state.items() if key not in RESUME_KEYS}
-                inference_state["resume_scope"] = "Weights only (model, ema_model); resume training from last.pt."
-                atomic_torch_save(inference_state, output / "best.pt")
+            # Inference-only snapshots (no optimizer/scheduler/scaler/RNG): best_miou.pt, best_loss.pt.
+            inference_state = {key: value for key, value in state.items() if key not in RESUME_KEYS}
+            for name in improved:
+                atomic_torch_save({**inference_state, "selected_by": name,
+                                   "resume_scope": "Weights only (model); resume training from last.pt."},
+                                  output / f"{name}.pt")
             save_every = int(settings.get("save_every", 0))
             if save_every > 0 and (epoch + 1) % save_every == 0:
                 atomic_torch_save(state, output / f"epoch_{epoch + 1:03d}.pt")

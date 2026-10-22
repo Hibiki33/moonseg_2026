@@ -63,9 +63,6 @@ train:
   tf32: true
   cudnn_benchmark: true
   grad_clip: 0.1
-  ema:
-    enabled: true
-    decay: 0.999
   sampling:
     mode: uniform
   validate: true

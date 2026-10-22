@@ -66,6 +66,10 @@ class Mask2FormerCriterion(nn.Module):
         class_weights = torch.ones(num_classes + 1)
         class_weights[-1] = no_object_weight
         self.register_buffer("class_weights", class_weights)
+        # Training averages the mask-count normalizer over ranks (one all_reduce per forward), as
+        # upstream. Evaluation sets this False: ranks then run different numbers of forwards, where
+        # the collective would deadlock, and each sample is normalized by its own mask count.
+        self.sync_num_masks = True
 
     def _prepare_targets(self, targets, device):
         prepared = []
@@ -172,7 +176,7 @@ class Mask2FormerCriterion(nn.Module):
             if len(targets) != outputs["pred_logits"].shape[0]:
                 raise ValueError("Output and target batch sizes differ")
             count = torch.tensor(sum(t["labels"].numel() for t in targets), device=outputs["pred_logits"].device, dtype=torch.float32)
-            if dist.is_available() and dist.is_initialized():
+            if self.sync_num_masks and dist.is_available() and dist.is_initialized():
                 dist.all_reduce(count)
                 count /= dist.get_world_size()
             normalizer = count.clamp(min=1)

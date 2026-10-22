@@ -1,6 +1,6 @@
 # 训练配方
 
-更新：2026-10-21 晚。两条开发池基线已于当晚启动（ViT-L/16 在 PCI 0/7，ViT-B/16 在 PCI 5/6），精度结果待填，记在 [roadmap.md](roadmap.md#实验记录)。两份配置 [`configs/dnv3_va_m2f_vitb16.yaml`](../configs/dnv3_va_m2f_vitb16.yaml) 与 [`configs/dnv3_va_m2f_vitl16.yaml`](../configs/dnv3_va_m2f_vitl16.yaml) 只有骨干、权重路径和输出目录不同；配置是取值的唯一事实来源，本文给出每项的理由。这些设置是本项目的工程选择：LuSNAR 论文没有报告训练配方（见 [paper_alignment.md](paper_alignment.md)），这里也不声称已验证精度最优。
+更新：2026-10-22。两条开发池基线已于 2026-10-21 晚启动（ViT-L/16 在 PCI 0/7，ViT-B/16 在 PCI 5/6），精度结果待填，记在 [roadmap.md](roadmap.md#实验记录)。2026-10-22 起训练不再使用 EMA，并按验证 mIoU 与验证损失分别保存最佳 checkpoint（见[验证协议](#验证协议)）；这两条基线启动于此改动之前，仍带 EMA 并写 `best.pt`。两份配置 [`configs/dnv3_va_m2f_vitb16.yaml`](../configs/dnv3_va_m2f_vitb16.yaml) 与 [`configs/dnv3_va_m2f_vitl16.yaml`](../configs/dnv3_va_m2f_vitl16.yaml) 只有骨干、权重路径和输出目录不同；配置是取值的唯一事实来源，本文给出每项的理由。这些设置是本项目的工程选择：LuSNAR 论文没有报告训练配方（见 [paper_alignment.md](paper_alignment.md)），这里也不声称已验证精度最优。
 
 ## 配方与理由
 
@@ -21,13 +21,13 @@
 | 数值 | BF16 autocast + TF32，`cudnn_benchmark: true`；匹配、损失与可变形注意力在 FP32 | 速度；数值语义见 model.md |
 | 可变形注意力 | `deformable_attention: auto`，选中已编译的官方 CUDA 扩展 | 比纯 PyTorch 路径省约 10.7 GiB、快约 31%（[gpu_topology.md](gpu_topology.md#显存与吞吐容量)） |
 | 激活检查点 | `gradient_checkpointing: true` | 关闭只快约 8%，但每卡多约 9 GiB |
-| EMA | decay 0.999，只平均可训练参数 | 时间常数约 1000 次更新，即约 10 个开发 epoch；每次验证同时评估原始权重与 EMA |
+| EMA | 不使用（2026-10-22 移除；配置含 `train.ema` 会报错） | 所查官方分割配方都不用 EMA；两条基线中它只平滑了漂移的轨迹（见[验证协议](#验证协议)） |
 | 训练长度 | 80 epoch：开发池 8000 次更新，全训练池 10000 次 | 初始预算；更新次数少于常见配方（见[参考配方与证据](#参考配方与证据)），按验证曲线调整 |
 | 采样 | `sampling.mode: uniform`，每轮重新打乱 | 稀有类采样已实现，作为候选 |
 | 数据 | 开发池 `dev_train.json`（场景 1/3/6/7/8，6403 帧）训练，`dev_val.json`（场景 5，1599 帧）验证 | 官方清单到位前的开发通道（[data.md](data.md#公开训练场景开发池)） |
-| 验证 | 每轮验证；中间轮 `eval_stride: 2`（800 帧），最后一轮全量 1599 帧 | 隔帧抽样的类别占比偏差 ≤0.4%（[data.md](data.md#时间冗余)） |
+| 验证 | 每轮验证 mIoU 与验证损失；中间轮 `eval_stride: 2`（800 帧），最后一轮全量 1599 帧 | 隔帧抽样的类别占比偏差 ≤0.4%（[data.md](data.md#时间冗余)） |
 | 推理 | 整图、单尺度、无翻转（`sliding_window: false`、`scales: [1.0]`、`flip: false`） | 与整图训练一致；TTA 是候选 |
-| checkpoint | 每轮覆盖 `last.pt`，验证提升时覆盖 `best.pt`，`save_every: 0` | 不存冻结骨干；格式见 [model.md](model.md#checkpoints) |
+| checkpoint | 每轮覆盖 `last.pt`；验证 mIoU 新高时覆盖 `best_miou.pt`，验证损失新低时覆盖 `best_loss.pt`；`save_every: 0` | 不存冻结骨干；格式见 [model.md](model.md#checkpoints) |
 | 其他 | seed 42，`num_workers: 4`，`log_every: 10` | 4 个 worker 每 rank 约 21 img/s，远高于训练需求（[gpu_topology.md](gpu_topology.md#显存与吞吐容量)） |
 
 ## Batch 计划
@@ -44,8 +44,10 @@
 ## 验证协议
 
 - 训练启动时检查训练与验证的样本 ID、场景互不重叠。
-- 每轮在场景 5 上验证；中间轮按 `(scene, sample_id)` 顺序每 2 帧取 1 帧（800 帧），最后一轮评估全部 1599 帧。`history.jsonl` 记录每轮的 `eval_stride`、`evaluated_samples`、`validation` 与 `validation_ema`。
-- 原始权重与 EMA 在相同帧上评估，两者中较高的 mIoU 刷新最佳值时写 `best.pt` 并记录 `best_source`。`best.pt` 可能在抽样子集上选出，子集 mIoU 不能直接与全量比较；需要时用 `moonseg.evaluate --weights auto` 在全量上复评（命令见 README）。
+- 每轮在场景 5 上验证；中间轮按 `(scene, sample_id)` 顺序每 2 帧取 1 帧（800 帧），最后一轮评估全部 1599 帧。`history.jsonl` 记录每轮的 `eval_stride`、`evaluated_samples`、`val_loss`、`miou_ma3`、`best_miou`/`best_miou_epoch`、`best_loss`/`best_loss_epoch`、`saved_best`（本轮写入的最佳文件）与完整的 `validation`（含 `val_loss`）。
+- 验证损失 `val_loss`：与训练相同的 Mask2Former 总损失（最终层加各辅助层），每帧 batch 1、与训练相同的 autocast，模型处于 eval 模式，对所有 rank 上评估的帧取平均。当前整图单尺度推理下与 mIoU 共用同一次前向。点采样在 `fork_rng` 内用固定种子，所以结果可复现、同一帧各轮抽到相同的点，且不推进训练的随机数流。各 rank 的帧数可能不同（全量 1599 帧时为 800/799），评估期间关闭损失里按 rank 同步 mask 数的 `all_reduce`（否则会死锁），每帧用自己的 mask 数归一化。因此 `val_loss` 与 `train_loss` 量级相近但不严格可比：后者是 train 模式、每卡 8 张、跨 rank 平均归一化，且带数据增强。
+- 最佳文件：验证 mIoU 严格高于此前所有验证时写 `best_miou.pt`，验证损失严格低于此前所有验证时写 `best_loss.pt`，两者可在同一轮写入，持平不覆盖；`last.pt` 每轮覆盖。`miou_ma3` 是最近 3 次验证 mIoU 的均值，只作参考，不参与选择。最佳文件可能在抽样子集上选出，子集分数不能直接与全量比较；需要时用 `moonseg.evaluate` 在全量上分别复评两个文件（命令见 README）。
+- 移除 EMA（2026-10-22）的理由：所查官方分割配方（Mask2Former、DINOv3、ViT-Adapter，见[参考配方与证据](#参考配方与证据)）都不用 EMA；两条基线截至 2026-10-22 12:20（ViT-B 64 轮、ViT-L 67 轮，800 帧子集）的 `history.jsonl` 中，原始权重 mIoU 在第 12/15 轮达到峰值 0.871/0.920 后漂移回落，EMA 最高只有 0.829/0.909，`best_source` 始终是 `model`；近 20 轮 EMA 只把轮间标准差从 0.009/0.010 压到 0.003，均值比原始权重高 0.003/0.009，仍低于早期峰值。也就是说 EMA 只平滑了一条漂移的轨迹，却让每轮验证时间翻倍。验证损失给出与 mIoU 互补的第二条选择依据。EMA 时代的 `last.pt` 仍可用新配置恢复，EMA 权重被丢弃、最佳记录重新开始；旧 checkpoint 的 `ema_model` 只在显式指定 `--weights ema_model`/`--weights-key ema_model` 时加载，`auto` 一律用 `model`（[model.md](model.md#checkpoints)）。
 - 指标为按场景累积混淆矩阵的 mIoU（只平均参考标签中出现的类别）、各类 IoU、mAcc 等，定义见 [metrics.md](metrics.md)。场景 5 分数不是排行榜成绩。
 - 第二验证场景、暗帧子集和 block bootstrap 置信区间是候选（[roadmap.md](roadmap.md) #7，依据见 [data.md](data.md#验证场景)）。
 
@@ -56,22 +58,23 @@
 | `runs/dnv3_va_m2f_vitl16` | `dnv3_va_m2f_vitl16.yaml` | 0、7（RTX 6000 Ada） | 无（脚本默认 `CUDA_VISIBLE_DEVICES=0,7`） | 约 45.6 GB |
 | `runs/dnv3_va_m2f_vitb16` | `dnv3_va_m2f_vitb16.yaml` | 5、6（RTX A6000） | `CUDA_VISIBLE_DEVICES=5,6 NCCL_P2P_DISABLE=1` | 约 40.9 GB |
 
-启动、恢复、评估和预测命令见 [README](../README.md#训练验证与推理)。启动脚本固定 `CUDA_DEVICE_ORDER=PCI_BUS_ID`；PCI 5/6 卡对的 PCIe P2P 会静默丢数据，必须关闭 NCCL P2P，原因见 [gpu_topology.md](gpu_topology.md)。`runs` 是指向本地盘 `/home/disk02/wjj/moonseg/runs` 的软链接，不写 NAS。只能从 `last.pt` 恢复，且配置、数据清单和进程数必须与原运行一致。
+启动、恢复、评估和预测命令见 [README](../README.md#训练验证与推理)。启动脚本固定 `CUDA_DEVICE_ORDER=PCI_BUS_ID`；PCI 5/6 卡对的 PCIe P2P 会静默丢数据，必须关闭 NCCL P2P，原因见 [gpu_topology.md](gpu_topology.md)。`runs` 是指向本地盘 `/home/disk02/wjj/moonseg/runs` 的软链接，不写 NAS。只能从 `last.pt` 恢复，且配置、数据清单和进程数必须与原运行一致；唯一例外是 EMA 时代的 `last.pt` 记录的 `train.ema`，恢复时被忽略。
 
 ## 预期墙钟时间
 
-- 实测（两条运行前两轮的 `history.jsonl` `seconds`，含每轮两次 800 帧验证）：ViT-L 在 PCI 0/7 每轮 790–796 s，80 轮约 17.6 h；ViT-B 在 PCI 5/6 每轮 828–841 s，80 轮约 18.5 h。最后一轮全量验证再多几分钟。
+- 实测（EMA 时代两条运行前两轮的 `history.jsonl` `seconds`，含每轮两次 800 帧验证）：ViT-L 在 PCI 0/7 每轮 790–796 s，80 轮约 17.6 h；ViT-B 在 PCI 5/6 每轮 828–841 s，80 轮约 18.5 h。最后一轮全量验证再多几分钟。
 - 与合成基准一致：ViT-L 在 Ada 上每卡 batch 8 为 4.13 img/s，6400 张约 780 s（不含验证）；ViT-B 在 A6000 上按 46068 MiB 卡测得的 0.66×Ada 估计约 900 s，实测更快，说明该比例偏保守。
+- 移除 EMA 后每轮只验证一次，验证损失与 mIoU 共用同一次前向，只多出损失计算，新运行每轮应略短于上面的实测，尚未实测。
 - 最终在全训练池重训（`validate: false`）时，每轮训练量为开发池的 1.25 倍且没有验证。
 - 预测 5004 张测试图：双卡单尺度纯 GPU 时间约 157 s，3 尺度 × 翻转 TTA 约 17 min，PNG 读写另计（[gpu_topology.md](gpu_topology.md#显存与吞吐容量)）。
 
 ## 结果看什么
 
-- 场景 5 的 mIoU（原始与 EMA）、岩石和撞击坑 IoU、山体 IoU（场景 5 只有 48.3% 的帧有山体）、mAcc 与各类支持数。
-- 曲线：`train_loss`、`grad_norm_mean`/`grad_norm_max`（裁剪前范数）和每轮验证 mIoU 是否在 80 轮内饱和或回落；EMA 在前约 10 轮仍含较多随机初始化成分，早期 EMA 分数偏低属正常。
+- 场景 5 的 mIoU 与验证损失、岩石和撞击坑 IoU、山体 IoU（场景 5 只有 48.3% 的帧有山体）、mAcc 与各类支持数。
+- 曲线：`train_loss`、`val_loss`、`grad_norm_mean`/`grad_norm_max`（裁剪前范数）和每轮验证 mIoU（及 `miou_ma3`）是否在 80 轮内饱和或回落；`val_loss` 回升而 `train_loss` 继续下降是过拟合信号。
 - 过拟合信号：训练损失持续下降而撞击坑、岩石 IoU 先升后降；暗区被系统性预测为撞击坑；加入第二验证场景后两者走势分歧。
 - B 与 L 同配方并排比较，回答骨干容量是否重要；DINOv3 线性探测从 B 到 L 提升 3.1（见下），可作先验参照。
-- 记录 `best_source`、`best_epoch`，并在全量上复评 `best.pt` 后填入 [roadmap.md](roadmap.md#实验记录)。
+- 记录 `best_miou_epoch`、`best_loss_epoch`，在全量上复评 `best_miou.pt` 与 `best_loss.pt` 后填入 [roadmap.md](roadmap.md#实验记录)。
 
 ## 参考配方与证据
 
@@ -105,7 +108,7 @@
 ### 竞赛常用技巧
 
 - 多尺度+翻转 TTA：Mask2Former +1.0–2.8；DINOv3 只用 0.9–1.1 的窄比例也有 +0.4；ViT-Adapter BEiTv2 +0.3。
-- EMA：HuBMAP-2023 第 1 名把 EMA 列为最关键技巧 [weak: [write-up](https://www.kaggle.com/competitions/hubmap-hacking-the-human-vasculature/writeups/tascj-1st-place-solution)，页面被拦截]。
+- EMA：HuBMAP-2023 第 1 名把 EMA 列为最关键技巧 [weak: [write-up](https://www.kaggle.com/competitions/hubmap-hacking-the-human-vasculature/writeups/tascj-1st-place-solution)，页面被拦截]。本项目已于 2026-10-22 移除 EMA，理由见[验证协议](#验证协议)。
 - logit 集成：Contrails 第 1 名用 unet1024 与 vit 集成 [weak: 搜索摘要]。
 - Copy-paste：只有通用证据，没有找到行星场景的定量证据。
 
