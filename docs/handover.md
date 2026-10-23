@@ -4,13 +4,13 @@
 
 ## 1. 现状一句话
 
-H+ 整图与 L0/L1/L2 均已完成 25 轮及场景 5 全量复评；当前验证最高为 H+ 第 14 轮，单尺度 0.929152、TTA 0.936013。公开测试单尺度的三场景等权 mIoU 为 L0 0.910903、L1 裁剪 0.915154、H+ 整图 0.913748，不能把验证排序直接推广到测试。L1 在三个测试场景都比 L0 高，H+ 在场景 9 比 L0 低，详细类别得失见第 3 节。H+ RRC 第 1 轮后 OOM，已修复内存生命周期并于 2026-10-23 13:22 从 last.pt 续训，已跨过训练/验证边界；5/6 正常进行 L1 低学习率消融。
+主线已按用户决定转为 ViT-L，优先比较公开测试场景 9。L1 的场景 9 单尺度 mIoU 为 0.881551，高于 L0 0.878490、H+ 整图 0.875411、L2 0.874835。H+ RRC 已完成内存修复验证，但于 2026-10-23 14:54 在第 6 轮 checkpoint 保存后主动暂停；14:57 由 L gamma 接替 0/7，随后 shadow。5/6 的低学习率实验已完成 25 轮，当前 RCS，随后 seed43。
 
 ## 2. 已定决策
 
 | 项目 | 决定 | 来源 |
 |---|---|---|
-| 骨干 | 冻结 DINOv3，后续训练集中在 L/H+；旧最佳权重全量单尺度 L 比 B 高 4.87 个百分点 | 80 轮对比及全量复评 |
+| 骨干 | 冻结 DINOv3，后续训练以 ViT-L 为主，暂停 H+ 追加训练；已有 H+ 结果保留对照 | 用户 2026-10-23 根据公开测试结果调整路线 |
 | 输入 | 1024×1024，训练几何增强以 L0/L1/L2 消融决定（L1 目前领先） | 本页第 3 节 |
 | 有效 batch | 每卡 8 × 2 卡 × 累积 4 = 64；用户于 2026-10-23 明确大于等于 64 即可，本批保持可比 | 用户；显存实测 |
 | 优化 | AdamW、lr 2e-4、wd 0.05、poly 0.9、无 warmup、梯度裁剪 0.1、bf16 + TF32、25 轮 | 用户；80 轮在第 12–15 轮过拟合 |
@@ -18,6 +18,7 @@ H+ 整图与 L0/L1/L2 均已完成 25 轮及场景 5 全量复评；当前验证
 | checkpoint | `last.pt`（完整恢复）、`best_miou.pt`、`best_loss.pt`（仅权重），不存冻结骨干 | 用户 |
 | 验证 | 场景 5，每轮隔 2 帧、末轮全量；同时记录验证损失与 3 轮滑动均值 | — |
 | 公开测试研究 | 场景 2/4/9 全部 5004 张，用验证选出的固定权重；报告分场景、等权场景平均及汇总像素指标 | 用户 2026-10-23 明确要求；非官方比赛成绩 |
+| 方案比较优先级 | 场景 9 mIoU 优先，同时看撞击坑/岩石/山体 IoU；检查场景 2/4 回退，等权均值作为辅助 | 用户强调场景 9；官方数值权重不在本地假定 |
 | TTA | 尺度 0.9/1.0/1.1 + 水平翻转，概率平均；作为统一评估设置，在每个新实验上与单尺度同时测 | 第 3 节；本批评估队列 |
 | 数据 | 官方清单到位前用公开训练场景开发池；最终模型在官方清单上从骨干重训 | [data.md](data.md) |
 | GPU | 0/7（Ada）与 5/6（A6000，须 `NCCL_P2P_DISABLE=1`）各为一对；不占 1–4 做训练，空卡只跑推理 | 用户；[gpu_topology.md](gpu_topology.md) |
@@ -45,20 +46,23 @@ H+ 整图与 L0/L1/L2 均已完成 25 轮及场景 5 全量复评；当前验证
 | L0 整图 | 9 | 93.490 | 91.931 | 87.849 | 91.090 | 94.774 | 90.010 |
 | L1 RRC | 11 | 94.229 | 92.162 | 88.155 | 91.515 | 95.240 | 90.463 |
 | H+ 整图 | 14 | 93.751 | 92.832 | 87.541 | 91.375 | 95.067 | 90.160 |
+| L2 温和尺度抖动 | 5 | 93.186 | 91.457 | 87.484 | 90.709 | 94.633 | 89.669 |
 
-L1 相对 L0，场景 2/4/9 分别提高 0.738/0.231/0.306 个百分点，等权均值提高 0.425；但场景 9 撞击坑降低 1.061，岩石和山体提高 1.294/1.115，不能把总体收益描述为所有类别受益。同为整图训练，H+ 相对 L0 的等权均值提高 0.284，场景 2/4 提高 0.260/0.901，场景 9 降低 0.308，主要拖累包括撞击坑降低 2.459。H+ 比 L1 均值低 0.141，差距较小，尚需种子复验；当前测试证据支持继续验证 RRC，不能只凭场景 5 的峰值宣布扩大骨干更好。L2 和 TTA 继续评估。
+L1 相对 L0，场景 2/4/9 分别提高 0.738/0.231/0.306 个百分点，等权均值提高 0.425；但场景 9 撞击坑降低 1.061，岩石和山体提高 1.294/1.115，不能把总体收益描述为所有类别受益。同为整图训练，H+ 相对 L0 的等权均值提高 0.284，场景 2/4 提高 0.260/0.901，场景 9 降低 0.308，主要拖累包括撞击坑降低 2.459。H+ 比 L1 均值低 0.141、场景 9 低 0.614；用户据此决定优先投入 L。L2 三个场景均低于 L0，不作为后续基线。当前是资源优先级选择，不宣称已排除所有 H+ 配方；已有 TTA 继续完成，L 的小差距仍需种子复验。
 
 ## 4. 正在跑与排队（2026-10-23）
 
 | 卡对 | 当前 | 之后 | 预计 |
 |---|---|---|---|
-| PCI 0/7 | H+ RRC，从第 1 轮 checkpoint 恢复 | L1 gamma → L1 shadow | 恢复队列独立；保持 8×2×4=64 |
-| PCI 5/6 | L1 lr1e-4 | L1 RCS → L1 seed43 | 原队列继续运行；全程关闭 NCCL P2P |
+| PCI 0/7 | L1 gamma（14:57 启动） | L1 shadow | L 优先队列；保持 8×2×4=64 |
+| PCI 5/6 | L1 RCS | L1 seed43 | 低学习率实验已完成；原队列继续，全程关闭 NCCL P2P |
 | PCI 2/4 | 公开测试及全量验证单尺度/TTA，各卡一个推理进程 | 完成训练的权重自动进入评估 | 所有评估队列共用 GPU 锁，每次启动前检查空闲 |
 
 原批次 H+/L2 已结束。`scripts/run_training_queue.py` 的原实例继续管理 5/6；0/7 的旧失败记录保留，新恢复计划在 `runs/plans/2026-10-23/recovery_gpu_0_7/`，状态为 `runs/queue_2026-10-23_gpu_0_7_recovery.status.json`。H+ 原错误发生于 04:11，第 2 轮首次 criterion 分配 2 MiB 失败，allocated 41.86 GiB、reserved 未用 4.81 GiB；未留 allocator snapshot，碎片是主要怀疑而非已完全证明的根因。修复释放批次/保存对象引用、轮次边界 empty_cache，并启用 `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`；每 rank 每轮记录显存峰值。原配方、batch、RNG 与优化器状态保持不变。
 
 全量验证结果在 `runs/evaluations_2026-10-23/aggregate.json`；恢复的三项结果在 `runs/evaluations_2026-10-23_gpu_0_7_recovery/aggregate.json`，它们依赖恢复队列的完成标记，不再依赖旧 failed lane。具体参数见 [本批单变量消融](roadmap.md#本批单变量消融)。
+
+当前 0/7 调度使用 `runs/plans/2026-10-23/vitl_priority/training.json`，状态为 `runs/queue_2026-10-23_vitl_priority.status.json`；原恢复队列状态已为 superseded，勿重启。评估三个实例改用同目录 `evaluation.json`、`evaluation_recovery.json`、`public_test.json`，输出目录保持原位，正在运行的 L1/H+ 整图 TTA 已接管且未重跑。H+ RRC 第 6 轮完整 last.pt（step 600）保留，其待评任务显式取消；这是用户主动调整算力，不是新的失败。公开测试低学习率与 L 消融提到旧模型补评之前。
 
 ## 5. 保守路线：逐步消融阶梯
 
@@ -68,7 +72,7 @@ L1 相对 L0，场景 2/4/9 分别提高 0.738/0.231/0.306 个百分点，等权
 |---|---|---|---|---|---|
 | 1 | 几何增强：L0 整图 vs L1 随机缩放裁剪 vs L2 温和抖动 | 已有三份配置 | 3 × 5.5–8 h | L1 验证领先 | 三项训练与全量验证完成；公开测试待比较 |
 | 2 | 骨干容量：H+ vs L，同几何 | `dnv3_va_m2f_vith16plus.yaml` | 7.5 h（Ada） | 验证有提升，测试待比较 | 已完成 |
-| 3 | 组合：H+ + RRC | `dnv3_va_m2f_vith16plus_rrc.yaml`：几何与 L1 相同 | 7.5 h | 检查容量与几何增强的交互，不预设相加 | OOM 修复后续训 |
+| 3 | 组合：H+ + RRC | `dnv3_va_m2f_vith16plus_rrc.yaml`：几何与 L1 相同 | 7.5 h | 检查容量与几何增强的交互，不预设相加 | 已修复；按路线调整暂停于第 6/25 轮 |
 | 4 | 光度增强：+ gamma 0.7–1.5；+ 非天空阴影 | 两项分别基于 L1，概率均为 0.5，参数见 roadmap | 各一次 | 检查总体及困难类别收益 | 已排队 |
 | 5 | 稀有类采样 | `train.sampling: {mode: rare_class, temperature: 0.01}` + `data.label_stats` | 一次 | 检查岩石/撞击坑表现 | 已排队 |
 | 6 | 损失采样点 12544 → 50176 | `loss.num_points` | 一次（显存几乎不变） | 小岩石边界 | 候选 |
@@ -151,7 +155,7 @@ CUDA_VISIBLE_DEVICES=5,6 NCCL_P2P_DISABLE=1 PYTHON=.venv/bin/python bash scripts
 
 原批次使用 `build/queue_2026-10-22.sh`。追加任务使用 `scripts/run_training_queue.py --plan runs/plans/2026-10-23/training.json`，评估使用 `scripts/run_evaluation_queue.py --config runs/plans/2026-10-23/evaluation.json`；两者都支持 `--dry-run`。已启动的调度器不要重复启动。训练状态为 `runs/queue_2026-10-23.status.json`，评估状态为 `runs/evaluations_2026-10-23/status.json`；训练任务成功退出且完成全轮次后才写入各运行的 `queue_completed.json`，供评估调度器接手。主机 PID/start_ticks 和启动记录只保留在外置计划目录，不入 Git。
 
-0/7 恢复使用 `--plan runs/plans/2026-10-23/recovery_gpu_0_7/training.json --status-prefix runs/queue_2026-10-23_gpu_0_7_recovery`，其验证计划为同目录 `evaluation.json`。公开测试使用 `scripts/run_public_test_queue.py --config runs/plans/2026-10-23/public_test.json`。这三个新实例均已启动；原状态里的 0/7 failed 与 12 个 blocked 是历史记录，不能据此重复启动恢复任务。所有评估实例共用 `runs/evaluations_2026-10-23/gpu_2.lock` 和 `gpu_4.lock`。
+当前 0/7 使用 `--plan runs/plans/2026-10-23/vitl_priority/training.json --status-prefix runs/queue_2026-10-23_vitl_priority`；三个评估实例使用该目录的 `evaluation.json`、`evaluation_recovery.json` 和 `public_test.json`，分别由原验证脚本、原验证脚本、公开测试脚本管理。它们已启动，不要重复运行或回用旧计划。旧 0/7 failed、恢复队列 superseded 和原验证 blocked 均为历史状态。所有评估实例共用 `runs/evaluations_2026-10-23/gpu_2.lock` 和 `gpu_4.lock`。
 
 ### 看进度
 
@@ -200,7 +204,7 @@ PCI 序号即 `nvidia-smi` 序号（脚本固定 `CUDA_DEVICE_ORDER=PCI_BUS_ID`�
 
 ## 11. 待办
 
-- H+ RRC 恢复已在 13:44 跨过第 2 轮训练/验证/保存边界，并进入第 3 轮至 step 210；第 2 轮每卡峰值 allocated/reserved 为 45.113/45.260 GiB。继续观察 25 轮长跑，随后 gamma/shadow 自动接续；5/6 继续低学习率/RCS/seed43。汇总公开测试与验证结果，避免重复启动或把旧 failed lane 当成恢复队列现状。
+- 跟踪 L gamma → shadow 与 RCS → seed43；低学习率训练已完成，等待优先公开测试。H+ RRC 已主动暂停于第 6 轮，未经新指令不自动恢复。汇总测试时先看场景 9，再看其他场景及类别得失；旧 failed/superseded 状态不代表当前 L 队列。
 - H+ 的 SwiGLU gate/up 映射尚未与 HF 参考实现做数值比对（机器上另有带 transformers 的环境可用；H+ 第 7 轮已达 0.923，说明映射大概率正确，但仍建议闭合）。
 - 官方训练包到位后切换清单并复核与开发池的差异。
 - 测试输入到位后用 `tools/package_submission.py` 做一次完整打包演练。

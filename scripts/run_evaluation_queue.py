@@ -26,7 +26,7 @@ from datetime import datetime, timezone
 
 
 ROOT = Path(__file__).resolve().parents[1]
-TERMINAL = {"completed", "failed", "alias", "blocked"}
+TERMINAL = {"completed", "failed", "alias", "blocked", "cancelled"}
 
 
 class TrainingBlocked(Exception):
@@ -198,6 +198,7 @@ def validate_config(config):
     names = [run["name"] for run in config["runs"]]
     if len(set(names)) != len(names) or any(Path(name).name != name for name in names):
         raise ValueError("Run names must be unique directory names")
+    validate_cancellations(config, names)
     if not absolute(config["output_dir"]).resolve().is_relative_to((ROOT / "runs").resolve()):
         raise ValueError("Evaluation output must be under external runs storage")
     if not absolute(config.get("gpu_lock_dir", config["output_dir"])).resolve().is_relative_to((ROOT / "runs").resolve()):
@@ -209,6 +210,28 @@ def validate_config(config):
 
 def job_key(run, checkpoint, profile):
     return f"{run}/{Path(checkpoint).stem}/{profile}"
+
+
+def validate_cancellations(config, names):
+    cancelled = config.get("cancelled_runs", [])
+    if len(cancelled) != len(set(cancelled)) or not set(cancelled) <= set(names):
+        raise ValueError("cancelled_runs must contain unique planned run names")
+
+
+def apply_queue_policy(state, config, order):
+    """Apply an explicitly migrated plan without losing results or live workers."""
+    cancelled = set(config.get("cancelled_runs", []))
+    for job in state["jobs"].values():
+        if job["run"] in cancelled and job["status"] not in {"completed", "alias", "cancelled"}:
+            if job["status"] in {"running", "launching"}:
+                raise ValueError("Cannot cancel a live evaluator through queue configuration")
+            if "error" in job:
+                job["previous_error"] = job.pop("error")
+            job.update(previous_status=job["status"], status="cancelled", cancelled_at=now(),
+                       cancellation_reason=config.get("cancellation_reason", "Cancelled by explicit plan"))
+    if set(order) != set(state["jobs"]) or len(order) != len(state["jobs"]):
+        raise ValueError("Queue order must preserve every existing evaluation job")
+    state["jobs"] = {key: state["jobs"][key] for key in order}
 
 
 class Queue:
@@ -240,6 +263,9 @@ class Queue:
         for job in self.state["jobs"].values():
             if job["status"] == "launching":
                 self.fail(job, "Parent interrupted during launch; manual inspection required")
+        apply_queue_policy(self.state, config, [job_key(run["name"], checkpoint, profile)
+                           for run in config["runs"] for checkpoint in config["checkpoints"]
+                           for profile in config["profiles"]])
         self.save()
 
     def save(self):
@@ -250,7 +276,7 @@ class Queue:
             result = job.get("result", {})
             rows.append({"job": key, **{field: job.get(field) for field in (
                 "run", "checkpoint", "epoch", "global_step", "weights", "profile", "status",
-                "alias_of", "elapsed_seconds", "score_path", "error")},
+                "alias_of", "elapsed_seconds", "score_path", "error", "cancellation_reason")},
                 "mIoU": result.get("mIoU"), "mAcc": result.get("mAcc"),
                 "class_IoU": result.get("class_IoU"), "evaluated_samples": result.get("evaluated_samples")})
         atomic_json(self.output / "aggregate.json", {"updated_at": now(), "status": self.state["status"],
@@ -372,7 +398,7 @@ class Queue:
             if original["status"] == "completed":
                 job.update(status="alias", result=original["result"], score_path=original["score_path"],
                            elapsed_seconds=0, finished_at=now())
-            elif original["status"] in {"failed", "blocked"}:
+            elif original["status"] in {"failed", "blocked", "cancelled"}:
                 job.update(status="blocked", error="Canonical evaluation failed; no duplicate retry", finished_at=now())
 
     def launch(self, key, job, gpu):
@@ -499,6 +525,9 @@ def main():
                 "max_workers": config["max_workers"], "weights": "model", "profiles": config["profiles"],
                 "expected_samples": config["expected_samples"], "runs": []}
         for run in config["runs"]:
+            if run["name"] in config.get("cancelled_runs", []):
+                plan["runs"].append({**run, "ready": False, "status": "cancelled"})
+                continue
             try:
                 ready, message = dependency(run, config)
                 item = {**run, "ready": ready, "dependency_status": message}

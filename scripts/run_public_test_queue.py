@@ -21,7 +21,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from scripts.run_evaluation_queue import (Queue as ValidationQueue, TrainingBlocked, absolute, atomic_json,
                                           checkpoint_metadata, file_identity, gpu_snapshot, now,
-                                          process_info, read_json, TERMINAL)
+                                          process_info, read_json, TERMINAL, apply_queue_policy,
+                                          validate_cancellations)
 from moonseg.evaluate_public_test import EXPECTED_SAMPLES, MANIFEST_KIND, PROFILES, SCENE_COUNTS
 
 
@@ -75,8 +76,10 @@ def validate_config(config):
     names = [run["name"] for run in config["runs"]]
     if len(names) != len(set(names)) or any(Path(name).name != name for name in names):
         raise ValueError("Run names must be unique directory names")
-    if len(names) != 12 or len(config["priority_runs"]) != 4 or not set(config["priority_runs"]) <= set(names):
-        raise ValueError("Expected 12 runs and four initial single-profile comparisons")
+    if (len(names) != 12 or len(config["priority_runs"]) != len(set(config["priority_runs"]))
+            or not set(config["priority_runs"]) <= set(names)):
+        raise ValueError("Expected 12 runs and unique planned priority comparisons")
+    validate_cancellations(config, names)
     for run in config["runs"]:
         epochs = run["expected_epochs"]
         if epochs not in (25, 80) or run["checkpoint"] != ("best.pt" if epochs == 80 else "best_miou.pt"):
@@ -159,6 +162,8 @@ class Queue(ValidationQueue):
         for job in self.state["jobs"].values():
             if job["status"] == "launching":
                 self.fail(job, "Parent interrupted during launch; inspect log/PID before a manual retry")
+        apply_queue_policy(self.state, config, [f"{run['name']}/{Path(run['checkpoint']).stem}/{profile}"
+                           for run, profile in job_order(config)])
         self.save()
 
     def save(self):
@@ -169,7 +174,7 @@ class Queue(ValidationQueue):
             result = job.get("result", {})
             rows.append({"job": key, **{field: job.get(field) for field in (
                 "run", "label", "checkpoint", "epoch", "global_step", "weights", "profile", "status",
-                "gpu", "pid", "elapsed_seconds", "score_path", "log_path", "error")},
+                "gpu", "pid", "elapsed_seconds", "score_path", "log_path", "error", "cancellation_reason")},
                 **{field: result.get(field) for field in (
                     "mIoU", "mAcc", "pooled", "scene_equal_macro", "scenes", "scene_sample_counts", "evaluated_samples")}})
         atomic_json(self.output / "aggregate.json", {"updated_at": now(), "status": self.state["status"],
@@ -306,6 +311,9 @@ def main():
                 "evaluation_kind": MANIFEST_KIND, "official_score": False, "runs": [],
                 "job_order": [f"{run['label']}/{profile}" for run, profile in job_order(config)]}
         for run in config["runs"]:
+            if run["name"] in config.get("cancelled_runs", []):
+                plan["runs"].append({**run, "ready": False, "status": "cancelled"})
+                continue
             try:
                 ready, message = dependency(run)
                 item = {**run, "ready": ready, "dependency_status": message}

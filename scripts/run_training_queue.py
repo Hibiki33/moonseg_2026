@@ -58,6 +58,21 @@ def same_process(dependency):
             and identity['state'] not in ('Z', 'X'))
 
 
+def live_config_processes(config):
+    """Include orphan ranks/data workers, whose original parent may have exited."""
+    found = []
+    for directory in Path('/proc').glob('[0-9]*'):
+        try:
+            arguments = (directory / 'cmdline').read_bytes().split(b'\0')
+        except (FileNotFoundError, ProcessLookupError, PermissionError):
+            continue
+        if b'moonseg.train' in arguments and os.fsencode(config) in arguments:
+            identity = process_identity(int(directory.name))
+            if identity and identity['state'] not in ('Z', 'X'):
+                found.append(dict(pid=int(directory.name), **identity))
+    return found
+
+
 def check_history(run_dir, epochs):
     rows = [json.loads(line) for line in (run_dir / 'history.jsonl').read_text().splitlines() if line.strip()]
     if [row.get('epoch') for row in rows] != list(range(1, epochs + 1)):
@@ -70,6 +85,8 @@ def check_history(run_dir, epochs):
 
 
 def validate(plan):
+    if 'supersession' in plan:
+        return validate_supersession(plan)
     if 'recovery' in plan:
         return validate_recovery(plan)
     if plan.get('version') != 1 or len(plan.get('lanes', [])) != 2:
@@ -117,6 +134,75 @@ def validate(plan):
     if not PYTHON.is_file():
         raise ValueError(f'Python interpreter is missing: {PYTHON}')
     return config_contents
+
+
+def supersession_source(plan):
+    """Only replace a retired 0/7 lane; the legacy 5/6 lane may continue."""
+    handoff = plan['supersession']
+    source = json.loads(path(handoff['source_status']).read_text())
+    if (source['pid'], source['start_ticks']) != (handoff['source_pid'], handoff['source_start_ticks']):
+        raise ValueError('Superseded source queue identity differs from plan')
+    if same_process(source) or any(same_process(item) for item in handoff['source_processes']):
+        raise ValueError('Superseded source parent or training children are still alive')
+    lane = source['lanes'][handoff['source_lane']]
+    if live_config_processes(lane['jobs'][0]['config']):
+        raise ValueError('Superseded source training ranks or data workers are still alive')
+    if source['status'] != 'superseded' or lane['status'] != 'superseded' or lane['gpus'] != [0, 7]:
+        raise ValueError('Source 0/7 lane must be explicitly superseded')
+    if any(job.get('pid') and same_process(job) for job in lane['jobs']):
+        raise ValueError('Source training job is still alive')
+    expected = [job['name'] for job in plan['lanes'][0]['jobs']]
+    transferred = [job for job in lane['jobs'] if job['status'] == 'transferred']
+    if ([job['name'] for job in transferred] != expected
+            or any(job['status'] not in {'cancelled', 'transferred', 'completed'} for job in lane['jobs'])):
+        raise ValueError('Source must explicitly cancel H+ and transfer the ordered L successors')
+    if any(path(job['config']) != path(original['config'])
+           for job, original in zip(plan['lanes'][0]['jobs'], transferred)):
+        raise ValueError('Transferred jobs must reuse their frozen configurations')
+    legacy = json.loads(path(handoff['legacy_status']).read_text())
+    if (legacy['pid'], legacy['start_ticks']) != (handoff['legacy_pid'], handoff['legacy_start_ticks']):
+        raise ValueError('Legacy queue identity differs from plan')
+    for other in legacy['lanes'].values():
+        if set(other['gpus']).intersection({0, 7}):
+            if other['status'] not in {'failed', 'cancelled', 'superseded', 'completed'}:
+                raise ValueError('Legacy queue still owns an overlapping active lane')
+            if any(job.get('pid') and same_process(job) for job in other['jobs']):
+                raise ValueError('Legacy queue has a live overlapping training process')
+        elif other['gpus'] != [5, 6]:
+            raise ValueError('Only the legacy 5/6 lane may remain active')
+    return legacy
+
+
+def validate_supersession(plan):
+    if plan.get('version') != 1 or len(plan.get('lanes', [])) != 1:
+        raise ValueError('Supersession requires one lane')
+    lane, handoff = plan['lanes'][0], plan['supersession']
+    if lane['gpus'] != [0, 7] or handoff.get('allocator') != 'expandable_segments:True':
+        raise ValueError('Supersession requires GPUs 0/7 and expandable_segments:True')
+    if [job['name'] for job in lane['jobs']] != ['dnv3_va_m2f_vitl16_rrc_gamma', 'dnv3_va_m2f_vitl16_rrc_shadow']:
+        raise ValueError('Only the existing gamma then shadow experiments may be transferred')
+    supersession_source(plan)
+    contents = {}
+    for job in lane['jobs']:
+        config_path = path(job['config'])
+        content = config_path.read_bytes()
+        settings = yaml.safe_load(content)['train']
+        output = path(settings['output_dir'])
+        if (output.parent != path('runs') or output.name != job['name'] or config_path.stem != job['name']
+                or (output.exists() and any(output.iterdir()))):
+            raise ValueError('Transferred jobs require their original fresh output directories')
+        if (settings['batch_size'], settings['accumulation_steps'], settings['epochs'],
+                settings.get('min_effective_batch'), job['expected_epochs']) != (8, 4, 25, 64, 25):
+            raise ValueError('Transferred jobs must preserve batch8 × 2 GPUs × accumulation4 and 25 epochs')
+        if settings.get('resume') is not None or 'resume_checkpoint' in job:
+            raise ValueError('Transferred L experiments must start fresh')
+        if Path(job['log_name']).name != job['log_name'] or not job['log_name'].endswith('.log'):
+            raise ValueError('Training log must be a plain .log filename')
+        job.update(config=str(config_path), run_dir=str(output))
+        contents[job['name']] = content
+    if not PYTHON.is_file():
+        raise ValueError(f'Python interpreter is missing: {PYTHON}')
+    return contents
 
 
 def recovery_source(plan):
@@ -269,6 +355,8 @@ class Queue:
                       'start_ticks': process_identity(os.getpid())['start_ticks'], 'started_at': now(),
                       'project_root': str(ROOT), 'runs_root': str(path('runs')),
                       'lanes': {lane['id']: dict(lane, status='pending') for lane in plan['lanes']}}
+        if 'supersession' in plan:
+            self.state['supersession'] = plan['supersession']
         for lane in self.state['lanes'].values():
             lane['jobs'] = [dict(job, status='pending', gpus=lane['gpus']) for job in lane['jobs']]
         self.save()
@@ -289,7 +377,9 @@ class Queue:
     def lane(self, lane):
         current_job = None
         try:
-            if 'recovery' in self.plan:
+            if 'supersession' in self.plan:
+                supersession_source(self.plan)
+            elif 'recovery' in self.plan:
                 recovery_source(self.plan)
             else:
                 dep = lane['predecessor']
@@ -304,6 +394,9 @@ class Queue:
                 while True:
                     try:
                         gpu_state = gpu_occupancy(lane['gpus'])
+                        if ('supersession' in self.plan and gpu_state['gpu_uuids'] !=
+                                self.plan['supersession']['expected_gpu_uuids']):
+                            raise ValueError('Physical GPU UUID mapping differs from frozen handoff')
                     except (subprocess.SubprocessError, OSError, ValueError) as error:
                         self.update(lane, gpu_query_error=str(error), gpu_checked_at=now())
                         time.sleep(POLL_SECONDS)
@@ -327,6 +420,8 @@ class Queue:
                            PYTHON=str(PYTHON), OMP_NUM_THREADS=env.get('OMP_NUM_THREADS', '4'))
                 if 'recovery' in self.plan:
                     env['PYTORCH_CUDA_ALLOC_CONF'] = self.plan['recovery']['allocator']
+                if 'supersession' in self.plan:
+                    env['PYTORCH_CUDA_ALLOC_CONF'] = self.plan['supersession']['allocator']
                 if set(lane['gpus']) == {5, 6}:
                     env['NCCL_P2P_DISABLE'] = '1'
                 else:
@@ -388,17 +483,19 @@ def main():
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
-            if 'recovery' not in plan or not same_process(recovery_source(plan)):
+            source = (supersession_source(plan) if 'supersession' in plan else
+                      recovery_source(plan) if 'recovery' in plan else None)
+            if source is None or not same_process(source):
                 raise RuntimeError('Another queue instance holds the exclusive lock') from None
             # The legacy parent holds this lock for its remaining disjoint lane.
             # A separate recovery lock and per-GPU locks serialize new parents.
-        if 'recovery' in plan:
+        if 'recovery' in plan or 'supersession' in plan:
             recovery_lock = locks.enter_context(path('runs/.training_queue.recovery.lock').open('a'))
             try:
                 fcntl.flock(recovery_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError:
                 raise RuntimeError('Another recovery queue is active') from None
-            recovery_source(plan)
+            supersession_source(plan) if 'supersession' in plan else recovery_source(plan)
         gpu_locks = {}
         for gpu in sorted(gpu for lane in plan['lanes'] for gpu in lane['gpus']):
             gpu_lock = locks.enter_context(path(f'runs/.training_gpu_{gpu}.lock').open('a'))
@@ -411,7 +508,7 @@ def main():
             raise RuntimeError('Existing queue status requires inspection; automatic restart is disabled')
         if prefix.with_suffix('.log').exists():
             raise RuntimeError('Existing queue log requires inspection; automatic restart is disabled')
-        if 'recovery' not in plan:
+        if 'recovery' not in plan and 'supersession' not in plan:
             freeze_configs(plan, config_contents)
         return Queue(plan, prefix, config_contents, gpu_locks).run()
 
