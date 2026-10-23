@@ -1,0 +1,406 @@
+{
+  "mIoU": 0.9041200971325986,
+  "mAcc": 0.9462165314406215,
+  "class_IoU": {
+    "regolith": 0.9873750041010085,
+    "rock": 0.8486701404699785,
+    "crater": 0.7617186657417073,
+    "mountain": 0.926003037364582,
+    "sky": 0.9968336379857161
+  },
+  "class_accuracy": {
+    "regolith": 0.9936806565044322,
+    "rock": 0.9001788347754438,
+    "crater": 0.8602559838257453,
+    "mountain": 0.9778585935330314,
+    "sky": 0.9991085885644537
+  },
+  "class_recall": {
+    "regolith": 0.9936806565044322,
+    "rock": 0.9001788347754438,
+    "crater": 0.8602559838257453,
+    "mountain": 0.9778585935330314,
+    "sky": 0.9991085885644537
+  },
+  "class_support": {
+    "regolith": 3589208122,
+    "rock": 157197614,
+    "crater": 65474918,
+    "mountain": 141505961,
+    "sky": 1293687689
+  },
+  "pixel_accuracy": 0.9901260851289061,
+  "confusion_matrix": [
+    [
+      3566526683,
+      8418309,
+      8166859,
+      5361437,
+      734834
+    ],
+    [
+      13283782,
+      141505965,
+      271317,
+      1714219,
+      422331
+    ],
+    [
+      8615165,
+      173489,
+      56325190,
+      361063,
+      11
+    ],
+    [
+      448841,
+      857276,
+      31776,
+      138372820,
+      1795248
+    ],
+    [
+      573897,
+      91787,
+      3,
+      487521,
+      1292534481
+    ]
+  ],
+  "absent_class_policy": "Average only classes present in ground truth; sky is included when present.",
+  "rules_source": "https://insight.onescience.cn/competition/moonseg?event_id=c2f557a58ff2e9f4265d56f112a7e01&tab=info&section=validation",
+  "metric_scope": "Offline public-test research only. Pooled pixels and equal scene macro are reported; neither is the official organizer-weighted total.",
+  "scenes": {
+    "2": {
+      "mIoU": 0.9371311427756019,
+      "mAcc": 0.9537733507720735,
+      "class_IoU": {
+        "regolith": 0.9934746934954357,
+        "rock": 0.883906531532129,
+        "crater": 0.8496278713427314,
+        "mountain": 0.9598451529419955,
+        "sky": 0.9988014645657185
+      },
+      "class_accuracy": {
+        "regolith": 0.9977077963889911,
+        "rock": 0.9229052573521698,
+        "crater": 0.8581792024953138,
+        "mountain": 0.9908927229789842,
+        "sky": 0.999181774644908
+      },
+      "class_recall": {
+        "regolith": 0.9977077963889911,
+        "rock": 0.9229052573521698,
+        "crater": 0.8581792024953138,
+        "mountain": 0.9908927229789842,
+        "sky": 0.999181774644908
+      },
+      "class_support": {
+        "regolith": 1153203401,
+        "rock": 30692028,
+        "crater": 17330406,
+        "mountain": 52041900,
+        "sky": 421308137
+      },
+      "pixel_accuracy": 0.9950518408042607,
+      "confusion_matrix": [
+        [
+          1150560024,
+          1148415,
+          173807,
+          1260636,
+          60519
+        ],
+        [
+          2078169,
+          28325834,
+          620,
+          250841,
+          36564
+        ],
+        [
+          2453218,
+          4594,
+          14872594,
+          0,
+          0
+        ],
+        [
+          241923,
+          168700,
+          0,
+          51567940,
+          63337
+        ],
+        [
+          140382,
+          32450,
+          0,
+          171893,
+          420963412
+        ]
+      ],
+      "absent_class_policy": "Average only classes present in ground truth; sky is included when present.",
+      "rules_source": "https://insight.onescience.cn/competition/moonseg?event_id=c2f557a58ff2e9f4265d56f112a7e01&tab=info&section=validation",
+      "metric_scope": "Confusion counts pooled over the evaluated samples; use each scene separately for official scene mIoU. Official weighted total requires organizer weights.",
+      "evaluated_samples": 1597
+    },
+    "4": {
+      "mIoU": 0.9219543194680633,
+      "mAcc": 0.9348503448831291,
+      "class_IoU": {
+        "regolith": 0.9909986364774114,
+        "rock": 0.8867908076879021,
+        "crater": 0.7556423742298156,
+        "mountain": 0.9776813237594292,
+        "sky": 0.9986584551857585
+      },
+      "class_accuracy": {
+        "regolith": 0.9982564650549435,
+        "rock": 0.9226480483733043,
+        "crater": 0.7684064667179569,
+        "mountain": 0.9857201976743317,
+        "sky": 0.9992205465951087
+      },
+      "class_recall": {
+        "regolith": 0.9982564650549435,
+        "rock": 0.9226480483733043,
+        "crater": 0.7684064667179569,
+        "mountain": 0.9857201976743317,
+        "sky": 0.9992205465951087
+      },
+      "class_support": {
+        "regolith": 948578636,
+        "rock": 29376699,
+        "crater": 18902881,
+        "mountain": 11369205,
+        "sky": 375892899
+      },
+      "pixel_accuracy": 0.9936715393355399,
+      "confusion_matrix": [
+        [
+          946924756,
+          1169589,
+          318089,
+          64446,
+          101756
+        ],
+        [
+          2253217,
+          27104354,
+          1213,
+          5576,
+          12339
+        ],
+        [
+          4374591,
+          3194,
+          14525096,
+          0,
+          0
+        ],
+        [
+          59087,
+          5788,
+          0,
+          11206855,
+          97475
+        ],
+        [
+          260260,
+          9271,
+          0,
+          23460,
+          375599908
+        ]
+      ],
+      "absent_class_policy": "Average only classes present in ground truth; sky is included when present.",
+      "rules_source": "https://insight.onescience.cn/competition/moonseg?event_id=c2f557a58ff2e9f4265d56f112a7e01&tab=info&section=validation",
+      "metric_scope": "Confusion counts pooled over the evaluated samples; use each scene separately for official scene mIoU. Official weighted total requires organizer weights.",
+      "evaluated_samples": 1320
+    },
+    "9": {
+      "mIoU": 0.8843363647184592,
+      "mAcc": 0.9523387212978776,
+      "class_IoU": {
+        "regolith": 0.9803501655249347,
+        "rock": 0.8266363143341611,
+        "crater": 0.7235102225257085,
+        "mountain": 0.8973885477219719,
+        "sky": 0.9937965734855202
+      },
+      "class_accuracy": {
+        "regolith": 0.9876402718861825,
+        "rock": 0.8862016199156076,
+        "crater": 0.9208617672523123,
+        "mountain": 0.968028227108838,
+        "sky": 0.9989617203264475
+      },
+      "class_recall": {
+        "regolith": 0.9876402718861825,
+        "rock": 0.8862016199156076,
+        "crater": 0.9208617672523123,
+        "mountain": 0.968028227108838,
+        "sky": 0.9989617203264475
+      },
+      "class_support": {
+        "regolith": 1487426085,
+        "rock": 97128887,
+        "crater": 29241631,
+        "mountain": 78094856,
+        "sky": 496486653
+      },
+      "pixel_accuracy": 0.9841143786764396,
+      "confusion_matrix": [
+        [
+          1469041903,
+          6100305,
+          7674963,
+          4036355,
+          572559
+        ],
+        [
+          8952396,
+          86075777,
+          269484,
+          1457802,
+          373428
+        ],
+        [
+          1787356,
+          165701,
+          26927500,
+          361063,
+          11
+        ],
+        [
+          147831,
+          682788,
+          31776,
+          75598025,
+          1634436
+        ],
+        [
+          173255,
+          50066,
+          3,
+          292168,
+          495971161
+        ]
+      ],
+      "absent_class_policy": "Average only classes present in ground truth; sky is included when present.",
+      "rules_source": "https://insight.onescience.cn/competition/moonseg?event_id=c2f557a58ff2e9f4265d56f112a7e01&tab=info&section=validation",
+      "metric_scope": "Confusion counts pooled over the evaluated samples; use each scene separately for official scene mIoU. Official weighted total requires organizer weights.",
+      "evaluated_samples": 2087
+    }
+  },
+  "evaluated_samples": 5004,
+  "pooled": {
+    "mIoU": 0.9041200971325986,
+    "mAcc": 0.9462165314406215,
+    "class_IoU": {
+      "regolith": 0.9873750041010085,
+      "rock": 0.8486701404699785,
+      "crater": 0.7617186657417073,
+      "mountain": 0.926003037364582,
+      "sky": 0.9968336379857161
+    },
+    "class_accuracy": {
+      "regolith": 0.9936806565044322,
+      "rock": 0.9001788347754438,
+      "crater": 0.8602559838257453,
+      "mountain": 0.9778585935330314,
+      "sky": 0.9991085885644537
+    },
+    "class_recall": {
+      "regolith": 0.9936806565044322,
+      "rock": 0.9001788347754438,
+      "crater": 0.8602559838257453,
+      "mountain": 0.9778585935330314,
+      "sky": 0.9991085885644537
+    },
+    "class_support": {
+      "regolith": 3589208122,
+      "rock": 157197614,
+      "crater": 65474918,
+      "mountain": 141505961,
+      "sky": 1293687689
+    },
+    "pixel_accuracy": 0.9901260851289061,
+    "confusion_matrix": [
+      [
+        3566526683,
+        8418309,
+        8166859,
+        5361437,
+        734834
+      ],
+      [
+        13283782,
+        141505965,
+        271317,
+        1714219,
+        422331
+      ],
+      [
+        8615165,
+        173489,
+        56325190,
+        361063,
+        11
+      ],
+      [
+        448841,
+        857276,
+        31776,
+        138372820,
+        1795248
+      ],
+      [
+        573897,
+        91787,
+        3,
+        487521,
+        1292534481
+      ]
+    ],
+    "absent_class_policy": "Average only classes present in ground truth; sky is included when present.",
+    "rules_source": "https://insight.onescience.cn/competition/moonseg?event_id=c2f557a58ff2e9f4265d56f112a7e01&tab=info&section=validation",
+    "metric_scope": "Confusion counts pooled over the evaluated samples; use each scene separately for official scene mIoU. Official weighted total requires organizer weights."
+  },
+  "scene_equal_macro": {
+    "mIoU": 0.9144739423207081,
+    "mAcc": 0.9469874723176934
+  },
+  "scene_sample_counts": {
+    "2": 1597,
+    "4": 1320,
+    "9": 2087
+  },
+  "evaluation_kind": "public_test_research_manifest",
+  "official_score": false,
+  "checkpoint_selection": "Existing local-validation checkpoint, fixed before public-test evaluation; public-test metrics do not select checkpoints.",
+  "data_root": "/home/disk02/wjj/moonseg/data/research_test/LuSNAR",
+  "manifest": "/home/disk02/wjj/moonseg/data/research_test/manifest.json",
+  "label_usage": "Confusion metrics only; no loss, training, BN adaptation or parameter updates.",
+  "checkpoint": "/home/disk02/wjj/moonseg/runs/dnv3_va_m2f_vitl16_e25/best_miou.pt",
+  "checkpoint_epoch": 9,
+  "global_step": 900,
+  "checkpoint_file_identity": {
+    "size": 143926424,
+    "mtime_ns": 1792666215165996385,
+    "inode": 356921258
+  },
+  "selected_by": "best_miou",
+  "weights": "model",
+  "profile": "narrowflip",
+  "inference": {
+    "sliding_window": false,
+    "scales": [
+      0.9,
+      1.0,
+      1.1
+    ],
+    "flip": true
+  }
+}
