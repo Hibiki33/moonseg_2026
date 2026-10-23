@@ -81,10 +81,12 @@
 | ViT-H+ 冻结，检查点开（真实权重，2026-10-22） | A6000 49140 MiB（PCI 2） | 8：42.95 / 46.45，2.35 img/s；40 步 + 中途 20 张 1024² 推理未 OOM，reserved 稳定在 46.45 GiB（余量约 0.95 GiB，`bench_hplus_b8_long.json`） | 未测 9 |
 | 同上 | 同上 | 6：33.16 / 37.49，2.39 img/s；4：23.38 / 26.82，2.34 img/s | — |
 
-- H+ 的每图边际显存约 4.9 GiB，吞吐同样对 batch 不敏感，因此配置取每卡 4 × 累积 8 = 64（证据 [evidence/gpu_results/hplus/](evidence/gpu_results/hplus/)）。
+- H+ 的每图边际显存约 4.9 GiB，吞吐对 batch 不敏感；当前用户选定每卡 8 × 两卡 × 累积 4 = 64。短程容量证据见 [evidence/gpu_results/hplus/](evidence/gpu_results/hplus/)，不能把合成负载通过视为任意增强长跑均已验证。
 - 每卡吞吐对 batch 基本不敏感：ViT-B 冻结、检查点开时 b4/b7/b8/b10 为 5.51/5.34/5.48/5.38 img/s（b8 为 34.90 / 39.19 GiB），GPU 在 b4 已饱和，加大 batch 只减少累积步数。ViT-L 冻结 b4/b6/b7/b8 为 4.33/4.24/4.17/4.13 img/s（b7 为 33.69 / 37.64 GiB，b8 为 38.28 / 42.81 GiB）。
 - A6000（46068 MiB）b9 约为 Ada 速度的 0.66 倍；该测量的 reserved 已接近上限，0.66 偏保守。49140 MiB 版 A6000 没有做容量测试；当前 ViT-B 基线在 PCI 5/6 以每卡 batch 8 运行。
 - 长跑宜选 reserved ≤44 GiB 的设置：检查点关、batch 8 的单卡测试跑过 3 步后在第 4 步 OOM，说明碎片化风险真实存在。
+
+2026-10-23 的真实 H+ 整图训练以每卡 8 完成 25 轮；相同 batch 的 RRC 训练在第 1 轮验证后、第 2 轮损失采样处 OOM（allocated 41.86 GiB，reserved 未使用 4.81 GiB，申请 2 MiB 失败）。已修复跨批次和保存对象的引用生命周期，每轮结束释放空闲缓存，并在恢复进程启用 `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`；配方与 batch 未变。日志支持碎片推断，未取得原 allocator snapshot，不能断言单一根因。13:44 已完成恢复后的第 2 轮训练、验证和保存，并在第 3 轮完成 10 次更新；第 2 轮两卡峰值 allocated/reserved 均为 45.113/45.260 GiB，完整训练/验证切换通过，25 轮长跑仍在继续。原始日志为 `runs/dnv3_va_m2f_vith16plus_rrc/train.recovery_2026-10-23.log`，核对记录为 `runs/plans/2026-10-23/recovery_gpu_0_7/verification.json`。
 - 激活检查点开/关（ViT-B，b7）：关闭后每卡多 9.08 GiB，单卡吞吐 5.34→5.84（+9%），双卡 10.82→11.72（+8%）。
 
 ### 显存归因（ViT-B 冻结，CUDA 扩展，单卡 b7）

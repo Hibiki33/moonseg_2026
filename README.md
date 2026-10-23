@@ -143,7 +143,9 @@ uv run --no-sync python tools/package_submission.py \
   --predictions runs/predictions --archive submissions/predictions.zip
 ```
 
-推理默认整图、单尺度、无翻转 TTA，输出恢复原输入尺寸。预测 ZIP 只包含 `test/Moon_2/submission/*.png`、`test/Moon_4/submission/*.png`、`test/Moon_9/submission/*.png`；完整评分口径与一次提交限制见 [challenge.md](challenge.md)，本地指标定义见 [docs/metrics.md](docs/metrics.md)。checkpoint 只保留 `last.pt`（完整恢复状态）与 `best.pt`（仅权重，不能用于 `--resume`），都不含冻结的 DINOv3 张量，评估、预测和复现包都需要 `model.backbone_weights` 指向的预训练文件（[docs/model.md](docs/model.md#checkpoints)）。最终在全部训练场景上重训的流程见 [docs/roadmap.md](docs/roadmap.md#最终流程方案冻结后)。仓库同时提供顶层 `train.py`、`predict.py` 作为复现入口。
+推理默认整图、单尺度、无翻转 TTA，输出恢复原输入尺寸。预测 ZIP 只包含 `test/Moon_2/submission/*.png`、`test/Moon_4/submission/*.png`、`test/Moon_9/submission/*.png`；完整评分口径与一次提交限制见 [challenge.md](challenge.md)，本地指标定义见 [docs/metrics.md](docs/metrics.md)。新训练保存 `last.pt`（完整恢复状态）与 `best_miou.pt`、`best_loss.pt`（仅权重，不能用于 `--resume`）；旧 B/L 的最佳文件名为 `best.pt`。它们不含冻结的 DINOv3 张量，评估、预测和复现包都需要 `model.backbone_weights` 指向的预训练文件（[docs/model.md](docs/model.md#checkpoints)）。最终在全部训练场景上重训的流程见 [docs/roadmap.md](docs/roadmap.md#最终流程方案冻结后)。仓库同时提供顶层 `train.py`、`predict.py` 作为复现入口。
+
+按用户 2026-10-23 的明确要求，公开 LuSNAR 场景 2/4/9 的 5004 张图另用 `moonseg.evaluate_public_test` 做离线研究评估。标签位于 `data/research_test/`，不进入训练加载器；权重按场景 5 验证选择，固定评估单尺度和窄尺度 TTA。这不是比赛正式成绩。当前后台队列为 `scripts/run_public_test_queue.py`，计划在 `runs/plans/2026-10-23/public_test.json`，可用 `--dry-run` 检查；已启动实例不要重复运行。结果在 `runs/public_test_research_2026-10-23/aggregate.json`，指标与数据口径见 [docs/metrics.md](docs/metrics.md) 和 [docs/data.md](docs/data.md#开发清单)。H+ 恢复队列与完整训练状态见 [docs/handover.md](docs/handover.md#4-正在跑与排队2026-10-23)。
 
 ## Git
 
