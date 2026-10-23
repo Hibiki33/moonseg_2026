@@ -146,9 +146,9 @@
 
 明确允许：在 `dev_*.json` 上训练和本地验证，比较模型、增强和采样策略；用 `tools/label_stats.py --development-pool` 统计开发清单的类别像素，供开发期稀有类采样；报告开发期结果时注明 `provenance = public_development_pool`。
 
-明确禁止：
+训练与比赛流程的边界：
 
-- 读取、解压或统计场景 2/4/9 的标签。整理阶段只为测试场景提取 RGB；`prepare_data.py` 生成开发清单时断言不含测试场景，`load_manifest` 对开发清单再次拒绝非 1/3/5/6/7/8 场景，`MoonDataset` 也只接受训练场景。
+- 场景 2/4/9 不进入训练与训练期间验证。`prepare_data.py` 生成开发清单时断言不含测试场景，`load_manifest` 对开发清单再次拒绝非 1/3/5/6/7/8 场景，`MoonDataset` 也只接受训练场景。下述公开测试研究使用独立入口，不放宽这些检查。
 - 用测试场景 RGB 做训练、伪标签、统计调参或 BN 重估；推理时读取测试 RGB 生成预测不受影响。
 - 把开发清单当作或改写为正式清单。规则写明"每个分区实际选取的样本列表由官方清单固定""不得引入官方训练清单以外的数据。禁止使用未分配的 LuSNAR 图像、标签或其衍生材料"。
 - 用开发池训练出的 checkpoint 提交，或用它初始化、继续训练最终模型；最终模型必须在组织方清单上从预训练骨干重新训练。
@@ -168,6 +168,10 @@
 | `dev_final_train.json` | 1、3、5、6、7、8 | 8002 | 开发期全训练池，用于长程或容量试验；不是最终提交模型 |
 
 每个开发清单都写入 `kind: "public_development_manifest"`、`official_allowlist: null`、`scenes` 和说明文字：样本来自公开 LuSNAR 训练场景池，只用于方法开发，最终提交模型必须在组织方清单上重新训练。
+
+2026-10-23，用户明确要求在**公开 LuSNAR 场景 2/4/9**上评价实验结论。相应标签从原始 ZIP 的 `image0/label` 提取至 `data/research_test/LuSNAR/`，RGB 软链到已有文件；清单为 `data/research_test/manifest.json`，`kind: public_test_research_manifest`。场景 2/4/9 分别有 1597/1320/2087 张，共 5004 张，尺寸 1024×1024，全部标签通过 RGB 调色板解码和图像尺寸校验，记录见同目录 `validation.json`。文件实际位于 `/home/disk02/wjj/moonseg/data/research_test/`。
+
+该清单用于 `moonseg.evaluate_public_test` 的独立离线研究评估，标签仅参与指标计算；不进入训练、损失、BN 更新或伪标签流程。权重由场景 5 验证选择，随后固定评估单尺度与窄尺度 TTA。结果分别记录每场景、三场景等权平均及汇总像素指标；这些指标均不是比赛官方加权成绩。此项用户决策改变了本项目此前“不读取公开测试标签”的工作范围，不改变 `challenge.md` 记录的赛事规则，也不表示使用测试结果开发的方法自动符合参赛条件。
 
 ### 配置接口与记录
 

@@ -301,6 +301,8 @@ def main():
         sampler.set_epoch(epoch)
         model.train()
         optimizer.zero_grad(set_to_none=True)
+        if device.type == "cuda":
+            torch.cuda.reset_peak_memory_stats(device)
         epoch_loss = torch.zeros(2, device=device, dtype=torch.float64)
         grad_stats = torch.zeros(3, device=device, dtype=torch.float64)  # sum, max, count of applied updates
         started = time.monotonic()
@@ -340,6 +342,9 @@ def main():
                                       "loss": float(loss.detach()), "grad_norm": float(norm),
                                       "lr": scheduler.get_last_lr(),
                                       "elapsed_seconds": round(time.monotonic() - started, 1)}), flush=True)
+            # Loop locals otherwise keep the previous batch and its loss graph alive during
+            # the next forward, and keep the final batch throughout validation/checkpointing.
+            del batch, images, targets, losses, loss
         if dist.is_initialized():
             dist.all_reduce(epoch_loss)
             # Adapter BatchNorm updates running statistics locally. Validate and save one consistent
@@ -393,8 +398,23 @@ def main():
             save_every = int(settings.get("save_every", 0))
             if save_every > 0 and (epoch + 1) % save_every == 0:
                 atomic_torch_save(state, output / f"epoch_{epoch + 1:03d}.pt")
+            # state_dict tensors alias live model/optimizer storage; do not retain a snapshot's
+            # references after saving (including buffers that a later forward may replace).
+            del inference_state, state
         if dist.is_initialized():
             dist.barrier()
+        if device.type == "cuda":
+            # Validation uses batch 1, training uses larger batches: release unused cached
+            # blocks at the phase boundary so they do not fragment the next training forward.
+            memory = {"allocated": torch.cuda.memory_allocated(device),
+                      "reserved_before_release": torch.cuda.memory_reserved(device),
+                      "peak_allocated": torch.cuda.max_memory_allocated(device),
+                      "peak_reserved": torch.cuda.max_memory_reserved(device)}
+            torch.cuda.empty_cache()
+            free, total = torch.cuda.mem_get_info(device)
+            memory.update(reserved=torch.cuda.memory_reserved(device), free=free, total=total)
+            print(json.dumps({"epoch_boundary": epoch + 1, "rank": rank,
+                              "cuda_memory_bytes": memory}), flush=True)
     if dist.is_initialized():
         dist.destroy_process_group()
 

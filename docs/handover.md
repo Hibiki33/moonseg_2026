@@ -4,7 +4,7 @@
 
 ## 1. 现状一句话
 
-冻结 DINOv3 ViT-L/16 + ViT-Adapter + Mask2Former 的旧最佳权重在场景 5 全量单尺度为 0.9200、加 TTA 为 0.9300。L1 随机缩放裁剪减轻了后期退化，末轮全量比新整图对照 L0 高 1.49 个百分点；其验证损失仍有回升，不能称为过拟合消失。H+ 整图与 L2 正在训练；H+ + RRC 及五项 L1 消融/复验已接入后续队列。
+H+ 整图与 L0/L1/L2 均已完成 25 轮及场景 5 全量复评；当前验证最高为 H+ 第 14 轮，单尺度 0.929152、TTA 0.936013。用户已明确要求用公开测试场景 2/4/9 的指标评价结论，场景 5 结果只作为验证证据。H+ RRC 第 1 轮后 OOM，已修复内存生命周期并于 2026-10-23 13:22 从 last.pt 续训；5/6 正常进行 L1 低学习率消融。
 
 ## 2. 已定决策
 
@@ -17,6 +17,7 @@
 | EMA | 不用（官方分割配方均不用；我们的实验里只平滑了下滑的轨迹） | 用户 |
 | checkpoint | `last.pt`（完整恢复）、`best_miou.pt`、`best_loss.pt`（仅权重），不存冻结骨干 | 用户 |
 | 验证 | 场景 5，每轮隔 2 帧、末轮全量；同时记录验证损失与 3 轮滑动均值 | — |
+| 公开测试研究 | 场景 2/4/9 全部 5004 张，用验证选出的固定权重；报告分场景、等权场景平均及汇总像素指标 | 用户 2026-10-23 明确要求；非官方比赛成绩 |
 | TTA | 尺度 0.9/1.0/1.1 + 水平翻转，概率平均；作为统一评估设置，在每个新实验上与单尺度同时测 | 第 3 节；本批评估队列 |
 | 数据 | 官方清单到位前用公开训练场景开发池；最终模型在官方清单上从骨干重训 | [data.md](data.md) |
 | GPU | 0/7（Ada）与 5/6（A6000，须 `NCCL_P2P_DISABLE=1`）各为一对；不占 1–4 做训练，空卡只跑推理 | 用户；[gpu_topology.md](gpu_topology.md) |
@@ -29,20 +30,25 @@
 | `dnv3_va_m2f_vitl16`（80 轮，旧配方） | ViT-L 整图 | 0.920（第 15） | 全量 0.885 | 0.851 / 0.858 / 0.904 | 第 15 轮后下滑，poly 尾段无回升 |
 | `dnv3_va_m2f_vitl16_e25`（L0） | ViT-L 整图，25 轮、无 warmup、无 EMA | 0.9147（第 9） | 全量 0.9039，已完成 | 0.841 / 0.828 / 0.917 | 验证损失最低 5.01 → 末轮 6.37，后期退化 |
 | `dnv3_va_m2f_vitl16_rrc`（L1） | L0 + 随机缩放 0.5–2.0 + 1024 裁剪 | **0.9239（第 11）** | **全量 0.9188** | 0.857 / 0.853 / 0.922 | 验证损失最低 4.11 → 末轮 4.58，后期退化减轻 |
-| `dnv3_va_m2f_vith16plus_e25` | H+ 整图，8×4 | 0.9232（第 7，进行中） | — | 0.850 / 0.856 / 0.923 | 同几何比 L0 高约 0.9；每卡 46.6 GB |
+| `dnv3_va_m2f_vith16plus_e25` | H+ 整图，8×4 | 全量 0.929152（第 14），TTA 0.936013 | 全量 0.924055 | 0.861 / 0.857 / 0.938（全量单尺度） | 验证集领先；best_loss 第 7 轮，不能与第 14 轮混报 |
+| `dnv3_va_m2f_vitl16_sj`（L2） | L0 + 0.75–1.25 温和尺度抖动 | 全量 0.911321（第 5），TTA 0.921182 | 全量 0.899337 | 0.836 / 0.827 / 0.907（全量单尺度） | 场景 5 未提升，测试集结论待独立评估 |
 | TTA（best.pt，全量） | 单尺度 → +翻转 → 0.75/1/1.25 → 0.9/1/1.1 | L：0.9200 → 0.9242 → 0.9291 → 0.9300；B：0.8713 → 0.8735 → 0.8829 → 0.8858 | — | 山体受益最大 | 设置定为窄尺度 + 翻转 |
 
 原始数据：`runs/<run>/history.jsonl`（逐轮全部指标与混淆矩阵）、`docs/evidence/tta/`、`docs/evidence/gpu_results/`。
+
+新 25 轮的全量 best_miou 复评：L0 单尺度/TTA 为 0.914664/0.923932，L1 为 0.923909/0.930930。以上仍是场景 5 的验证结果。公开测试评估入口为 `moonseg.evaluate_public_test`，标签清单与验证记录在 `data/research_test/`，旧 B/L 使用验证选择的 `best.pt`，其余使用 `best_miou.pt`，均选择 model 权重。队列已于 13:26 启动，12 项训练各评估单尺度/TTA，共 24 项；进度和结果在 `runs/public_test_research_2026-10-23/{status,aggregate}.json`，正式得分写出前不报告测试集增益。
 
 ## 4. 正在跑与排队（2026-10-23）
 
 | 卡对 | 当前 | 之后 | 预计 |
 |---|---|---|---|
-| PCI 0/7 | `dnv3_va_m2f_vith16plus_e25` | H+ RRC → L1 gamma → L1 shadow | 新增约 18–20 小时，从当前任务结束后计 |
-| PCI 5/6 | `dnv3_va_m2f_vitl16_sj`（L2） | L1 lr1e-4 → L1 RCS → L1 seed43 | 新增约 21–24 小时，从当前任务结束后计；全程关闭 NCCL P2P |
-| PCI 2/4 | 全量单尺度/TTA，各卡一个推理进程 | 完成训练的权重自动进入评估 | 每次启动前重新检查空闲；不在这些卡上训练 |
+| PCI 0/7 | H+ RRC，从第 1 轮 checkpoint 恢复 | L1 gamma → L1 shadow | 恢复队列独立；保持 8×2×4=64 |
+| PCI 5/6 | L1 lr1e-4 | L1 RCS → L1 seed43 | 原队列继续运行；全程关闭 NCCL P2P |
+| PCI 2/4 | 公开测试及全量验证单尺度/TTA，各卡一个推理进程 | 完成训练的权重自动进入评估 | 所有评估队列共用 GPU 锁，每次启动前检查空闲 |
 
-原队列 `build/queue_2026-10-22.sh` 继续管理 H+/L2。新增训练由 `scripts/run_training_queue.py` 管理，等待对应原任务的 PID/start_ticks 身份退出并核对完整训练记录，随后顺序执行；事件写入 `runs/queue_2026-10-23.log`。评估由 `scripts/run_evaluation_queue.py` 管理，结果汇总到 `runs/evaluations_2026-10-23/aggregate.json`。具体计划和六份冻结配置在本地盘的 `runs/plans/2026-10-23/`，配置/参数见 [本批单变量消融](roadmap.md#本批单变量消融)。
+原批次 H+/L2 已结束。`scripts/run_training_queue.py` 的原实例继续管理 5/6；0/7 的旧失败记录保留，新恢复计划在 `runs/plans/2026-10-23/recovery_gpu_0_7/`，状态为 `runs/queue_2026-10-23_gpu_0_7_recovery.status.json`。H+ 原错误发生于 04:11，第 2 轮首次 criterion 分配 2 MiB 失败，allocated 41.86 GiB、reserved 未用 4.81 GiB；未留 allocator snapshot，碎片是主要怀疑而非已完全证明的根因。修复释放批次/保存对象引用、轮次边界 empty_cache，并启用 `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`；每 rank 每轮记录显存峰值。原配方、batch、RNG 与优化器状态保持不变。
+
+全量验证结果在 `runs/evaluations_2026-10-23/aggregate.json`；恢复的三项结果在 `runs/evaluations_2026-10-23_gpu_0_7_recovery/aggregate.json`，它们依赖恢复队列的完成标记，不再依赖旧 failed lane。具体参数见 [本批单变量消融](roadmap.md#本批单变量消融)。
 
 ## 5. 保守路线：逐步消融阶梯
 
@@ -50,9 +56,9 @@
 
 | 步 | 改动 | 配置做法 | 预算 | 预期 | 状态 |
 |---|---|---|---|---|---|
-| 1 | 几何增强：L0 整图 vs L1 随机缩放裁剪 vs L2 温和抖动 | 已有三份配置 | 3 × 5.5–8 h | L1 领先 | L0/L1 完成，L2 进行中；统一全量复评已安排 |
-| 2 | 骨干容量：H+ vs L，同几何 | `dnv3_va_m2f_vith16plus.yaml` | 7.5 h（Ada） | +0.5–1 | 进行中 |
-| 3 | 组合：H+ + RRC | `dnv3_va_m2f_vith16plus_rrc.yaml`：几何与 L1 相同 | 7.5 h | 检查容量与几何增强的交互，不预设相加 | 已排队 |
+| 1 | 几何增强：L0 整图 vs L1 随机缩放裁剪 vs L2 温和抖动 | 已有三份配置 | 3 × 5.5–8 h | L1 验证领先 | 三项训练与全量验证完成；公开测试待比较 |
+| 2 | 骨干容量：H+ vs L，同几何 | `dnv3_va_m2f_vith16plus.yaml` | 7.5 h（Ada） | 验证有提升，测试待比较 | 已完成 |
+| 3 | 组合：H+ + RRC | `dnv3_va_m2f_vith16plus_rrc.yaml`：几何与 L1 相同 | 7.5 h | 检查容量与几何增强的交互，不预设相加 | OOM 修复后续训 |
 | 4 | 光度增强：+ gamma 0.7–1.5；+ 非天空阴影 | 两项分别基于 L1，概率均为 0.5，参数见 roadmap | 各一次 | 检查总体及困难类别收益 | 已排队 |
 | 5 | 稀有类采样 | `train.sampling: {mode: rare_class, temperature: 0.01}` + `data.label_stats` | 一次 | 检查岩石/撞击坑表现 | 已排队 |
 | 6 | 损失采样点 12544 → 50176 | `loss.num_points` | 一次（显存几乎不变） | 小岩石边界 | 候选 |
@@ -103,20 +109,20 @@
 
 ## 7. 决策规则与验证协议
 
-每个改动在相同的场景 5 全量 1599 帧上，同时比较单尺度与窄尺度 TTA；分别记录 best_miou/best_loss 的选择方式，不把挑选后的最高值混成一个未注明来源的分数。同轮保存的两个最佳文件只评估一次。关注岩石、撞击坑、山体三类 IoU 与验证损失走势；小差距不能仅凭一次峰值认定稳定，本批 seed43 对照用于初步估计跨种子波动。方案冻结前，对前两名配方用场景 6 留出重训确认，并补暗帧子集及置信区间；这些尚未完成。
+训练期间在场景 5 选择权重并记录损失走势，全量验证分别保留 best_miou/best_loss 的来源，同轮文件只评估一次。公开测试统一使用验证选择的 best_miou（旧 B/L 为 best.pt），在相同 5004 张上比较单尺度与窄尺度 TTA，以各场景及岩石、撞击坑、山体 IoU 判断实际收益；不从多个测试成绩中回选权重轮次。场景等权平均与汇总像素 mIoU 各自标明，均不称为官方加权成绩。小差距仍需 seed43 复验，场景 6 留出重训、暗帧子集及置信区间尚未完成；反复参考公开测试结果后的研究结论，也不能冒充对全新未知数据的无偏估计。
 
 ## 8. 最终流程与截止
 
 1. 官方训练包到位（10-22 起发放）：`tools/prepare_data.py --root data/LuSNAR --official-allowlist … --official-test-allowlist … --validate-labels`，重新生成 `label_stats`，与开发池清单比对差异。
 2. 用冻结的配方在全部 6 个训练场景上从骨干重训（新配置 `dnv3_va_m2f_<骨干>_final.yaml`，`validate: false`，轮数按开发曲线定，`development_pool: false`）。
 3. 测试输入到位（11-02）：`scripts/predict.sh … --weights-key auto`，配置 `inference` 段写死 `scales: [0.9, 1.0, 1.1]`、`flip: true`；`tools/package_submission.py` 校验并打包。
-4. 11-20 23:59 前一次性提交；同时准备 train.py / predict.py / 权重 / 配置 / 环境 / README / 训练日志 / 来源说明和 ≤6 页方法文档（模型来源：DINOv3 LVD-1689M，ModelScope 镜像，sha256 见 [weights.md](weights.md)）。
+4. 11-20 23:59 前一次性提交；同时准备 train.py / predict.py / 权重 / 配置 / 环境 / README / 训练日志 / 来源说明和 ≤6 页方法文档（模型来源：DINOv3 LVD-1689M，ModelScope 镜像，来源见 [weights.md](weights.md)）。公开测试研究不构成参赛合规授权，比赛流程须按赛事规则另行核对。
 
 ## 9. 操作手册
 
 ### 环境与路径
 
-- 代码 `/home/vrlab-132-nat-moon/moon`（在训练主机上表现为 `/Users/jiajunwang/ClaudeWork/vrlab-132-nat-moon/moon` 的挂载，NAS，不要往里写大文件）；数据、权重、运行输出、引用 PDF 都在本地盘 `/home/disk02/wjj/moonseg/` 下，通过软链 `data/`、`ckpts/`、`runs/`、`references/` 访问。
+- 当前代码 `/home/nas_1/wjj/moon`（NAS，不要往里写大文件）；数据、权重、运行输出、引用 PDF 都在本地盘 `/home/disk02/wjj/moonseg/` 下，通过软链 `data/`、`ckpts/`、`runs/`、`references/` 访问。
 - 解释器 `.venv/bin/python`（uv 管理，`uv` 不在 PATH 时用 `PYTHON=.venv/bin/python` 传给脚本）。
 - CUDA 扩展：`bash scripts/build_ops.sh` 一次；`model.deformable_attention: auto` 自动选用，日志首行会打印 `deformable attention: cuda`。
 
@@ -134,6 +140,8 @@ CUDA_VISIBLE_DEVICES=5,6 NCCL_P2P_DISABLE=1 PYTHON=.venv/bin/python bash scripts
 ### 队列脚本
 
 原批次使用 `build/queue_2026-10-22.sh`。追加任务使用 `scripts/run_training_queue.py --plan runs/plans/2026-10-23/training.json`，评估使用 `scripts/run_evaluation_queue.py --config runs/plans/2026-10-23/evaluation.json`；两者都支持 `--dry-run`。已启动的调度器不要重复启动。训练状态为 `runs/queue_2026-10-23.status.json`，评估状态为 `runs/evaluations_2026-10-23/status.json`；训练任务成功退出且完成全轮次后才写入各运行的 `queue_completed.json`，供评估调度器接手。主机 PID/start_ticks 和启动记录只保留在外置计划目录，不入 Git。
+
+0/7 恢复使用 `--plan runs/plans/2026-10-23/recovery_gpu_0_7/training.json --status-prefix runs/queue_2026-10-23_gpu_0_7_recovery`，其验证计划为同目录 `evaluation.json`。公开测试使用 `scripts/run_public_test_queue.py --config runs/plans/2026-10-23/public_test.json`。这三个新实例均已启动；原状态里的 0/7 failed 与 12 个 blocked 是历史记录，不能据此重复启动恢复任务。所有评估实例共用 `runs/evaluations_2026-10-23/gpu_2.lock` 和 `gpu_4.lock`。
 
 ### 看进度
 
@@ -178,11 +186,11 @@ PCI 序号即 `nvidia-smi` 序号（脚本固定 `CUDA_DEVICE_ORDER=PCI_BUS_ID`�
 - 不自行改代码，代码改动派子 agent；子 agent 不得再派子 agent；不做冒烟测试训练，验证用静态审查与 CPU 单元检查。
 - 一次只改一项；候选写进 roadmap 而不是直接进配置；结果写进本文第 3 节和 roadmap 的实验记录。
 - 不往 NAS 写训练输出；只保留 `last.pt`、`best_miou.pt`、`best_loss.pt`。
-- 红线：不读测试标签；不用测试图做任何自适应；不引入外部图像或标注；预训练权重只用来源可核验的 DINOv3 并申报。
+- 公开场景 2/4/9 标签按用户 2026-10-23 的明确指令用于独立研究评估；不用测试图做任何自适应，不把研究清单接入训练。赛事条款见 challenge.md，研究评估不改写官方规则。预训练权重只用来源可核验的 DINOv3 并申报。
 
 ## 11. 待办
 
-- H+ 与 L2 结束后，新增训练队列与评估队列会自动接手；跟踪全量评估和本批六项结果，更新第 3 节与 roadmap，避免重复启动。
+- 跟踪 H+ RRC 恢复是否跨过新的训练/验证边界，随后 gamma/shadow 自动接续；5/6 继续低学习率/RCS/seed43。汇总公开测试与验证结果，避免重复启动或把旧 failed lane 当成恢复队列现状。
 - H+ 的 SwiGLU gate/up 映射尚未与 HF 参考实现做数值比对（机器上另有带 transformers 的环境可用；H+ 第 7 轮已达 0.923，说明映射大概率正确，但仍建议闭合）。
 - 官方训练包到位后切换清单并复核与开发池的差异。
 - 测试输入到位后用 `tools/package_submission.py` 做一次完整打包演练。

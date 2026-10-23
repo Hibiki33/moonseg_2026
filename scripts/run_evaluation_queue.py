@@ -80,7 +80,7 @@ def dependency(run, config):
     if dep["kind"] == "marker":
         marker = run_dir / "queue_completed.json"
         if not marker.exists():
-            status_path = ROOT / "runs" / "queue_2026-10-23.status.json"
+            status_path = absolute(dep.get("status_path", "runs/queue_2026-10-23.status.json"))
             if status_path.exists():
                 for lane in read_json(status_path).get("lanes", {}).values():
                     for job in lane.get("jobs", []):
@@ -200,6 +200,8 @@ def validate_config(config):
         raise ValueError("Run names must be unique directory names")
     if not absolute(config["output_dir"]).resolve().is_relative_to((ROOT / "runs").resolve()):
         raise ValueError("Evaluation output must be under external runs storage")
+    if not absolute(config.get("gpu_lock_dir", config["output_dir"])).resolve().is_relative_to((ROOT / "runs").resolve()):
+        raise ValueError("GPU lock directory must be under external runs storage")
     for run in config["runs"]:
         if run["dependency"]["kind"] not in {"history", "process_exit", "marker"}:
             raise ValueError("Unknown training dependency")
@@ -374,7 +376,11 @@ class Queue:
                 job.update(status="blocked", error="Canonical evaluation failed; no duplicate retry", finished_at=now())
 
     def launch(self, key, job, gpu):
-        lock = (self.output / f"gpu_{gpu}.lock").open("a+")
+        # Recovery queues share the legacy parent's lock directory, including
+        # its live workers; separate output roots must not create separate locks.
+        lock_dir = absolute(self.config.get("gpu_lock_dir", self.config["output_dir"]))
+        lock_dir.mkdir(parents=True, exist_ok=True)
+        lock = (lock_dir / f"gpu_{gpu}.lock").open("a+")
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
@@ -425,7 +431,8 @@ class Queue:
             self.save()
             with Path(job["log_path"]).open("xb") as log:
                 child = subprocess.Popen(command, cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT,
-                                         stdin=subprocess.DEVNULL, start_new_session=True, close_fds=True)
+                                         stdin=subprocess.DEVNULL, start_new_session=True, close_fds=True,
+                                         pass_fds=(lock.fileno(),))
             info = process_info(child.pid)
             job.update(status="running", pid=child.pid, start_ticks=info["start_ticks"] if info else -1)
             self.children[key], self.gpu_locks[gpu] = child, lock

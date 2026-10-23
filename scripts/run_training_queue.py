@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Conservative two-lane training queue. --dry-run validates without launching jobs."""
 import argparse
+from contextlib import ExitStack
 import csv
 import fcntl
 import io
@@ -69,6 +70,8 @@ def check_history(run_dir, epochs):
 
 
 def validate(plan):
+    if 'recovery' in plan:
+        return validate_recovery(plan)
     if plan.get('version') != 1 or len(plan.get('lanes', [])) != 2:
         raise ValueError('Expected version 1 with two lanes')
     names, outputs, devices, lane_ids = set(), set(), set(), set()
@@ -116,6 +119,106 @@ def validate(plan):
     return config_contents
 
 
+def recovery_source(plan):
+    """The old parent may keep its disjoint lane; it must have retired this lane."""
+    recovery = plan['recovery']
+    state = json.loads(path(recovery['source_status']).read_text())
+    if (state['pid'], state['start_ticks']) != (recovery['source_pid'], recovery['source_start_ticks']):
+        raise ValueError('Source queue identity differs from the frozen recovery plan')
+    lane = state['lanes'][recovery['source_lane']]
+    selected = set(plan['lanes'][0]['gpus'])
+    if lane['status'] != 'failed' or set(lane['gpus']) != selected:
+        raise ValueError('Recovery requires an explicitly failed source lane on the same GPUs')
+    for other in state['lanes'].values():
+        if other['id'] != lane['id'] and selected.intersection(other['gpus']):
+            raise ValueError('Source parent has another overlapping lane')
+    for job in lane['jobs']:
+        if job.get('pid') and same_process(job):
+            raise ValueError(f"Source training process is still alive: {job['name']}")
+    jobs = plan['lanes'][0]['jobs']
+    if [job['name'] for job in jobs] != [job['name'] for job in lane['jobs']]:
+        raise ValueError('Recovery must preserve the entire failed lane job order')
+    if lane['jobs'][0]['status'] != 'failed' or any(job['status'] != 'pending' for job in lane['jobs'][1:]):
+        raise ValueError('Recovery requires one failed first job and pending successors')
+    for job, original in zip(jobs, lane['jobs']):
+        if path(job['config']) != path(original['config']):
+            raise ValueError('Recovery must use the original frozen configuration')
+    return state
+
+
+def resume_identity(job):
+    checkpoint = path(job['resume_checkpoint'])
+    stat = checkpoint.stat()
+    return {'size': stat.st_size, 'mtime_ns': stat.st_mtime_ns, 'inode': stat.st_ino}
+
+
+def validate_resume(job):
+    """Read trusted checkpoint metadata on CPU; never initialize CUDA here."""
+    import torch
+
+    before = resume_identity(job)
+    checkpoint = torch.load(path(job['resume_checkpoint']), map_location='cpu', mmap=True, weights_only=False)
+    required = ('model', 'optimizer', 'scheduler', 'scaler', 'rng_states', 'world_size',
+                'total_steps', 'config', 'data_snapshot', 'global_step', 'epoch')
+    if any(key not in checkpoint for key in required):
+        raise ValueError('Recovery requires a full epoch-boundary last.pt checkpoint')
+    if checkpoint['epoch'] + 1 != job['resume_epoch'] or checkpoint['world_size'] != 2:
+        raise ValueError('Resume checkpoint epoch/world size differs from recovery plan')
+    settings = checkpoint['config']['train']
+    if (settings['epochs'], settings['batch_size'], settings['accumulation_steps']) != (25, 8, 4):
+        raise ValueError('Resume checkpoint must preserve 25 epochs and effective batch 64')
+    rows = [json.loads(line) for line in (Path(job['run_dir']) / 'history.jsonl').read_text().splitlines() if line.strip()]
+    if [row['epoch'] for row in rows] != list(range(1, job['resume_epoch'] + 1)):
+        raise ValueError('Resume history does not match the completed checkpoint epoch')
+    if rows[-1]['global_step'] != checkpoint['global_step'] or checkpoint['global_step'] < 1:
+        raise ValueError('Resume history global step does not match the checkpoint')
+    del checkpoint
+    if resume_identity(job) != before:
+        raise ValueError('Resume checkpoint changed during validation')
+    job['resume_identity'] = before
+
+
+def validate_recovery(plan):
+    if plan.get('version') != 1 or len(plan.get('lanes', [])) != 1:
+        raise ValueError('Recovery requires version 1 and exactly one failed lane')
+    lane = plan['lanes'][0]
+    if lane['gpus'] != [0, 7] or plan['recovery'].get('allocator') != 'expandable_segments:True':
+        raise ValueError('Recovery permits only GPUs 0/7 with expandable_segments:True')
+    if not PYTHON.is_file():
+        raise ValueError(f'Python interpreter is missing: {PYTHON}')
+    recovery_source(plan)
+    contents, outputs = {}, set()
+    for index, job in enumerate(lane['jobs']):
+        config_path = path(job['config'])
+        content = config_path.read_bytes()
+        config = yaml.safe_load(content)
+        settings = config['train']
+        output = path(settings['output_dir'])
+        if output.parent != path('runs') or output.name != job['name'] or output in outputs:
+            raise ValueError('Recovery outputs must be distinct original run directories')
+        outputs.add(output)
+        if (settings['batch_size'], settings['accumulation_steps'], settings['epochs'],
+                settings.get('min_effective_batch'), job['expected_epochs']) != (8, 4, 25, 64, 25):
+            raise ValueError('Recovery must preserve batch8, accumulation4 and 25 epochs')
+        if settings.get('resume') is not None:
+            raise ValueError('Recovery uses an explicit checkpoint argument, not a changed configuration')
+        job.update(config=str(config_path), run_dir=str(output))
+        if index == 0:
+            if job.get('resume_epoch') != 1 or path(job['resume_checkpoint']) != output / 'last.pt':
+                raise ValueError('First recovery job must resume its original last.pt after epoch 1')
+            if (output / 'queue_completed.json').exists():
+                raise ValueError('Refusing recovery of an already completed run')
+            validate_resume(job)
+        elif 'resume_checkpoint' in job or (output.exists() and any(output.iterdir())):
+            raise ValueError('Recovery successors must be fresh runs')
+        if Path(job['log_name']).name != job['log_name'] or not job['log_name'].endswith('.log'):
+            raise ValueError('Recovery log must be a plain .log filename')
+        if (output / job['log_name']).exists():
+            raise ValueError('Recovery log already exists; manual inspection required')
+        contents[job['name']] = content
+    return contents
+
+
 def gpu_occupancy(gpus):
     def query(arguments):
         result = subprocess.run(['nvidia-smi', *arguments], capture_output=True, text=True, timeout=20, check=True)
@@ -157,9 +260,10 @@ def freeze_configs(plan, config_contents):
 
 
 class Queue:
-    def __init__(self, plan, prefix, config_contents):
+    def __init__(self, plan, prefix, config_contents, gpu_locks=None):
         self.plan, self.prefix, self.mutex = plan, prefix, threading.RLock()
         self.config_contents = config_contents
+        self.gpu_locks = gpu_locks or {}
         self.logfile = prefix.with_suffix('.log').open('a', buffering=1)
         self.state = {'version': 1, 'status': 'running', 'pid': os.getpid(),
                       'start_ticks': process_identity(os.getpid())['start_ticks'], 'started_at': now(),
@@ -185,11 +289,14 @@ class Queue:
     def lane(self, lane):
         current_job = None
         try:
-            dep = lane['predecessor']
-            self.update(lane, status='waiting_dependency')
-            while same_process(dep):
-                time.sleep(POLL_SECONDS)
-            check_history(Path(dep['run_dir']), dep['expected_epochs'])
+            if 'recovery' in self.plan:
+                recovery_source(self.plan)
+            else:
+                dep = lane['predecessor']
+                self.update(lane, status='waiting_dependency')
+                while same_process(dep):
+                    time.sleep(POLL_SECONDS)
+                check_history(Path(dep['run_dir']), dep['expected_epochs'])
             self.update(lane, dependency_completed_at=now())
             for job in lane['jobs']:
                 current_job = job
@@ -208,21 +315,32 @@ class Queue:
                 config_path, run_dir = Path(job['config']), Path(job['run_dir'])
                 if config_path.read_bytes() != self.config_contents[job['name']]:
                     raise ValueError(f'Configuration changed since queue startup: {config_path}')
-                if run_dir.exists() and any(run_dir.iterdir()):
+                if 'resume_checkpoint' in job:
+                    if resume_identity(job) != job['resume_identity']:
+                        raise ValueError('Resume checkpoint changed since queue startup')
+                elif run_dir.exists() and any(run_dir.iterdir()):
                     raise ValueError(f'Refusing existing run outputs: {run_dir}')
                 run_dir.mkdir(parents=False, exist_ok=True)
                 env = os.environ.copy()
-                env.update(CUDA_DEVICE_ORDER='PCI_BUS_ID', CUDA_VISIBLE_DEVICES=','.join(map(str, lane['gpus'])),
+                env.update(CUDA_DEVICE_ORDER='PCI_BUS_ID',
+                           CUDA_VISIBLE_DEVICES=','.join(gpu_state['gpu_uuids'][str(gpu)] for gpu in lane['gpus']),
                            PYTHON=str(PYTHON), OMP_NUM_THREADS=env.get('OMP_NUM_THREADS', '4'))
+                if 'recovery' in self.plan:
+                    env['PYTORCH_CUDA_ALLOC_CONF'] = self.plan['recovery']['allocator']
                 if set(lane['gpus']) == {5, 6}:
                     env['NCCL_P2P_DISABLE'] = '1'
                 else:
                     env.pop('NCCL_P2P_DISABLE', None)
                 command = [str(PYTHON), '-m', 'torch.distributed.run', '--standalone', '--nproc_per_node=2',
                            '-m', 'moonseg.train', '--config', str(config_path)]
+                if 'resume_checkpoint' in job:
+                    command.extend(['--resume', str(path(job['resume_checkpoint']))])
                 self.update(job, status='launching', command=command, started_at=now())
-                with (run_dir / 'train.log').open('x') as log:
-                    child = subprocess.Popen(command, cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT, close_fds=True)
+                with (run_dir / job.get('log_name', 'train.log')).open('x') as log:
+                    child = subprocess.Popen(command, cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT,
+                                             close_fds=True, pass_fds=tuple(
+                                                 self.gpu_locks[gpu].fileno() for gpu in lane['gpus']
+                                                 if gpu in self.gpu_locks))
                     self.update(job, status='running', pid=child.pid, start_ticks=process_identity(child.pid)['start_ticks'])
                     self.update(lane, status='running')
                     exit_code = child.wait()
@@ -265,15 +383,37 @@ def main():
         return 0
     prefix = args.status_prefix.resolve()
     prefix.parent.mkdir(parents=True, exist_ok=True)
-    with path('runs/.training_queue.lock').open('a') as lock:
+    with ExitStack() as locks:
+        lock = locks.enter_context(path('runs/.training_queue.lock').open('a'))
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
-            raise RuntimeError('Another queue instance holds the exclusive lock') from None
+            if 'recovery' not in plan or not same_process(recovery_source(plan)):
+                raise RuntimeError('Another queue instance holds the exclusive lock') from None
+            # The legacy parent holds this lock for its remaining disjoint lane.
+            # A separate recovery lock and per-GPU locks serialize new parents.
+        if 'recovery' in plan:
+            recovery_lock = locks.enter_context(path('runs/.training_queue.recovery.lock').open('a'))
+            try:
+                fcntl.flock(recovery_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                raise RuntimeError('Another recovery queue is active') from None
+            recovery_source(plan)
+        gpu_locks = {}
+        for gpu in sorted(gpu for lane in plan['lanes'] for gpu in lane['gpus']):
+            gpu_lock = locks.enter_context(path(f'runs/.training_gpu_{gpu}.lock').open('a'))
+            try:
+                fcntl.flock(gpu_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                raise RuntimeError(f'Another training queue owns GPU {gpu}') from None
+            gpu_locks[gpu] = gpu_lock
         if prefix.with_suffix('.status.json').exists():
             raise RuntimeError('Existing queue status requires inspection; automatic restart is disabled')
-        freeze_configs(plan, config_contents)
-        return Queue(plan, prefix, config_contents).run()
+        if prefix.with_suffix('.log').exists():
+            raise RuntimeError('Existing queue log requires inspection; automatic restart is disabled')
+        if 'recovery' not in plan:
+            freeze_configs(plan, config_contents)
+        return Queue(plan, prefix, config_contents, gpu_locks).run()
 
 
 if __name__ == '__main__':
