@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Conservative two-lane training queue. --dry-run validates without launching jobs."""
+"""Conservative training queue with explicit independent-lane followup handoffs.
+
+Followup plans use a dedicated parent lock and wait for each source lane before
+acquiring its GPU locks. --dry-run validates without launching jobs or writing.
+"""
 import argparse
 from contextlib import ExitStack
 import csv
@@ -85,12 +89,18 @@ def check_history(run_dir, epochs):
 
 
 def validate(plan):
+    modes = [key for key in ('followup', 'supersession', 'recovery') if key in plan]
+    if len(modes) > 1:
+        raise ValueError('Training queue modes are mutually exclusive')
     if 'supersession' in plan:
         return validate_supersession(plan)
     if 'recovery' in plan:
         return validate_recovery(plan)
-    if plan.get('version') != 1 or len(plan.get('lanes', [])) != 2:
-        raise ValueError('Expected version 1 with two lanes')
+    followup = 'followup' in plan
+    if plan.get('version') != 1 or len(plan.get('lanes', [])) not in ((1, 2) if followup else (2,)):
+        raise ValueError('Expected version 1 with two lanes (one or two for followup)')
+    if followup and plan['followup'].get('allocator') != 'expandable_segments:True':
+        raise ValueError('Followup requires expandable_segments:True')
     names, outputs, devices, lane_ids = set(), set(), set(), set()
     config_contents = {}
     for lane in plan['lanes']:
@@ -98,6 +108,13 @@ def validate(plan):
             raise ValueError('Lane IDs and GPU assignments must be unique')
         if not all(type(gpu) is int and gpu >= 0 for gpu in lane['gpus']):
             raise ValueError('GPU indices must be nonnegative integers')
+        if followup:
+            if lane['gpus'] not in ([0, 7], [5, 6]):
+                raise ValueError('Followup training permits only physical GPUs 0/7 and 5/6')
+            uuids = lane.get('expected_gpu_uuids', {})
+            if (set(uuids) != {str(gpu) for gpu in lane['gpus']} or len(set(uuids.values())) != 2
+                    or any(not isinstance(uuid, str) or not uuid.startswith('GPU-') for uuid in uuids.values())):
+                raise ValueError('Followup requires a frozen distinct UUID for each physical GPU')
         lane_ids.add(lane['id'])
         devices.update(lane['gpus'])
         dep = lane['predecessor']
@@ -106,6 +123,8 @@ def validate(plan):
         resolved = json.loads((path(dep['run_dir']) / 'resolved_config.json').read_text())
         if resolved['train']['epochs'] != dep['expected_epochs'] or path(resolved['train']['output_dir']) != path(dep['run_dir']):
             raise ValueError('Predecessor saved configuration does not match its run/epochs')
+        if followup:
+            followup_source(lane)
         if not lane['jobs']:
             raise ValueError('Each lane needs jobs')
         for job in lane['jobs']:
@@ -126,6 +145,13 @@ def validate(plan):
                 raise ValueError('Expected batch_size=8, accumulation_steps=4 and matching epochs')
             if job['expected_epochs'] != 25 or train.get('min_effective_batch') != 64 or train.get('resume') is not None:
                 raise ValueError('Expected fresh 25-epoch runs with effective batch 64')
+            if followup:
+                if (train.get('seed') != 42 or config['data'].get('image_size') != [1024, 1024]
+                        or config['data'].get('crop_size') != [1024, 1024] or 'resume_checkpoint' in job):
+                    raise ValueError('Followup requires fresh seed42, 1024-square training')
+                log_name = job.get('log_name', 'train.log')
+                if Path(log_name).name != log_name or not log_name.endswith('.log'):
+                    raise ValueError('Training log must be a plain .log filename')
             names.add(job['name'])
             outputs.add(output)
             job.update(config=str(config_path), run_dir=str(output))
@@ -134,6 +160,59 @@ def validate(plan):
     if not PYTHON.is_file():
         raise ValueError(f'Python interpreter is missing: {PYTHON}')
     return config_contents
+
+
+def followup_source(lane):
+    """Validate only this lane's source; another lane/parent may keep training."""
+    dep = lane['predecessor']
+    for field in ('source_pid', 'source_start_ticks'):
+        if type(dep.get(field)) is not int or dep[field] <= 0:
+            raise ValueError('Followup requires the frozen source queue PID/start_ticks')
+    source = json.loads(path(dep['status_path']).read_text())
+    if (source['pid'], source['start_ticks']) != (dep['source_pid'], dep['source_start_ticks']):
+        raise ValueError('Followup source queue identity differs from plan')
+    original = source['lanes'][dep['source_lane']]
+    if original['gpus'] != lane['gpus']:
+        raise ValueError('Followup source lane has different physical GPUs')
+    if any(other['id'] != original['id'] and set(other['gpus']).intersection(lane['gpus'])
+           for other in source['lanes'].values()):
+        raise ValueError('Followup source has another overlapping lane')
+    previous = original['jobs'][-1]
+    if ((previous.get('pid'), previous.get('start_ticks'), previous.get('expected_epochs')) !=
+            (dep['pid'], dep['start_ticks'], dep['expected_epochs'])
+            or path(previous['run_dir']) != path(dep['run_dir'])):
+        raise ValueError('Followup predecessor must match the final source lane job')
+    return original
+
+
+def followup_ready(lane):
+    original = followup_source(lane)
+    if original['status'] in {'failed', 'cancelled', 'superseded'}:
+        raise ValueError(f"Followup source lane is {original['status']}")
+    if any(job['status'] in {'failed', 'cancelled', 'transferred', 'superseded'} for job in original['jobs']):
+        raise ValueError('Followup source lane contains an unsuccessful training job')
+    if original['status'] != 'completed':
+        if not same_process({'pid': lane['predecessor']['source_pid'],
+                             'start_ticks': lane['predecessor']['source_start_ticks']}):
+            raise ValueError('Followup source parent exited before its lane completed')
+        return False, 'waiting for source lane completed'
+    if any(job['status'] != 'completed' or job.get('exit_code') != 0 for job in original['jobs']):
+        raise ValueError('Completed source lane must contain only successful training jobs')
+    dep = lane['predecessor']
+    if same_process(dep) or any(job.get('pid') and same_process(job) for job in original['jobs']):
+        return False, 'waiting for source training launchers to exit'
+    if any(live_config_processes(job['config']) for job in original['jobs']):
+        return False, 'waiting for source training ranks/data workers to exit'
+    run_dir = path(dep['run_dir'])
+    marker = json.loads((run_dir / 'queue_completed.json').read_text())
+    if ((marker.get('status'), marker.get('exit_code'), marker.get('expected_epochs'), marker.get('pid')) !=
+            ('completed', 0, dep['expected_epochs'], dep['pid'])
+            or marker.get('name') != original['jobs'][-1]['name']
+            or path(marker.get('run_dir', '')) != run_dir
+            or path(marker.get('config', '')) != path(original['jobs'][-1]['config'])):
+        raise ValueError('Followup predecessor completion marker differs from the frozen source')
+    check_history(run_dir, dep['expected_epochs'])
+    return True, 'source lane completed and all source training processes exited'
 
 
 def supersession_source(plan):
@@ -357,6 +436,8 @@ class Queue:
                       'lanes': {lane['id']: dict(lane, status='pending') for lane in plan['lanes']}}
         if 'supersession' in plan:
             self.state['supersession'] = plan['supersession']
+        if 'followup' in plan:
+            self.state['followup'] = plan['followup']
         for lane in self.state['lanes'].values():
             lane['jobs'] = [dict(job, status='pending', gpus=lane['gpus']) for job in lane['jobs']]
         self.save()
@@ -376,8 +457,31 @@ class Queue:
 
     def lane(self, lane):
         current_job = None
+        lane_locks = ExitStack()
         try:
-            if 'supersession' in self.plan:
+            if 'followup' in self.plan:
+                self.update(lane, status='waiting_dependency')
+                while True:
+                    ready, message = followup_ready(lane)
+                    self.update(lane, dependency=message)
+                    if ready:
+                        break
+                    time.sleep(POLL_SECONDS)
+                self.update(lane, status='waiting_gpu_locks')
+                # Delay lock acquisition until this lane's predecessor is done.
+                # Holding the other lane's locks must never delay this handoff.
+                for gpu in sorted(lane['gpus']):
+                    lock = lane_locks.enter_context(path(f'runs/.training_gpu_{gpu}.lock').open('a'))
+                    while True:
+                        try:
+                            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                            break
+                        except BlockingIOError:
+                            time.sleep(POLL_SECONDS)
+                    self.gpu_locks[gpu] = lock
+                if not followup_ready(lane)[0]:
+                    raise ValueError('Followup source changed while acquiring GPU locks')
+            elif 'supersession' in self.plan:
                 supersession_source(self.plan)
             elif 'recovery' in self.plan:
                 recovery_source(self.plan)
@@ -401,6 +505,8 @@ class Queue:
                         self.update(lane, gpu_query_error=str(error), gpu_checked_at=now())
                         time.sleep(POLL_SECONDS)
                         continue
+                    if 'followup' in self.plan and gpu_state['gpu_uuids'] != lane['expected_gpu_uuids']:
+                        raise ValueError('Physical GPU UUID mapping differs from frozen followup')
                     self.update(lane, **gpu_state, gpu_query_error=None, gpu_checked_at=now())
                     if not gpu_state['occupied']:
                         break
@@ -422,6 +528,8 @@ class Queue:
                     env['PYTORCH_CUDA_ALLOC_CONF'] = self.plan['recovery']['allocator']
                 if 'supersession' in self.plan:
                     env['PYTORCH_CUDA_ALLOC_CONF'] = self.plan['supersession']['allocator']
+                if 'followup' in self.plan:
+                    env['PYTORCH_CUDA_ALLOC_CONF'] = self.plan['followup']['allocator']
                 if set(lane['gpus']) == {5, 6}:
                     env['NCCL_P2P_DISABLE'] = '1'
                 else:
@@ -453,6 +561,8 @@ class Queue:
             if current_job is not None:
                 self.update(current_job, status='failed', error=str(error), failed_at=now())
             self.update(lane, status='failed', error=str(error), failed_at=now())
+        finally:
+            lane_locks.close()
 
     def run(self):
         threads = [threading.Thread(target=self.lane, args=(lane,)) for lane in self.state['lanes'].values()]
@@ -479,10 +589,13 @@ def main():
     prefix = args.status_prefix.resolve()
     prefix.parent.mkdir(parents=True, exist_ok=True)
     with ExitStack() as locks:
-        lock = locks.enter_context(path('runs/.training_queue.lock').open('a'))
+        lock_path = prefix.with_suffix('.followup.lock') if 'followup' in plan else path('runs/.training_queue.lock')
+        lock = locks.enter_context(lock_path.open('a'))
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
+            if 'followup' in plan:
+                raise RuntimeError('Another followup queue holds this status-prefix lock') from None
             source = (supersession_source(plan) if 'supersession' in plan else
                       recovery_source(plan) if 'recovery' in plan else None)
             if source is None or not same_process(source):
@@ -497,7 +610,8 @@ def main():
                 raise RuntimeError('Another recovery queue is active') from None
             supersession_source(plan) if 'supersession' in plan else recovery_source(plan)
         gpu_locks = {}
-        for gpu in sorted(gpu for lane in plan['lanes'] for gpu in lane['gpus']):
+        initial_gpus = [] if 'followup' in plan else sorted(gpu for lane in plan['lanes'] for gpu in lane['gpus'])
+        for gpu in initial_gpus:
             gpu_lock = locks.enter_context(path(f'runs/.training_gpu_{gpu}.lock').open('a'))
             try:
                 fcntl.flock(gpu_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)

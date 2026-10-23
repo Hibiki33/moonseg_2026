@@ -56,8 +56,8 @@ L1 相对 L0，场景 2/4/9 分别提高 0.738/0.231/0.306 个百分点，等权
 
 | 卡对 | 当前 | 之后 | 预计 |
 |---|---|---|---|
-| PCI 0/7 | L1 shadow，14/25 完成，正在第 15 轮 | 当前无后继任务 | 预计 10-24 01:50–02:00 结束；8×2×4=64 |
-| PCI 5/6 | L1 seed43，5/25 完成 | 当前无后继任务 | 预计 10-24 05:30–05:50 结束；NCCL P2P 已关闭 |
+| PCI 0/7 | L1 shadow，23:32 时 14/25 完成 | L1 采样点 50176 | shadow 预计 10-24 01:50–02:00 结束；8×2×4=64 |
+| PCI 5/6 | L1 seed43，23:32 时 5/25 完成 | L1 关闭对比度增强 | seed43 预计 10-24 05:30–05:50 结束；NCCL P2P 已关闭 |
 | PCI 2/4 | 2：RCS 公开测试 TTA；4：其他项目占用 | RCS 全量验证，shadow/seed43 训练后的验证及测试 | 共用 GPU 锁；4 号卡空闲后才恢复使用 |
 
 原批次 H+/L2 已结束。`scripts/run_training_queue.py` 的原实例继续管理 5/6；0/7 的旧失败记录保留，新恢复计划在 `runs/plans/2026-10-23/recovery_gpu_0_7/`，状态为 `runs/queue_2026-10-23_gpu_0_7_recovery.status.json`。H+ 原错误发生于 04:11，第 2 轮首次 criterion 分配 2 MiB 失败，allocated 41.86 GiB、reserved 未用 4.81 GiB；未留 allocator snapshot，碎片是主要怀疑而非已完全证明的根因。修复释放批次/保存对象引用、轮次边界 empty_cache，并启用 `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`；每 rank 每轮记录显存峰值。原配方、batch、RNG 与优化器状态保持不变。
@@ -65,6 +65,10 @@ L1 相对 L0，场景 2/4/9 分别提高 0.738/0.231/0.306 个百分点，等权
 全量验证结果在 `runs/evaluations_2026-10-23/aggregate.json`；恢复的三项结果在 `runs/evaluations_2026-10-23_gpu_0_7_recovery/aggregate.json`，它们依赖恢复队列的完成标记，不再依赖旧 failed lane。具体参数见 [本批单变量消融](roadmap.md#本批单变量消融)。
 
 当前 0/7 调度使用 `runs/plans/2026-10-23/vitl_priority/training.json`，状态为 `runs/queue_2026-10-23_vitl_priority.status.json`；原恢复队列状态已为 superseded，勿重启。评估三个实例改用同目录 `evaluation.json`、`evaluation_recovery.json`、`public_test.json`，输出目录保持原位，正在运行的 L1/H+ 整图 TTA 已接管且未重跑。H+ RRC 第 6 轮完整 last.pt（step 600）保留，其待评任务显式取消；这是用户主动调整算力，不是新的失败。公开测试低学习率与 L 消融提到旧模型补评之前。
+
+用户随后授权接续两项 L1 单变量消融：shadow 后跑 `dnv3_va_m2f_vitl16_rrc_points50176`，seed43 后跑 `dnv3_va_m2f_vitl16_rrc_no_contrast`。各自从骨干重训，不继承前置权重；25 轮、seed 42、1024²、有效 batch 64 不变。独立计划在 `runs/plans/2026-10-23/l1_followup/{training,evaluation,public_test}.json`，训练状态 `runs/queue_2026-10-23_l1_followup.status.json`；两条 lane 分别等自己的前置成功结束及 GPU 释放，不相互等待。验证输出 `runs/evaluations_2026-10-23_l1_followup/`，公开测试输出 `runs/public_test_research_2026-10-23_l1_followup/`，所有评估继续共用原 GPU 2/4 锁。采样点增加的显存和耗时尚未实测，遇到训练失败会停止该 lane，不自动改 batch 或配方。
+
+后继三个调度进程已于 23:47 启动，两个训练任务处于 `waiting_dependency`，配置已冻结，验证/公开测试等待训练成功标记。启动记录在该计划目录 `launch_receipt.json`，勿重复启动。原训练与评估进程继续运行。
 
 ## 5. 保守路线：逐步消融阶梯
 
@@ -206,7 +210,7 @@ PCI 序号即 `nvidia-smi` 序号（脚本固定 `CUDA_DEVICE_ORDER=PCI_BUS_ID`�
 
 ## 11. 待办
 
-- 跟踪 shadow、seed43 和 RCS TTA；gamma、低学习率已完成公开测试。下一轮候选为 L1 损失采样点 12544→50176、L1 仅关闭对比度增强，各自独立，尚未入队，理由见 roadmap。H+ RRC 保持暂停。汇总测试时先看场景 9，再看其他场景及类别得失；旧 failed/superseded 状态不代表当前 L 队列。
+- 跟踪 shadow → L1 采样点 50176、seed43 → L1 关闭对比度增强，以及各项固定权重测试；两项后继已获用户授权，独立等待队列见上文。gamma、低学习率已完成公开测试。H+ RRC 保持暂停。汇总测试时先看场景 9，再看其他场景及类别得失；旧 failed/superseded 状态不代表当前 L 队列。
 - H+ 的 SwiGLU gate/up 映射尚未与 HF 参考实现做数值比对（机器上另有带 transformers 的环境可用；H+ 第 7 轮已达 0.923，说明映射大概率正确，但仍建议闭合）。
 - 官方训练包到位后切换清单并复核与开发池的差异。
 - 测试输入到位后用 `tools/package_submission.py` 做一次完整打包演练。

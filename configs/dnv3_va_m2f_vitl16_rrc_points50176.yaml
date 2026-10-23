@@ -1,0 +1,82 @@
+# Only loss.num_points changes from L1: 12544 -> 50176. 1024-square, 25 epochs, batch8 x 2 GPUs x accumulation4 = 64, seed42.
+# dnv3_va_m2f_vitl16_rrc_points50176 (L1 ablation, 2026-10-23): DINOv3 ViT-L/16 frozen + ViT-Adapter + Mask2Former, ADE20K-style random resize (x0.5-2.0) + random 1024 crop (cat_max_ratio 0.75), 25 epochs, poly 0.9 without warmup, no EMA. Development split: scenes 1,3,6,7,8 train, scene 5 local validation.
+# Data: public LuSNAR training-scene pool (data.development_pool). The final submission model must be
+# retrained from the backbone on the organizer's official sample list; see docs/data.md.
+# Changes versus the earlier draft recipe and their rationale are listed in docs/training.md.
+model:
+  backbone: vitl16
+  backbone_weights: ckpts/dinov3_vitl16_pretrain_lvd1689m-8aa4cbdd.pth
+  freeze_backbone: true
+  unfreeze_last_blocks: 0
+  num_classes: 5
+  num_queries: 100
+  hidden_dim: 256
+  decoder_layers: 6
+  encoder_layers: 6
+  gradient_checkpointing: true
+  deformable_attention: auto
+loss:
+  ce_weight: 2.0
+  mask_weight: 5.0
+  dice_weight: 5.0
+  no_object_weight: 0.1
+  num_points: 50176
+data:
+  root: data/LuSNAR
+  development_pool: true
+  train_manifest: data/manifests/dev_train.json
+  val_manifest: data/manifests/dev_val.json
+  label_stats: data/manifests/label_stats_dev_train.json
+  train_scenes: [1, 3, 6, 7, 8]
+  val_scenes: [5]
+  train_mode: random_resize_crop
+  crop_size: [1024, 1024]
+  resize_range: [0.5, 2.0]
+  cat_max_ratio: 0.75
+  crop_attempts: 10
+  image_size: [1024, 1024]
+  hflip_probability: 0.5
+  # Standard DINOv3/MMSeg PhotoMetricDistortion strengths for brightness and contrast.
+  brightness_probability: 0.5
+  brightness_delta: 32
+  contrast_probability: 0.5
+  contrast_range: [0.5, 1.5]
+  # Rendered LuSNAR pixels never fall below 22 (docs/data.md).
+  pixel_floor: 22
+  # Candidates kept off for the baseline.
+  gamma_probability: 0.0
+  shadow_probability: 0.0
+  scale_jitter_probability: 0.0
+  mean: [0.485, 0.456, 0.406]
+  std: [0.229, 0.224, 0.225]
+train:
+  output_dir: runs/dnv3_va_m2f_vitl16_rrc_points50176
+  seed: 42
+  epochs: 25
+  batch_size: 8
+  accumulation_steps: 4
+  # 8 x 2 GPUs x 4 = 64 images per update (user requirement: at least 64).
+  min_effective_batch: 64
+  num_workers: 4
+  lr: 0.0002
+  backbone_lr_multiplier: 0.1
+  weight_decay: 0.05
+  warmup_iters: 0
+  warmup_ratio: 0.001
+  poly_power: 0.9
+  amp: bf16
+  tf32: true
+  cudnn_benchmark: true
+  grad_clip: 0.1
+  sampling:
+    mode: uniform
+  validate: true
+  eval_every: 1
+  eval_stride: 2
+  save_every: 0
+  log_every: 10
+  resume: null
+inference:
+  sliding_window: false
+  scales: [1.0]
+  flip: false

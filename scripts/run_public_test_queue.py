@@ -76,9 +76,9 @@ def validate_config(config):
     names = [run["name"] for run in config["runs"]]
     if len(names) != len(set(names)) or any(Path(name).name != name for name in names):
         raise ValueError("Run names must be unique directory names")
-    if (len(names) != 12 or len(config["priority_runs"]) != len(set(config["priority_runs"]))
+    if (not names or len(config["priority_runs"]) != len(set(config["priority_runs"]))
             or not set(config["priority_runs"]) <= set(names)):
-        raise ValueError("Expected 12 runs and unique planned priority comparisons")
+        raise ValueError("Expected nonempty runs and unique planned priority comparisons")
     validate_cancellations(config, names)
     for run in config["runs"]:
         epochs = run["expected_epochs"]
