@@ -33,34 +33,28 @@
     {
       "scene": 1,
       "uniform_probability": 0.1708574105887865,
-      "rcs_probability": 0.0601392392452842,
-      "proposed_half_uniform_half_rcs_probability": 0.11549832491703535
+      "rcs_probability": 0.0601392392452842
     },
     {
       "scene": 3,
       "uniform_probability": 0.1920974543182883,
-      "rcs_probability": 0.1456387216035384,
-      "proposed_half_uniform_half_rcs_probability": 0.16886808796091335
+      "rcs_probability": 0.1456387216035384
     },
     {
       "scene": 6,
       "uniform_probability": 0.17210682492581603,
-      "rcs_probability": 0.20889904717885727,
-      "proposed_half_uniform_half_rcs_probability": 0.19050293605233665
+      "rcs_probability": 0.20889904717885727
     },
     {
       "scene": 7,
       "uniform_probability": 0.2539434640012494,
-      "rcs_probability": 0.3328901376447677,
-      "proposed_half_uniform_half_rcs_probability": 0.2934168008230086
+      "rcs_probability": 0.3328901376447677
     },
     {
       "scene": 8,
       "uniform_probability": 0.21099484616585976,
-      "rcs_probability": 0.25243285432755413,
-      "proposed_half_uniform_half_rcs_probability": 0.23171385024670693
+      "rcs_probability": 0.25243285432755413
     }
   ],
-  "crop_policy": "Current sampler returns image indices only. Dataset random_resize_crop does not receive the selected rare class or enforce its retained area.",
-  "proposed_mixture": "50% uniform image draw + 50% current RCS image draw; not implemented or run."
+  "crop_policy": "Current sampler returns image indices only. Dataset random_resize_crop does not receive the selected rare class or enforce its retained area."
 }
