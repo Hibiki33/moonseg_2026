@@ -2,7 +2,7 @@
 """Durable public LuSNAR 2/4/9 research evaluation queue; never trains a model.
 
 Dry-run reads plans, history and CPU checkpoint metadata only, and writes nothing.
-GPU 2/4 locks are shared with the scene-5 evaluation queue. Existing successful
+Physical GPU locks are shared with the scene-5 evaluation queue. Existing successful
 scores are adopted; failed attempts are not automatically repeated.
 """
 from __future__ import annotations
@@ -23,7 +23,8 @@ from scripts.run_evaluation_queue import (Queue as ValidationQueue, TrainingBloc
                                           checkpoint_metadata, file_identity, gpu_snapshot, now,
                                           process_info, read_json, TERMINAL, apply_queue_policy,
                                           validate_cancellations)
-from moonseg.evaluate_public_test import EXPECTED_SAMPLES, MANIFEST_KIND, PROFILES, SCENE_COUNTS
+from moonseg.evaluate_public_test import (CHECKPOINT_POLICIES, EXPECTED_SAMPLES, MANIFEST_KIND, PROFILES,
+                                          SCENE_COUNTS, checkpoint_policy_metadata, validate_final_checkpoint)
 
 
 def dependency(run):
@@ -62,8 +63,14 @@ def dependency(run):
 
 
 def validate_config(config):
-    if config["gpus"] != [2, 4] or config["max_workers"] not in (1, 2):
-        raise ValueError("Only physical GPUs 2/4 and at most two workers are permitted")
+    gpus = config["gpus"]
+    if (not isinstance(gpus, list) or not gpus or any(type(gpu) is not int or gpu < 0 for gpu in gpus)
+            or len(gpus) != len(set(gpus)) or type(config["max_workers"]) is not int
+            or config["max_workers"] not in (1, 2)):
+        raise ValueError("Use unique nonnegative physical GPU indices and at most two workers")
+    policy = config.get("checkpoint_policy", "validation_selected")
+    if policy not in CHECKPOINT_POLICIES:
+        raise ValueError("Unknown checkpoint policy")
     if config["profiles"] != PROFILES or config["expected_samples"] != EXPECTED_SAMPLES:
         raise ValueError("Only the fixed single/narrowflip profiles over all 5004 samples are permitted")
     if config["weights"] != "model" or config["manifest_kind"] != MANIFEST_KIND:
@@ -82,7 +89,10 @@ def validate_config(config):
     validate_cancellations(config, names)
     for run in config["runs"]:
         epochs = run["expected_epochs"]
-        if epochs not in (25, 80) or run["checkpoint"] != ("best.pt" if epochs == 80 else "best_miou.pt"):
+        if policy == "final_epoch":
+            if type(epochs) is not int or epochs != 25 or run["checkpoint"] != "last.pt":
+                raise ValueError("final_epoch evaluations require the fixed 25-epoch last.pt checkpoint")
+        elif epochs not in (25, 80) or run["checkpoint"] != ("best.pt" if epochs == 80 else "best_miou.pt"):
             raise ValueError("Use existing validation best_miou.pt (25 epochs), or legacy best.pt (80 epochs)")
         if run["dependency"]["kind"] not in {"history", "marker"}:
             raise ValueError("Unknown training dependency")
@@ -90,6 +100,39 @@ def validate_config(config):
             raise ValueError("Marker dependencies require their own training status path")
     if not 1 <= config["poll_seconds"] <= 60:
         raise ValueError("poll_seconds must be between 1 and 60")
+
+
+def prepare_checkpoint(run, policy):
+    directory = ROOT / "runs" / run["name"]
+    config_path = (directory / "resolved_config.json").resolve()
+    config = read_json(config_path)
+    if config["train"]["epochs"] != run["expected_epochs"]:
+        raise ValueError("Original resolved config epoch count differs from plan")
+    checkpoint = (directory / run["checkpoint"]).resolve()
+    if policy == "final_epoch":
+        # Trusted local artifacts only; mmap keeps optimizer tensors off the queue parent's heap.
+        import torch
+        before = file_identity(checkpoint)
+        try:
+            value = torch.load(checkpoint, map_location="cpu", mmap=True, weights_only=False)
+        except RuntimeError as error:
+            if "mmap can only be used" not in str(error):
+                raise
+            value = torch.load(checkpoint, map_location="cpu", weights_only=False)
+        validate_final_checkpoint(config, checkpoint, value, run["expected_epochs"])
+        metadata = {"epoch": value["epoch"] + 1, "global_step": value["global_step"], "file_identity": before}
+        del value
+        if file_identity(checkpoint) != before:
+            raise ValueError("Checkpoint changed while reading final metadata")
+    else:
+        metadata = checkpoint_metadata(checkpoint)
+        if not 1 <= metadata["epoch"] <= run["expected_epochs"]:
+            raise ValueError("Selected checkpoint epoch is outside the completed training run")
+        if run["checkpoint"] == "best_miou.pt":
+            rows = [json.loads(line) for line in (directory / "history.jsonl").read_text().splitlines() if line.strip()]
+            if metadata["epoch"] != rows[-1].get("best_miou_epoch"):
+                raise ValueError("Checkpoint epoch differs from the final local-validation selection")
+    return config_path, checkpoint, metadata
 
 
 def job_order(config):
@@ -105,6 +148,11 @@ def job_order(config):
 
 def score_result(path, job, config):
     value = read_json(path)
+    policy = config.get("checkpoint_policy", "validation_selected")
+    if value.get("checkpoint_policy", "validation_selected") != policy:
+        raise ValueError("Score checkpoint policy does not match this planned evaluation")
+    if policy == "final_epoch" and any(value.get(key) != expected for key, expected in checkpoint_policy_metadata(policy).items()):
+        raise ValueError("Final scores must identify the fixed-budget public development comparison")
     if (value.get("evaluation_kind") != MANIFEST_KIND or value.get("official_score") is not False
             or value.get("evaluated_samples") != EXPECTED_SAMPLES or value.get("weights") != "model"
             or value.get("scene_sample_counts") != SCENE_COUNTS or "val_loss" in value):
@@ -154,11 +202,13 @@ class Queue(ValidationQueue):
             raise ValueError("Saved configuration differs; use a new output_dir")
         self.children, self.gpu_locks, self.stopping = {}, {}, False
         self.state.update(parent_pid=os.getpid(), parent_start_ticks=process_info(os.getpid())["start_ticks"],
-                          status="running", started_at=now(), evaluation_kind=MANIFEST_KIND, official_score=False)
+                          status="running", started_at=now(), evaluation_kind=MANIFEST_KIND, official_score=False,
+                          **checkpoint_policy_metadata(config.get("checkpoint_policy", "validation_selected")))
         for run, profile in job_order(config):
             key = f"{run['name']}/{Path(run['checkpoint']).stem}/{profile}"
             self.state["jobs"].setdefault(key, {"run": run["name"], "label": run["label"],
-                "checkpoint": run["checkpoint"], "profile": profile, "weights": "model", "status": "pending"})
+                "checkpoint": run["checkpoint"], "profile": profile, "weights": "model", "status": "pending",
+                "checkpoint_policy": config.get("checkpoint_policy", "validation_selected")})
         for job in self.state["jobs"].values():
             if job["status"] == "launching":
                 self.fail(job, "Parent interrupted during launch; inspect log/PID before a manual retry")
@@ -173,14 +223,14 @@ class Queue(ValidationQueue):
         for key, job in self.state["jobs"].items():
             result = job.get("result", {})
             rows.append({"job": key, **{field: job.get(field) for field in (
-                "run", "label", "checkpoint", "epoch", "global_step", "weights", "profile", "status",
+                "run", "label", "checkpoint", "checkpoint_policy", "epoch", "global_step", "weights", "profile", "status",
                 "gpu", "pid", "elapsed_seconds", "score_path", "log_path", "error", "cancellation_reason")},
                 **{field: result.get(field) for field in (
                     "mIoU", "mAcc", "pooled", "scene_equal_macro", "scenes", "scene_sample_counts", "evaluated_samples")}})
         atomic_json(self.output / "aggregate.json", {"updated_at": now(), "status": self.state["status"],
             "evaluation_kind": MANIFEST_KIND, "official_score": False,
             "metric_scope": "Pooled pixels and equal scene macro; no organizer-weighted official total.",
-            "checkpoint_selection": "Fixed existing local-validation checkpoints; never public-test score selection.",
+            **checkpoint_policy_metadata(self.config.get("checkpoint_policy", "validation_selected")),
             "evaluations": rows})
 
     def prepare(self, run):
@@ -192,18 +242,8 @@ class Queue(ValidationQueue):
             self.state["runs"][run["name"]] = {"ready": ready, "dependency": message}
             if not ready:
                 return
-            directory = ROOT / "runs" / run["name"]
-            config_path = (directory / "resolved_config.json").resolve()
-            if read_json(config_path)["train"]["epochs"] != run["expected_epochs"]:
-                raise ValueError("Original resolved config epoch count differs from plan")
-            checkpoint = (directory / run["checkpoint"]).resolve()
-            metadata = checkpoint_metadata(checkpoint)
-            if not 1 <= metadata["epoch"] <= run["expected_epochs"]:
-                raise ValueError("Selected checkpoint epoch is outside the completed training run")
-            if run["checkpoint"] == "best_miou.pt":
-                final = json.loads((directory / "history.jsonl").read_text().splitlines()[-1])
-                if metadata["epoch"] != final.get("best_miou_epoch"):
-                    raise ValueError("Checkpoint epoch differs from the final local-validation selection")
+            config_path, checkpoint, metadata = prepare_checkpoint(
+                run, self.config.get("checkpoint_policy", "validation_selected"))
             for job in jobs:
                 if job["status"] in TERMINAL:
                     continue
@@ -272,6 +312,7 @@ class Queue(ValidationQueue):
                        NCCL_P2P_DISABLE="1", OMP_NUM_THREADS="4", PYTHONUNBUFFERED="1")
             command = [str(absolute(self.config["python"])), "-m", "moonseg.evaluate_public_test", "--config",
                        job["config_path"], "--checkpoint", job["checkpoint_path"], "--weights", "model",
+                       "--checkpoint-policy", self.config.get("checkpoint_policy", "validation_selected"),
                        "--data-root", str(absolute(self.config["data_root"])), "--manifest",
                        str(absolute(self.config["manifest"])), "--profile", job["profile"],
                        "--output", str(score.with_name("scores.partial.json"))]
@@ -309,6 +350,7 @@ def main():
                 "max_workers": config["max_workers"], "weights": "model", "profiles": PROFILES,
                 "expected_samples": EXPECTED_SAMPLES, "scene_sample_counts": SCENE_COUNTS,
                 "evaluation_kind": MANIFEST_KIND, "official_score": False, "runs": [],
+                **checkpoint_policy_metadata(config.get("checkpoint_policy", "validation_selected")),
                 "job_order": [f"{run['label']}/{profile}" for run, profile in job_order(config)]}
         for run in config["runs"]:
             if run["name"] in config.get("cancelled_runs", []):
@@ -318,7 +360,8 @@ def main():
                 ready, message = dependency(run)
                 item = {**run, "ready": ready, "dependency_status": message}
                 if ready:
-                    item["checkpoint_metadata"] = checkpoint_metadata(ROOT / "runs" / run["name"] / run["checkpoint"])
+                    _, _, item["checkpoint_metadata"] = prepare_checkpoint(
+                        run, config.get("checkpoint_policy", "validation_selected"))
                 plan["runs"].append(item)
             except Exception as error:
                 plan["runs"].append({**run, "ready": False, "error": str(error)})

@@ -81,7 +81,8 @@ def check_history(run_dir, epochs):
     rows = [json.loads(line) for line in (run_dir / 'history.jsonl').read_text().splitlines() if line.strip()]
     if [row.get('epoch') for row in rows] != list(range(1, epochs + 1)):
         raise ValueError(f'{run_dir}: history must contain exactly epochs 1..{epochs}')
-    if rows[-1].get('eval_stride') != 1 or not rows[-1].get('validation'):
+    if (rows[-1].get('eval_stride') != 1 or not rows[-1].get('validation')
+            or rows[-1].get('evaluated_samples') != 1599):
         raise ValueError(f'{run_dir}: final full validation is missing')
     for filename in ('last.pt', 'best_miou.pt', 'best_loss.pt'):
         if not (run_dir / filename).is_file() or (run_dir / filename).stat().st_size == 0:
@@ -89,6 +90,14 @@ def check_history(run_dir, epochs):
 
 
 def validate(plan):
+    if 'allocator' in plan and plan['allocator'] != 'expandable_segments:True':
+        raise ValueError('Allocator must be expandable_segments:True')
+    if 'config_snapshot_dir' in plan:
+        snapshot_dir = plan['config_snapshot_dir']
+        if (not isinstance(snapshot_dir, str) or not snapshot_dir
+                or not path(snapshot_dir).is_relative_to(path('runs/plans'))
+                or path(snapshot_dir) == path('runs/plans')):
+            raise ValueError('Configuration snapshots must be in a directory under runs/plans')
     modes = [key for key in ('followup', 'supersession', 'recovery') if key in plan]
     if len(modes) > 1:
         raise ValueError('Training queue modes are mutually exclusive')
@@ -104,17 +113,21 @@ def validate(plan):
     names, outputs, devices, lane_ids = set(), set(), set(), set()
     config_contents = {}
     for lane in plan['lanes']:
-        if lane['id'] in lane_ids or len(lane['gpus']) != 2 or devices.intersection(lane['gpus']):
+        if (lane['id'] in lane_ids or len(lane['gpus']) != 2 or len(set(lane['gpus'])) != 2
+                or devices.intersection(lane['gpus'])):
             raise ValueError('Lane IDs and GPU assignments must be unique')
         if not all(type(gpu) is int and gpu >= 0 for gpu in lane['gpus']):
             raise ValueError('GPU indices must be nonnegative integers')
         if followup:
             if lane['gpus'] not in ([0, 7], [5, 6]):
                 raise ValueError('Followup training permits only physical GPUs 0/7 and 5/6')
+        if followup or 'expected_gpu_uuids' in lane:
             uuids = lane.get('expected_gpu_uuids', {})
-            if (set(uuids) != {str(gpu) for gpu in lane['gpus']} or len(set(uuids.values())) != 2
+            if (not isinstance(uuids, dict) or set(uuids) != {str(gpu) for gpu in lane['gpus']}
                     or any(not isinstance(uuid, str) or not uuid.startswith('GPU-') for uuid in uuids.values())):
-                raise ValueError('Followup requires a frozen distinct UUID for each physical GPU')
+                raise ValueError('Expected a frozen UUID for each physical GPU')
+            if len(set(uuids.values())) != 2:
+                raise ValueError('Expected distinct frozen GPU UUIDs')
         lane_ids.add(lane['id'])
         devices.update(lane['gpus'])
         dep = lane['predecessor']
@@ -404,7 +417,7 @@ def gpu_occupancy(gpus):
 
 
 def freeze_configs(plan, config_contents):
-    snapshots = path('runs/plans/2026-10-23/configs')
+    snapshots = path(plan.get('config_snapshot_dir', 'runs/plans/2026-10-23/configs'))
     snapshots.mkdir(parents=True, exist_ok=True)
     for lane in plan['lanes']:
         for job in lane['jobs']:
@@ -505,8 +518,8 @@ class Queue:
                         self.update(lane, gpu_query_error=str(error), gpu_checked_at=now())
                         time.sleep(POLL_SECONDS)
                         continue
-                    if 'followup' in self.plan and gpu_state['gpu_uuids'] != lane['expected_gpu_uuids']:
-                        raise ValueError('Physical GPU UUID mapping differs from frozen followup')
+                    if 'expected_gpu_uuids' in lane and gpu_state['gpu_uuids'] != lane['expected_gpu_uuids']:
+                        raise ValueError('Physical GPU UUID mapping differs from frozen lane')
                     self.update(lane, **gpu_state, gpu_query_error=None, gpu_checked_at=now())
                     if not gpu_state['occupied']:
                         break
@@ -524,13 +537,15 @@ class Queue:
                 env.update(CUDA_DEVICE_ORDER='PCI_BUS_ID',
                            CUDA_VISIBLE_DEVICES=','.join(gpu_state['gpu_uuids'][str(gpu)] for gpu in lane['gpus']),
                            PYTHON=str(PYTHON), OMP_NUM_THREADS=env.get('OMP_NUM_THREADS', '4'))
+                if 'allocator' in self.plan:
+                    env['PYTORCH_CUDA_ALLOC_CONF'] = self.plan['allocator']
                 if 'recovery' in self.plan:
                     env['PYTORCH_CUDA_ALLOC_CONF'] = self.plan['recovery']['allocator']
                 if 'supersession' in self.plan:
                     env['PYTORCH_CUDA_ALLOC_CONF'] = self.plan['supersession']['allocator']
                 if 'followup' in self.plan:
                     env['PYTORCH_CUDA_ALLOC_CONF'] = self.plan['followup']['allocator']
-                if set(lane['gpus']) == {5, 6}:
+                if set(lane['gpus']) != {0, 7}:
                     env['NCCL_P2P_DISABLE'] = '1'
                 else:
                     env.pop('NCCL_P2P_DISABLE', None)

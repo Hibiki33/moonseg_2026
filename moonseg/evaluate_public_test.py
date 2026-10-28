@@ -29,6 +29,54 @@ PROFILES = {
     "single": {"sliding_window": False, "scales": [1.0], "flip": False},
     "narrowflip": {"sliding_window": False, "scales": [0.9, 1.0, 1.1], "flip": True},
 }
+CHECKPOINT_POLICIES = ("validation_selected", "final_epoch")
+
+
+def checkpoint_policy_metadata(policy):
+    if policy not in CHECKPOINT_POLICIES:
+        raise ValueError(f"Unknown checkpoint policy: {policy}")
+    selection = (
+        "Fixed-budget final checkpoint after all planned training epochs; no checkpoint score selection."
+        if policy == "final_epoch" else
+        "Existing local-validation checkpoint, fixed before public-test evaluation; "
+        "public-test metrics do not select checkpoints.")
+    return {"checkpoint_policy": policy, "checkpoint_selection": selection,
+            "comparison_scope": "Public development comparison; not an independent holdout."}
+
+
+def validate_final_checkpoint(config, checkpoint_path, checkpoint, expected_epochs=None):
+    """Validate trusted CPU checkpoint metadata before model construction or CUDA use."""
+    path = Path(checkpoint_path)
+    if path.name != "last.pt":
+        raise ValueError("final_epoch policy requires last.pt")
+    epochs = config.get("train", {}).get("epochs")
+    if type(epochs) is not int or epochs < 1 or (expected_epochs is not None and epochs != expected_epochs):
+        raise ValueError("Final checkpoint requires the planned resolved train.epochs")
+    epoch, step = checkpoint.get("epoch"), checkpoint.get("global_step")
+    if type(epoch) is not int or epoch + 1 != epochs or type(step) is not int or step < 1:
+        raise ValueError("Final checkpoint epoch/global_step does not complete resolved train.epochs")
+    if not isinstance(checkpoint.get("model"), dict):
+        raise ValueError("Final checkpoint has no model weights")
+    saved = checkpoint.get("config", {})
+    for section in ("data", "model", "loss", "inference"):
+        if not isinstance(saved, dict) or saved.get(section) != config.get(section):
+            raise ValueError(f"Final checkpoint differs from resolved {section} configuration")
+    transient = {"resume", "output_dir", "log_every", "save_every", "ema"}
+    old_train = saved.get("train")
+    if not isinstance(old_train, dict) or (
+            {key: value for key, value in old_train.items() if key not in transient}
+            != {key: value for key, value in config["train"].items() if key not in transient}):
+        raise ValueError("Final checkpoint differs from resolved critical train configuration")
+    rows = [json.loads(line) for line in (path.parent / "history.jsonl").read_text().splitlines() if line.strip()]
+    if [row.get("epoch") for row in rows] != list(range(1, epochs + 1)):
+        raise ValueError(f"Final checkpoint requires complete history epochs 1..{epochs}")
+    final = rows[-1]
+    if type(final.get("global_step")) is not int or final["global_step"] != step:
+        raise ValueError("Final checkpoint global_step differs from final training history")
+    if final.get("evaluated_samples") != 1599 or final.get("eval_stride") != 1:
+        raise ValueError("Final checkpoint history requires full scene-5 validation")
+    if "total_steps" in checkpoint and checkpoint["total_steps"] != step:
+        raise ValueError("Final checkpoint has not completed its fixed optimizer-step budget")
 
 
 def file_identity(path):
@@ -93,7 +141,7 @@ class PublicTestResearchDataset(Dataset):
                 "sample_id": str(record["sample_id"]), "scene": int(record["scene"])}
 
 
-def research_result(metrics, dataset):
+def research_result(metrics, dataset, checkpoint_policy="validation_selected"):
     metrics = dict(metrics)
     metrics.pop("val_loss", None)
     pooled = {key: value for key, value in metrics.items() if key not in {"scenes", "evaluated_samples"}}
@@ -108,8 +156,7 @@ def research_result(metrics, dataset):
         official_score=False,
         metric_scope="Offline public-test research only. Pooled pixels and equal scene macro are reported; "
                      "neither is the official organizer-weighted total.",
-        checkpoint_selection="Existing local-validation checkpoint, fixed before public-test evaluation; "
-                             "public-test metrics do not select checkpoints.",
+        **checkpoint_policy_metadata(checkpoint_policy),
         data_root=str(dataset.root), manifest=str(dataset.manifest_path),
         label_usage="Confusion metrics only; no loss, training, BN adaptation or parameter updates.")
     return metrics
@@ -135,6 +182,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", required=True, help="Original resolved training config")
     parser.add_argument("--checkpoint", required=True)
+    parser.add_argument("--checkpoint-policy", choices=CHECKPOINT_POLICIES, default="validation_selected")
     parser.add_argument("--weights", choices=["model"], default="model")
     parser.add_argument("--data-root", default="data/research_test/LuSNAR")
     parser.add_argument("--manifest", default="data/research_test/manifest.json")
@@ -146,12 +194,16 @@ def main():
     if int(os.environ.get("WORLD_SIZE", "1")) != 1:
         raise ValueError("Research evaluator runs as one process per GPU")
     config = load_config(args.config)
-    configure_torch_backends(config.get("train", {}))
-    dataset = PublicTestResearchDataset(args.data_root, args.manifest, config["data"])
+    if args.checkpoint_policy == "final_epoch" and Path(args.checkpoint).name != "last.pt":
+        raise ValueError("final_epoch policy requires last.pt")
     identity = file_identity(args.checkpoint)
     checkpoint = load_checkpoint(args.checkpoint)
     if file_identity(args.checkpoint) != identity:
         raise ValueError("Checkpoint changed while loading")
+    if args.checkpoint_policy == "final_epoch":
+        validate_final_checkpoint(config, args.checkpoint, checkpoint)
+    configure_torch_backends(config.get("train", {}))
+    dataset = PublicTestResearchDataset(args.data_root, args.manifest, config["data"])
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     from .models import build_model
     model = build_model(config, load_backbone=True).to(device)
@@ -164,7 +216,7 @@ def main():
                              num_workers=config.get("train", {}).get("num_workers", 2), criterion=None)
     if file_identity(args.checkpoint) != identity:
         raise ValueError("Checkpoint changed during evaluation")
-    result = research_result(metrics, dataset)
+    result = research_result(metrics, dataset, args.checkpoint_policy)
     result.update(checkpoint=str(Path(args.checkpoint).resolve()), checkpoint_epoch=checkpoint.get("epoch", -1) + 1,
                   global_step=checkpoint.get("global_step"), checkpoint_file_identity=identity,
                   selected_by=checkpoint.get("selected_by"), weights=weights,

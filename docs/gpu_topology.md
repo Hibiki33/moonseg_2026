@@ -51,6 +51,8 @@
 
 当前两条基线的卡位见 [training.md](training.md#gpu-放置与启动)，命令见 [README](../README.md#训练验证与推理)。Ada 对 PCI 0/7 是脚本默认值；A6000 对 PCI 5/6 启动时必须加 `CUDA_VISIBLE_DEVICES=5,6 NCCL_P2P_DISABLE=1`。混合 Ada 与 A6000 组 DDP 时整体按 A6000 的速度运行。
 
+2026-10-29 用户授权寻找空卡恢复两项消融，启动前 0/1/3/4/5/7 空闲、2/6 被其他项目占用。本批 decoder9 在 0/7，grad_clip0.01 在 4/5，1/3 用于单卡评估；两组训练均保持 batch8×2×累积4=64。4/5 为此前未单独验证裸 P2P 的 A6000 对，明确设置 `NCCL_P2P_DISABLE=1`；普通训练队列现对所有非 0/7 对关闭 P2P，0/7 保留原通路。两组均固定 PCI_BUS_ID、GPU UUID 与 expandable_segments:True；后续启动按实际占用重新检查，不以历史空闲记录作为可用保证。
+
 ## 显存与吞吐容量
 
 实际运行（2026-10-21 基线，每卡 batch 8、EMA 开、真实数据，`nvidia-smi` 读数）：ViT-L 在 PCI 0/7 每卡约 45.6 GB，ViT-B 在 PCI 5/6 每卡约 40.9 GB。
