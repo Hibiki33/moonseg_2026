@@ -1,32 +1,32 @@
 # 训练配方
 
-更新：2026-10-22。两条开发池基线已于 2026-10-21 晚启动（ViT-L/16 在 PCI 0/7，ViT-B/16 在 PCI 5/6），精度结果待填，记在 [roadmap.md](roadmap.md#实验记录)。2026-10-22 起训练不再使用 EMA，并按验证 mIoU 与验证损失分别保存最佳 checkpoint（见[验证协议](#验证协议)）；这两条基线启动于此改动之前，仍带 EMA 并写 `best.pt`。两份配置 [`configs/dnv3_va_m2f_vitb16.yaml`](../configs/dnv3_va_m2f_vitb16.yaml) 与 [`configs/dnv3_va_m2f_vitl16.yaml`](../configs/dnv3_va_m2f_vitl16.yaml) 只有骨干、权重路径和输出目录不同；配置是取值的唯一事实来源，本文给出每项的理由。这些设置是本项目的工程选择：LuSNAR 论文没有报告训练配方（见 [paper_alignment.md](paper_alignment.md)），这里也不声称已验证精度最优。
+更新：2026-10-29。后续新训练以 [`configs/dnv3_va_m2f_vitl16_default.yaml`](../configs/dnv3_va_m2f_vitl16_default.yaml) 为模板：冻结ViT-L、RRC、梯度裁剪0.01、decoder6层/hidden_dim256，五场景训练、场景5验证、有效batch64。复制模板时设置独立输出目录；25轮只是已测参考预算，最合适轮数尚待校准。用户要求完整训练并使用末轮last.pt，不early stop；best_miou/best_loss可继续保存作诊断，不用于后续末轮对照。现有结果见 [roadmap.md](roadmap.md#实验记录)。历史B/L的80轮、warmup/EMA配方及其YAML保留用于追溯，不能再当成新训练默认。
 
 ## 配方与理由
 
 | 项目 | 当前值 | 理由 |
 |---|---|---|
-| 模型 | 冻结 DINOv3 ViT-B/16 或 ViT-L/16（LVD-1689M）+ 官方 ViT-Adapter + Mask2Former；100 query、hidden 256、pixel encoder 6 层、decoder 6 层 | 用户确定的主线；可训练参数 28.7M（B）/ 35.6M（L）。结构见 [model.md](model.md) |
+| 模型 | 冻结 DINOv3 ViT-L/16（LVD-1689M）+ 官方 ViT-Adapter + Mask2Former；100 query、hidden 256、pixel encoder 6 层、decoder 6 层 | 当前主线；decoder9的末轮对照未提升，结构见 [model.md](model.md) |
 | 骨干 | `freeze_backbone: true`、`unfreeze_last_blocks: 0` | 先把冻结方案训到收敛；部分解冻是候选 |
-| 输入 | `train_mode: full_image`，1024×1024，原图同尺寸时不重采样 | 标签与绝对行号强相关，裁剪会丢上下文（[data.md](data.md#位置相关的标注惯例)） |
-| 几何增强 | 同步水平翻转 p=0.5 | 所查分割实现均采用；保留上下关系 |
+| 输入 | `train_mode: random_resize_crop`，1024×1024 | 沿用L1基线；未加入场景5训练 |
+| 几何增强 | resize_range 0.5–2.0，1024裁剪，cat_max_ratio0.75，水平翻转p=0.5 | 已完成L0/L1/L2比较，详细类别取舍见roadmap |
 | 光度增强 | 亮度加性 U[−32,32]、对比度乘性 U[0.5,1.5]，各自独立 p=0.5；随后 `pixel_floor: 22` | DINOv3/MMSeg PhotoMetricDistortion 的标准强度；下限等于渲染器黑位 22 |
 | 其余增强 | gamma、阴影、尺度抖动的概率为 0 | 已实现，默认关闭（[augmentation_research.md](augmentation_research.md)） |
 | 归一化 | ImageNet mean/std | DINOv3 预训练输入约定 |
 | 损失 | Hungarian 匹配；CE / mask BCE / Dice = 2 / 5 / 5，no-object 0.1，12544 个采样点，每个解码层深监督 | Mask2Former 原始配方 |
 | 有效 batch | 每卡 8 × 2 卡 × 累积 4 = 64；`min_effective_batch: 64` | 用户要求不低于 64；每卡 8 在 48 GB 卡上可运行，ViT-L 实际每卡约 45.6 GB（[gpu_topology.md](gpu_topology.md#显存与吞吐容量)） |
 | 优化器 | AdamW，lr 2e-4，weight decay 0.05（偏置、一维张量和嵌入表不衰减）；`backbone_lr_multiplier: 0.1` 只在 ViT 可训练时生效 | Mask2Former 原配方 batch 16 / lr 1e-4，按 √(64/16) 缩放到 2e-4 |
-| 调度 | 线性 warmup 250 次更新（起点 0.001×），随后 poly 0.9 降到 0 | warmup 约 2.5 个开发 epoch；poly 0.9 同 Mask2Former |
-| 梯度裁剪 | 全局 L2 0.1，日志记录裁剪前范数 | 工程选择；Mask2Former 原配方为全模型 0.01，作为候选消融 |
+| 调度 | 无warmup，poly0.9按预设总更新数降到0 | 不同训练轮数的学习率轨迹不同；完整短训练不能由长训练中途快照替代 |
+| 梯度裁剪 | 全局 L2 **0.01**，日志记录裁剪前范数 | 用户10-29指定后续默认；省略grad_clip时解析为0.01，显式0禁用，历史显式0.1保持 |
 | 数值 | BF16 autocast + TF32，`cudnn_benchmark: true`；匹配、损失与可变形注意力在 FP32 | 速度；数值语义见 model.md |
 | 可变形注意力 | `deformable_attention: auto`，选中已编译的官方 CUDA 扩展 | 比纯 PyTorch 路径省约 10.7 GiB、快约 31%（[gpu_topology.md](gpu_topology.md#显存与吞吐容量)） |
 | 激活检查点 | `gradient_checkpointing: true` | 关闭只快约 8%，但每卡多约 9 GiB |
 | EMA | 不使用（2026-10-22 移除；配置含 `train.ema` 会报错） | 所查官方分割配方都不用 EMA；两条基线中它只平滑了漂移的轨迹（见[验证协议](#验证协议)） |
-| 训练长度 | 80 epoch：开发池 8000 次更新，全训练池 10000 次 | 初始预算；更新次数少于常见配方（见[参考配方与证据](#参考配方与证据)），按验证曲线调整 |
+| 训练长度 | 模板25轮，五场景2500次更新；最优预算未定 | 下一批候选12/18轮完整训练，对照现有25轮clip001末权重；尚未启动 |
 | 采样 | `sampling.mode: uniform`，每轮重新打乱 | 稀有类采样已实现，作为候选 |
 | 数据 | 开发池 `dev_train.json`（场景 1/3/6/7/8，6403 帧）训练，`dev_val.json`（场景 5，1599 帧）验证 | 官方清单到位前的开发通道（[data.md](data.md#公开训练场景开发池)） |
 | 验证 | 每轮验证 mIoU 与验证损失；中间轮 `eval_stride: 2`（800 帧），最后一轮全量 1599 帧 | 隔帧抽样的类别占比偏差 ≤0.4%（[data.md](data.md#时间冗余)） |
-| 推理 | 整图、单尺度、无翻转（`sliding_window: false`、`scales: [1.0]`、`flip: false`） | 与整图训练一致；TTA 是候选 |
+| 推理 | 模板为整图单尺度；公开评估另测0.9/1.0/1.1+翻转TTA | TTA已有正向证据；比较必须使用相同推理设置和末轮权重 |
 | checkpoint | 每轮覆盖 `last.pt`；验证 mIoU 新高时覆盖 `best_miou.pt`，验证损失新低时覆盖 `best_loss.pt`；`save_every: 0` | 不存冻结骨干；格式见 [model.md](model.md#checkpoints) |
 | 其他 | seed 42，`num_workers: 4`，`log_every: 10` | 4 个 worker 每 rank 约 21 img/s，远高于训练需求（[gpu_topology.md](gpu_topology.md#显存与吞吐容量)） |
 

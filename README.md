@@ -2,10 +2,10 @@
 
 LuSNAR 月面五类语义分割。类别编号固定为月壤 0、岩石 1、撞击坑 2、山体 3、天空 4；输入仅左相机 RGB。比赛规则见 [challenge.md](challenge.md)。
 
-## 当前状态（2026-10-21 晚）
+## 当前状态（2026-10-29）
 
-- 配方：冻结 DINOv3 + 官方 ViT-Adapter + Mask2Former，1024×1024 整图，每卡 8 × 2 卡 × 累积 4 = 有效 batch 64（要求不低于 64）。两份配置 `configs/dnv3_va_m2f_vitb16.yaml` 与 `configs/dnv3_va_m2f_vitl16.yaml` 只差骨干；取值与理由见 [docs/training.md](docs/training.md)。
-- 两条开发池基线已于 2026-10-21 晚启动：ViT-L/16 在 PCI 0/7，ViT-B/16 在 PCI 5/6。精度结果待填，见 [docs/roadmap.md](docs/roadmap.md)。
+- 默认配方：冻结 DINOv3 ViT-L + ViT-Adapter + Mask2Former，1024×1024 RRC，decoder6层/hidden256，梯度裁剪 **0.01**，每卡8×两卡×累积4=有效batch64。后续从 [默认模板](configs/dnv3_va_m2f_vitl16_default.yaml) 派生独立实验，历史配置保持原值；详见 [训练说明](docs/training.md)。
+- 最新clip0.01与decoder9两项训练和6项末轮评估已完成，当前无排队任务；后续完整跑完固定预算并取last.pt，训练轮数仍待校准。结果见 [路线记录](docs/roadmap.md)。
 - 数据：九个 LuSNAR 原始包已完整下载（52,301,555,752 字节），整理出 8002 对训练 RGB/标签与 5004 张测试 RGB。官方清单到位前使用公开训练场景开发池（`data.development_pool: true`），最终提交模型必须在组织方清单上从骨干重训，边界见 [docs/data.md](docs/data.md)。
 - 官方训练包计划 10 月 22 日起发放；正式样本清单与场景权重尚未取得。
 - 环境与资产：uv 独立管理 Python 3.12.15 与 `.venv`（`uv.lock` 已生成，`uv pip check` 通过）；固定版本 DINOv3 源码与 ModelScope ViT-B/16、ViT-L/16 权重已就绪；官方 MSDeformAttn CUDA 扩展已编译（`build/ms_deform_attn/`）。
@@ -115,8 +115,8 @@ uv run --no-sync python tools/label_stats.py --manifest data/manifests/dev_train
 # 一次性：编译官方可变形注意力 CUDA 扩展（需要一张可见 GPU，约 40 秒）
 bash scripts/build_ops.sh
 
-# ViT-L/16 基线：PCI 0/7（脚本默认），场景 5 验证
-PYTHON=.venv/bin/python bash scripts/train.sh configs/dnv3_va_m2f_vitl16.yaml
+# ViT-L/16 默认模板：PCI 0/7，场景5验证；新实验须复制配置并设置唯一output_dir
+PYTHON=.venv/bin/python bash scripts/train.sh configs/dnv3_va_m2f_vitl16_default.yaml
 
 # ViT-B/16 基线：PCI 5/6。该卡对的 PCIe P2P 有故障，必须关闭 NCCL P2P
 CUDA_VISIBLE_DEVICES=5,6 NCCL_P2P_DISABLE=1 PYTHON=.venv/bin/python \

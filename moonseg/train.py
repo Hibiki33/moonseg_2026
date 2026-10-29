@@ -26,7 +26,7 @@ from .utils import (amp_context, atomic_torch_save, configure_torch_backends, in
 # its register tokens storage_tokens; register_tokens is kept for other ViT implementations.
 NO_DECAY_NAMES = ("pos_embed", "cls_token", "register_tokens", "storage_tokens", "mask_token",
                   "level_embed", "level_encoding", "query_feat", "query_embed")
-TRAIN_DEFAULTS = {"tf32": True, "cudnn_benchmark": True, "eval_stride": 1,
+TRAIN_DEFAULTS = {"tf32": True, "cudnn_benchmark": True, "eval_stride": 1, "grad_clip": 0.01,
                   "sampling": {"mode": "uniform", "temperature": 0.01, "min_pixels": 1}}
 # Only last.pt (and epoch_XXX.pt) hold these; best_miou.pt/best_loss.pt are inference-only.
 RESUME_KEYS = ("optimizer", "scheduler", "scaler", "rng_states")
@@ -91,7 +91,7 @@ def resolve_train_settings(settings):
         raise ValueError("train.eval_stride must be a positive integer")
     if settings["sampling"]["mode"] not in ("uniform", "rare_class"):
         raise ValueError("train.sampling.mode must be uniform or rare_class")
-    if float(settings.get("grad_clip", 0.1)) < 0:
+    if float(settings["grad_clip"]) < 0:
         raise ValueError("train.grad_clip must be nonnegative; 0 disables clipping")
     return settings
 
@@ -237,7 +237,7 @@ def main():
     scheduler = make_scheduler(optimizer, total_steps, settings)
     amp = settings.get("amp", "bf16")
     scaler = torch.amp.GradScaler("cuda", enabled=device.type == "cuda" and amp == "fp16")
-    grad_clip = float(settings.get("grad_clip", 0.1))
+    grad_clip = float(settings["grad_clip"])
     start_epoch, global_step, best = 0, 0, initial_best()
     if resume_path:
         checkpoint = load_checkpoint(resume_path)
