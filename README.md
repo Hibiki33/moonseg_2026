@@ -5,7 +5,7 @@ LuSNAR 月面五类语义分割。类别编号固定为月壤 0、岩石 1、撞
 ## 当前状态（2026-10-29）
 
 - 默认配方：冻结 DINOv3 ViT-L + ViT-Adapter + Mask2Former，1024×1024 RRC，decoder6层/hidden256，梯度裁剪 **0.01**，每卡8×两卡×累积4=有效batch64。后续从 [默认模板](configs/dnv3_va_m2f_vitl16_default.yaml) 派生独立实验，历史配置保持原值；详见 [训练说明](docs/training.md)。
-- clip0.01与decoder9两项训练和6项末轮评估已完成；width384也已完成25轮，末轮场景5验证90.497%。公开测试原等待1/3空卡，现单尺度已在0运行，TTA等待0或7空闲，尚无分数。12/18轮搜索继续暂缓，数据划分保持原状。状态与结果见 [路线记录](docs/roadmap.md)。
+- clip0.01、decoder9、width384及各自末轮评估均已完成。width384的场景9 TTA87.892%低于同clip0.01的width256基线88.021%，三个公开场景mIoU均下降，默认保持6层/width256/clip0.01。当前无排队任务；12/18轮搜索继续暂缓，数据划分保持原状。状态与结果见 [路线记录](docs/roadmap.md)。
 - 数据：九个 LuSNAR 原始包已完整下载（52,301,555,752 字节），整理出 8002 对训练 RGB/标签与 5004 张测试 RGB。官方清单到位前使用公开训练场景开发池（`data.development_pool: true`），最终提交模型必须在组织方清单上从骨干重训，边界见 [docs/data.md](docs/data.md)。
 - 官方训练包计划 10 月 22 日起发放；正式样本清单与场景权重尚未取得。
 - 环境与资产：uv 独立管理 Python 3.12.15 与 `.venv`（`uv.lock` 已生成，`uv pip check` 通过）；固定版本 DINOv3 源码与 ModelScope ViT-B/16、ViT-L/16 权重已就绪；官方 MSDeformAttn CUDA 扩展已编译（`build/ms_deform_attn/`）。
