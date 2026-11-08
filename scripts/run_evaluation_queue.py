@@ -58,6 +58,12 @@ def absolute(path):
     return path if path.is_absolute() else ROOT / path
 
 
+def python_path(value):
+    # Preserve bin/python itself so Python still recognizes its virtualenv.
+    path = absolute(value)
+    return path.parent.resolve() / path.name
+
+
 def process_info(pid):
     """Linux process start ticks prevent confusing a reused PID with a dependency."""
     try:
@@ -449,7 +455,7 @@ class Queue:
                 env.pop(variable, None)
             env.update(CUDA_DEVICE_ORDER="PCI_BUS_ID", CUDA_VISIBLE_DEVICES=snapshot[gpu]["uuid"],
                        NCCL_P2P_DISABLE="1", OMP_NUM_THREADS="4", PYTHONUNBUFFERED="1")
-            command = [str(absolute(self.config["python"])), "-m", "moonseg.evaluate", "--config",
+            command = [str(python_path(self.config["python"])), "-m", "moonseg.evaluate", "--config",
                        job["config_path"], "--checkpoint", job["checkpoint_path"], "--weights", "model",
                        "--output", str(partial)]
             job.update(status="launching", gpu=gpu, gpu_uuid=snapshot[gpu]["uuid"], command=command,
@@ -514,6 +520,7 @@ class Queue:
 
 
 def main():
+    os.chdir(ROOT)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", default="runs/plans/2026-10-23/evaluation.json")
     parser.add_argument("--dry-run", action="store_true")
@@ -539,7 +546,6 @@ def main():
                 plan["runs"].append({**run, "ready": False, "error": str(error)})
         print(json.dumps(plan, indent=2))
         return 0
-    os.chdir(ROOT)
     return Queue(config).run()
 
 

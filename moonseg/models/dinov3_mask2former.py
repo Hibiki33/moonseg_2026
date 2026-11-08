@@ -88,7 +88,7 @@ def _enable_torch_deformable_attention(ops):
 
 def _load_deformable_attention_extension(directory=None):
     """Import the compiled official extension; return (module, None) or (None, reason)."""
-    directory = Path(directory or os.environ.get("MOONSEG_MSDA_DIR") or DEFAULT_EXTENSION_DIR).expanduser()
+    directory = Path(directory or os.environ.get("MOONSEG_MSDA_DIR") or DEFAULT_EXTENSION_DIR).expanduser().resolve()
     manifest = directory / "build_manifest.json"
     if manifest.is_file():
         built = json.loads(manifest.read_text(encoding="utf-8"))

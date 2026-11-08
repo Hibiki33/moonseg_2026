@@ -67,7 +67,9 @@
 | `runs/dnv3_va_m2f_vitl16` | `dnv3_va_m2f_vitl16.yaml` | 0、7（RTX 6000 Ada） | 无（脚本默认 `CUDA_VISIBLE_DEVICES=0,7`） | 约 45.6 GB |
 | `runs/dnv3_va_m2f_vitb16` | `dnv3_va_m2f_vitb16.yaml` | 5、6（RTX A6000） | `CUDA_VISIBLE_DEVICES=5,6 NCCL_P2P_DISABLE=1` | 约 40.9 GB |
 
-启动、恢复、评估和预测命令见 [README](../README.md#训练验证与推理)。启动脚本固定 `CUDA_DEVICE_ORDER=PCI_BUS_ID`；PCI 5/6 卡对的 PCIe P2P 会静默丢数据，必须关闭 NCCL P2P，原因见 [gpu_topology.md](gpu_topology.md)。`runs` 是指向本地盘 `/home/disk02/wjj/moonseg/runs` 的软链接，不写 NAS。只能从 `last.pt` 恢复，且配置、数据清单和进程数必须与原运行一致；唯一例外是 EMA 时代的 `last.pt` 记录的 `train.ema`，恢复时被忽略。
+启动、恢复、评估和预测命令见 [README](../README.md#训练验证与推理)。后续统一从本地完整checkout启动，本机为 `/home/disk02/wjj/moonseg/code`；旧NAS入口不会自动迁移。脚本先切物理代码目录，直接使用本地venv；解释器本体/标准库、源码、`third_party`和CUDA扩展均须在本地，不能只移动数据和输出。已启动的原A/B训练暂不停止或重启，其现有路径依赖保留。数据根目录与训练输出仅在运行时解析成物理路径，不改原配置、清单、来源记录或恢复比较。
+
+启动脚本固定 `CUDA_DEVICE_ORDER=PCI_BUS_ID`；PCI 5/6 卡对的 PCIe P2P 会静默丢数据，必须关闭 NCCL P2P，原因见 [gpu_topology.md](gpu_topology.md)。`runs` 是指向本地盘 `/home/disk02/wjj/moonseg/runs` 的软链接，不写 NAS。只能从 `last.pt` 恢复，且配置、数据清单和进程数必须与原运行一致；唯一例外是 EMA 时代的 `last.pt` 记录的 `train.ema`，恢复时被忽略。
 
 ## 预期墙钟时间
 

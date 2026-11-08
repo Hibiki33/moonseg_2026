@@ -176,8 +176,10 @@ LoRA（用户明确不考虑）；混合训练（用户要求先移除）；7B �
 
 ### 环境与路径
 
-- 当前开发和新训练使用 `/home/disk02/wjj/moonseg/code`；原A/B已启动进程仍保留NAS运行目录，不迁移或重启。数据、权重、运行输出、引用PDF和新DA3的CUDA扩展均在本地盘 `/home/disk02/wjj/moonseg/`，通过软链访问。
-- 解释器 `.venv/bin/python`（uv 管理，`uv` 不在 PATH 时用 `PYTHON=.venv/bin/python` 传给脚本）。
+- 当前开发和后续训练/验证/公开测试队列/预测使用 `/home/disk02/wjj/moonseg/code` 的完整本地checkout；原A/B已启动进程仍保留NAS运行目录，不迁移或重启。数据、权重、运行输出、引用PDF和新DA3的CUDA扩展均在本地盘 `/home/disk02/wjj/moonseg/`，通过软链访问。旧NAS入口未更新，不会自动转发，不能从旧目录启动新任务。
+- 解释器 `.venv/bin/python`（uv 管理，训练/预测脚本默认直接使用，无需经过uv；可用 `PYTHON` 指定本地venv）。11-08已将本地venv中解释器链接、`pyvenv.cfg`、editable源码映射、激活脚本和console脚本shebang的NAS引用修到disk02，沿用原Python3.12.15与依赖；不重建环境。已在运行的A/B及DA3训练保存的解释器base路径不会随之更新，暂不重启。其他机器通过 `MOONSEG_STORAGE_ROOT` 安装自己的本地环境。
+- shell入口和四个计划/队列入口先切到物理代码目录；新子进程使用本地venv物理目录下的 `bin/python`，数据根目录及训练/预测输出一次解析为实际路径。配置和样本记录保留原值，不改变来源、采样或恢复比较。直接模块命令同样先切本地checkout，并核对自定义源码/扩展路径没有指向NAS。
+- 两条等待中的公开测试队列已从修正后的本地环境恢复，原计划与任务状态保留：DINO父权重/A/B共6项、DA3共2项，每队列最多并行2个单卡任务；训练进程未停止。新进程读取真实训练/测试样本并加载本地扩展的文件访问跟踪未发现NAS路径，入口与迁移证据见[evidence/local_runtime_migration_20261108.json](evidence/local_runtime_migration_20261108.json)。
 - CUDA 扩展：`bash scripts/build_ops.sh` 一次；`model.deformable_attention: auto` 自动选用，日志首行会打印 `deformable attention: cuda`。
 
 ### 启动训练

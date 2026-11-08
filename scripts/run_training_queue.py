@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-PYTHON = ROOT / '.venv/bin/python'
+PYTHON = (ROOT / '.venv').resolve() / 'bin/python'
 POLL_SECONDS = 30
 
 
@@ -591,6 +591,7 @@ class Queue:
 
 
 def main():
+    os.chdir(ROOT)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--plan', type=Path, default=ROOT / 'runs/plans/2026-10-23/training.json')
     parser.add_argument('--dry-run', action='store_true')

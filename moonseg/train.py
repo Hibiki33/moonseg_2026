@@ -343,7 +343,7 @@ def main():
     if world_size > 1:
         model = DistributedDataParallel(model, device_ids=[device.index] if device.type == "cuda" else None,
                                         find_unused_parameters=False, broadcast_buffers=True)
-    output = Path(settings.get("output_dir", "runs/moonseg"))
+    output = Path(settings.get("output_dir", "runs/moonseg")).resolve()
     if rank == 0:
         runtime = {"deformable_attention": unwrap_model(model).deformable_attention,
                    "torch": torch.__version__, **backends}

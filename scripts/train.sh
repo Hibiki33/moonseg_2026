@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")/.."
+cd -P -- "$(dirname "${BASH_SOURCE[0]}")/.."
 # Physical GPU 0,7 map to local cuda:0,cuda:1 inside torchrun workers.
 # Build the compiled deformable attention once (bash scripts/build_ops.sh); otherwise
 # model.deformable_attention=auto warns and falls back to the slower PyTorch path.
@@ -10,6 +10,11 @@ export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES-0,7}"
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-4}"
 config="${1:-configs/dnv3_va_m2f_vitb16.yaml}"
 if [[ $# -gt 0 ]]; then shift; fi
-if [[ -n "${PYTHON:-}" ]]; then runner=("$PYTHON"); else runner=(uv run --no-sync python); fi
+# Resolve the environment directory, not bin/python's final symlink: Python must
+# still discover pyvenv.cfg. Launch directly so uv need not inspect a NAS checkout.
+python="${PYTHON:-.venv/bin/python}"
+if [[ "$python" != */* ]]; then python="$(command -v -- "$python")"; fi
+python="$(cd -P -- "$(dirname -- "$python")" && pwd)/$(basename -- "$python")"
+runner=("$python")
 exec "${runner[@]}" -m torch.distributed.run --standalone --nproc_per_node="${NPROC_PER_NODE:-2}" \
   -m moonseg.train --config "$config" "$@"

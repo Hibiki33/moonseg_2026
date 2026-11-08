@@ -153,7 +153,8 @@ def main():
         device, rank, world_size = torch.device(args.device), 0, 1
         if device.type == "cuda":
             torch.cuda.set_device(device)
-    records = load_manifest(args.manifest, config["data"]["root"], TEST_SCENES,
+    data_root = Path(config["data"]["root"]).resolve()
+    records = load_manifest(args.manifest, data_root, TEST_SCENES,
                             args.official_test_allowlist, need_label=False)
     require_complete_allowlist(records, read_allowlist(args.official_test_allowlist))
     from .models import build_model
@@ -167,13 +168,13 @@ def main():
     model.eval()
     inference = config.get("inference", {})
     amp = config.get("train", {}).get("amp", "none")
-    output = Path(args.output)
+    output = Path(args.output).resolve()
     output.mkdir(parents=True, exist_ok=True)
     predictions = []
     # Strided assignment has no repeated padding samples and gives each PNG one writer.
     for index in range(rank, len(records), world_size):
         record = records[index]
-        with Image.open(Path(config["data"]["root"]) / record["image"]) as handle:
+        with Image.open(data_root / record["image"]) as handle:
             image = handle.convert("RGB")
         tensor = normalize_image(image, config["data"]).to(device)
         scores = predict_scores(model, tensor, inference, amp, num_classes)

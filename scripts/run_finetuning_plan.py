@@ -17,6 +17,7 @@ from moonseg.utils import load_config
 
 
 def main():
+    os.chdir(ROOT)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--plan', required=True)
     args = parser.parse_args()
@@ -92,7 +93,7 @@ def main():
         env = os.environ.copy()
         env.update(CUDA_DEVICE_ORDER='PCI_BUS_ID', CUDA_VISIBLE_DEVICES=','.join(map(str, gpus)),
                    PYTORCH_CUDA_ALLOC_CONF='expandable_segments:True',
-                   PYTHON=str(ROOT / '.venv/bin/python'), OMP_NUM_THREADS='4', NPROC_PER_NODE='2')
+                   PYTHON=str((ROOT / '.venv').resolve() / 'bin/python'), OMP_NUM_THREADS='4', NPROC_PER_NODE='2')
         if gpus in ([4, 5], [2, 3]):
             env['NCCL_P2P_DISABLE'] = '1'
         else:

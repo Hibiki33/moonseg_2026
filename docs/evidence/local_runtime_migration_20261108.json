@@ -1,0 +1,129 @@
+{
+  "verified_at": "2026-11-08T15:16:41.764918+00:00",
+  "scope": "New local Python process imports train/test data code and local CUDA extension, reads one real training and one public-test sample on CPU; all file syscalls traced. Existing training processes are not restarted or traced.",
+  "trace_file": "/home/disk02/wjj/moonseg/verification/local_runtime_files_20261108.strace",
+  "traced_lines": 416863,
+  "nas_file_access_lines": 0,
+  "cuda_initialized": false,
+  "train_root": "/home/disk02/wjj/moonseg/data/LuSNAR",
+  "test_root": "/home/disk02/wjj/moonseg/data/research_test/LuSNAR",
+  "code_root": "/home/disk02/wjj/moonseg/code",
+  "venv": "/home/disk02/wjj/moonseg/.venv",
+  "queue_migrations": [
+    {
+      "migrated_at": "2026-11-08T15:14:14.820185+00:00",
+      "old_parent_pid": 157459,
+      "old_parent_start_ticks": 664681501,
+      "new_parent_pid": 601364,
+      "new_parent_start_ticks": 665469605,
+      "cwd": "/home/disk02/wjj/moonseg/code",
+      "command": [
+        "/home/disk02/wjj/moonseg/.venv/bin/python",
+        "-u",
+        "scripts/run_public_test_queue.py",
+        "--config",
+        "/home/disk02/wjj/moonseg/runs/plans/2026-11-08/fullft/public_test.json"
+      ],
+      "plan_unchanged": true,
+      "pending_jobs_preserved": 6,
+      "training_processes_signalled": false,
+      "log": "/home/disk02/wjj/moonseg/runs/plans/2026-11-08/fullft/public_test.local_runtime.log",
+      "new_parent_cwd_verified": "/home/disk02/wjj/moonseg/code"
+    },
+    {
+      "migrated_at": "2026-11-08T15:15:11.460114+00:00",
+      "old_parent_pid": 539034,
+      "old_parent_start_ticks": 665365734,
+      "new_parent_pid": 604855,
+      "new_parent_start_ticks": 665475269,
+      "cwd": "/home/disk02/wjj/moonseg/code",
+      "command": [
+        "/home/disk02/wjj/moonseg/.venv/bin/python",
+        "-u",
+        "scripts/run_public_test_queue.py",
+        "--config",
+        "/home/disk02/wjj/moonseg/runs/plans/2026-11-08/da3mono_frozen/public_test.json"
+      ],
+      "plan_unchanged": true,
+      "pending_jobs_preserved": 2,
+      "training_processes_signalled": false,
+      "log": "/home/disk02/wjj/moonseg/runs/plans/2026-11-08/da3mono_frozen/public_test.local_runtime.log",
+      "reason": "Restart only idle evaluator supervisor after fixing venv interpreter/stdlib paths; leave live training untouched",
+      "new_parent_cwd_verified": "/home/disk02/wjj/moonseg/code"
+    }
+  ],
+  "training_processes": [
+    {
+      "pid": 145216,
+      "start_ticks": 664657647,
+      "same_original_process": true
+    },
+    {
+      "pid": 150744,
+      "start_ticks": 664667392,
+      "same_original_process": true
+    },
+    {
+      "pid": 539262,
+      "start_ticks": 665365924,
+      "same_original_process": true
+    }
+  ],
+  "existing_process_limit": "Already running training can retain its original cwd, loaded source/extensions and Python base_prefix; local files/environment changes do not migrate that live process.",
+  "entry_cpu_checks": {
+    "python_syntax": "passed",
+    "run_training_queue_cwd": "/home/disk02/wjj/moonseg/code",
+    "run_finetuning_plan_cwd": "/home/disk02/wjj/moonseg/code",
+    "run_evaluation_queue_cwd": "/home/disk02/wjj/moonseg/code",
+    "run_public_test_queue_cwd": "/home/disk02/wjj/moonseg/code",
+    "child_python": [
+      "/home/disk02/wjj/moonseg/.venv/bin/python",
+      "/home/disk02/wjj/moonseg/.venv",
+      "/home/disk02/wjj/moonseg/.cache/uv-python/cpython-3.12.15-linux-x86_64-gnu"
+    ],
+    "dataset": {
+      "root": "/home/disk02/wjj/moonseg/verification/local_runtime_fixture_20261108/actual",
+      "after_alias_removed": "opened expected pixels/labels",
+      "config_records_provenance": "unchanged"
+    },
+    "train.sh": {
+      "cwd": "/home/disk02/wjj/moonseg/code",
+      "executable": "/home/disk02/wjj/moonseg/.venv/bin/python",
+      "argv": [
+        "-m",
+        "torch.distributed.run",
+        "--standalone",
+        "--nproc_per_node=2",
+        "-m",
+        "moonseg.train",
+        "--config",
+        "configs/example.yaml",
+        "--resume",
+        "runs/example/last.pt"
+      ]
+    },
+    "predict.sh": {
+      "cwd": "/home/disk02/wjj/moonseg/code",
+      "executable": "/home/disk02/wjj/moonseg/.venv/bin/python",
+      "argv": [
+        "-m",
+        "torch.distributed.run",
+        "--standalone",
+        "--nproc_per_node=2",
+        "-m",
+        "moonseg.predict",
+        "--config",
+        "config.yaml",
+        "--checkpoint",
+        "checkpoint.pt",
+        "--manifest",
+        "manifest.json",
+        "--output",
+        "runs/predictions",
+        "--official-test-allowlist",
+        "allowlist.json"
+      ]
+    },
+    "extension": "/home/disk02/wjj/moonseg/build/ms_deform_attn/MultiScaleDeformableAttention.cpython-312-x86_64-linux-gnu.so"
+  }
+}

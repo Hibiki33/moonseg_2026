@@ -4,7 +4,7 @@ LuSNAR 月面五类语义分割。类别编号固定为月壤 0、岩石 1、撞
 
 ## 当前状态（2026-11-08）
 
-代码与Git的本地工作副本现位于 `/home/disk02/wjj/moonseg/code`，用于避开NAS读写阻塞完成开发、验收和推送。原A/B训练进程仍以 `/home/nas_1/wjj/moon` 为工作目录。新DA3冻结运行从本地副本启动，Python、源码、权重、数据、输出和可变形注意力扩展均在disk02。
+代码与Git的本地工作副本现位于 `/home/disk02/wjj/moonseg/code`，用于避开NAS读写阻塞完成开发、验收和推送。原A/B训练进程仍以 `/home/nas_1/wjj/moon` 为工作目录；DA3冻结运行从本地副本启动，但已启动训练保存的旧解释器路径引用仍保留。后续任务统一使用修正后的本地Python、源码、权重、数据、输出和可变形注意力扩展；现有训练暂不停止或重启。
 
 - 默认配方：冻结 DINOv3 ViT-L + ViT-Adapter + Mask2Former，1024×1024 RRC，decoder6层/hidden256，梯度裁剪 **0.01**，每卡8×两卡×累积4=有效batch64。后续从 [默认模板](configs/dnv3_va_m2f_vitl16_default.yaml) 派生独立实验，历史配置保持原值；详见 [训练说明](docs/training.md)。
 - 权重选择：当前场景5独立验证，可按验证mIoU或验证loss选best；后续场景5并入训练、无独立验证集时用last。`best_loss.pt`指最低验证loss，不按训练loss选模型；10-29的末轮对照结果按原口径保留，新三项训练的验证best尚未做公开测试。
@@ -43,7 +43,7 @@ bash scripts/setup_env.sh
 
 该脚本让 uv 下载并管理 Python 3.12。Python 和安装缓存实际位于 `/home/disk02/wjj/moonseg/.cache`，虚拟环境位于 `/home/disk02/wjj/moonseg/.venv`；代码目录的 `.cache` 与 `.venv` 都是指向它们的软链接。可用 `MOONSEG_STORAGE_ROOT=/其他目录 bash scripts/setup_env.sh` 指定新的存储根目录。PyTorch 2.7.1 / torchvision 0.22.1 使用官方 CUDA 12.6 wheel 索引，默认面向 Linux x86_64；本机 GPU 见 [docs/gpu_topology.md](docs/gpu_topology.md)。
 
-`uv.lock` 随代码保留。迁移时复制代码及锁文件，重新运行安装脚本（内部使用 `uv sync --locked`）；不复制 `.venv`，也不依赖其他人的解释器路径。数据和模型存储位置通过下载脚本的 `--storage` 设置。运行入口使用 `uv run --no-sync`，避免训练时隐式修改环境。
+`uv.lock` 随代码保留。迁移时复制代码及锁文件，重新运行安装脚本（内部使用 `uv sync --locked`）；不复制 `.venv`，也不依赖其他人的解释器路径。数据和模型存储位置通过下载脚本的 `--storage` 设置。训练、预测脚本直接使用本地 `.venv/bin/python`，也可用 `PYTHON` 指定同一环境的解释器；环境安装完成后不在运行入口隐式同步依赖。
 
 ## 下载与存储
 
@@ -114,6 +114,10 @@ uv run --no-sync python tools/label_stats.py --manifest data/manifests/dev_train
 
 ## 训练、验证与推理
 
+后续训练、验证、公开测试队列和预测均从本地完整代码副本启动。本机先 `cd /home/disk02/wjj/moonseg/code`；其他机器使用自己的本地代码目录，并通过 `MOONSEG_STORAGE_ROOT` 安装环境及建立本地资产链接。仅将 `data/runs/.venv` 链到本地盘不足以避开NAS：代码、`third_party`、CUDA扩展、Python解释器本体及标准库也必须位于本地。旧NAS副本的入口未更新，不会自动转发，不能继续从那里启动。已在运行的训练保留原进程和目录，路径修复不改变其已保存的运行环境。
+
+`train.sh`、`predict.sh`和四个计划/队列入口会先切到自身代码目录的物理路径；子进程使用物理虚拟环境目录下的 `bin/python`，保留venv识别。数据加载和训练/预测输出在入口解析软链一次，配置中的原路径及清单记录保持原值，恢复配置比较、数据来源和采样不变。直接执行 `python -m moonseg.evaluate`、`moonseg.evaluate_public_test` 或顶层 `train.py/predict.py` 时，也须遵守上述本地目录和解释器约定；自定义 `PYTHON`、源码或扩展路径同样须指向本地。
+
 启动脚本固定 `CUDA_DEVICE_ORDER=PCI_BUS_ID`，默认 `CUDA_VISIBLE_DEVICES=0,7`，两张物理卡映射为进程内 `cuda:0,1`，训练和预测都由两个进程执行。该主机默认 CUDA 顺序与 `nvidia-smi` 不同，不能省略 `CUDA_DEVICE_ORDER`。
 
 ```bash
@@ -132,7 +136,7 @@ CUDA_VISIBLE_DEVICES=5,6 NCCL_P2P_DISABLE=1 PYTHON=.venv/bin/python \
   bash scripts/train.sh configs/dnv3_va_m2f_vitb16.yaml --resume runs/dnv3_va_m2f_vitb16/last.pt
 
 # 场景 5 全量本地评估（不是排行榜分数），同时输出验证损失；--weights auto 即 model（旧 checkpoint 的 ema_model 需显式指定）
-CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=0,7 uv run --no-sync python -m torch.distributed.run \
+CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=0,7 .venv/bin/python -m torch.distributed.run \
   --standalone --nproc_per_node=2 -m moonseg.evaluate \
   --config configs/dnv3_va_m2f_vitl16.yaml --checkpoint runs/dnv3_va_m2f_vitl16/best_miou.pt
 

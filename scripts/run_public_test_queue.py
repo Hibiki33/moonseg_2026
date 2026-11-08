@@ -22,7 +22,7 @@ sys.path.insert(0, str(ROOT))
 from scripts.run_evaluation_queue import (Queue as ValidationQueue, TrainingBlocked, absolute, atomic_json,
                                           checkpoint_metadata, file_identity, gpu_snapshot, now,
                                           process_info, read_json, TERMINAL, apply_queue_policy,
-                                          validate_cancellations)
+                                          validate_cancellations, python_path)
 from moonseg.evaluate_public_test import (CHECKPOINT_POLICIES, EXPECTED_SAMPLES, MANIFEST_KIND, PROFILES,
                                           SCENE_COUNTS, checkpoint_policy_metadata, validate_final_checkpoint)
 
@@ -321,7 +321,7 @@ class Queue(ValidationQueue):
             env.update(CUDA_DEVICE_ORDER="PCI_BUS_ID", CUDA_VISIBLE_DEVICES=snapshot[gpu]["uuid"],
                        NCCL_P2P_DISABLE="1", OMP_NUM_THREADS="4", PYTHONUNBUFFERED="1",
                        PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True")
-            command = [str(absolute(self.config["python"])), "-m", "moonseg.evaluate_public_test", "--config",
+            command = [str(python_path(self.config["python"])), "-m", "moonseg.evaluate_public_test", "--config",
                        job["config_path"], "--checkpoint", job["checkpoint_path"], "--weights", "model",
                        "--checkpoint-policy", self.config.get("checkpoint_policy", "validation_selected"),
                        "--data-root", str(absolute(self.config["data_root"])), "--manifest",
@@ -350,6 +350,7 @@ class Queue(ValidationQueue):
 
 
 def main():
+    os.chdir(ROOT)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", default="runs/plans/2026-10-23/public_test.json")
     parser.add_argument("--dry-run", action="store_true")
@@ -380,7 +381,6 @@ def main():
                 plan["runs"].append({**run, "ready": False, "error": str(error)})
         print(json.dumps(plan, indent=2))
         return 0
-    os.chdir(ROOT)
     absolute(config["gpu_lock_dir"]).mkdir(parents=True, exist_ok=True)
     return Queue(config).run()
 

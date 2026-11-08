@@ -53,7 +53,9 @@ class MoonDataset(Dataset):
     def __init__(self, config, split="train"):
         self.config = config
         self.split = split
-        self.root = Path(config["root"])
+        # Resolve storage links once, before workers repeatedly open image pairs.
+        # Keep config and manifest records unchanged for checkpoint comparisons.
+        self.root = Path(config["root"]).resolve()
         self.training = split == "train"
         scenes = set(config.get(f"{split}_scenes", [1, 3, 6, 7, 8] if self.training else [5]))
         if not scenes <= TRAIN_SCENES:

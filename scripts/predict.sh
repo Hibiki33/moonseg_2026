@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")/.."
+cd -P -- "$(dirname "${BASH_SOURCE[0]}")/.."
 export CUDA_DEVICE_ORDER=PCI_BUS_ID
 # Unset -> GPUs 0,7; explicitly empty (CUDA_VISIBLE_DEVICES=) means CPU only; -1 also works.
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES-0,7}"
@@ -13,7 +13,10 @@ config="$1"
 checkpoint="$2"
 manifest="$3"
 shift 3
-if [[ -n "${PYTHON:-}" ]]; then runner=("$PYTHON"); else runner=(uv run --no-sync python); fi
+python="${PYTHON:-.venv/bin/python}"
+if [[ "$python" != */* ]]; then python="$(command -v -- "$python")"; fi
+python="$(cd -P -- "$(dirname -- "$python")" && pwd)/$(basename -- "$python")"
+runner=("$python")
 exec "${runner[@]}" -m torch.distributed.run --standalone --nproc_per_node="${NPROC_PER_NODE:-2}" \
   -m moonseg.predict --config "$config" --checkpoint "$checkpoint" \
   --manifest "$manifest" --output runs/predictions "$@"
