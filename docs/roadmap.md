@@ -30,7 +30,7 @@
 
 ## 当前训练与评估（2026-10-29）
 
-本节表格及完成时间是10-29历史记录；11-08已在2/3追加独立DA3MONO单骨干训练（详见下文）；原A/B已启动，父权重与A/B的best_miou公开单尺度/TTA在同两组GPU释放后接续，执行计划为`runs/plans/2026-11-08/fullft/`，参数与阶段入口见下文两条已启动路线。
+本节表格及完成时间是10-29历史记录；11-08已在2/3追加独立DA3MONO冻结单骨干训练（详见下文）；原A/B已启动，父权重与A/B的best_miou公开单尺度/TTA在同两组GPU释放后接续，执行计划为`runs/plans/2026-11-08/fullft/`，参数与阶段入口见下文两条已启动路线。
 
 11-08数据核对：用户提供的官方训练/测试包已下载到 `data/LuSNAR_official`。训练8002对RGB/标签和测试5004张RGB，共21,008个PNG与原公开池逐字节一致，官方时间戳清单也完全对应，正式清单已转录生成。用户确认现有训练数据与官方一致，已有测试结论有效，无需更改数据或因来源差异重训、重复评估。沿用data/LuSNAR及原清单，当前仍训练1/3/6/7/8、留出5。细节与证据见 [data.md](data.md#官方数据一致性核对)。
 
@@ -149,9 +149,11 @@ H+ RRC 第 1 轮验证后，在第 2 轮第一次损失计算时显存溢出：a
 
 ### DA3MONO单骨干替换（11-08追加）
 
-11-08用户追加授权一组DA3MONO骨干替换：`da3mono_va_m2f_vitl14_rrc_fullft`已在PCI2/3启动，原A/B继续运行。仅加载DA3MONO-LARGE深度预训练encoder，Adapter/head重新初始化；25轮/2500更新、1024²、每卡4×2卡×累积8=64、head/Adapter lr2e-4及encoder lr2e-5、decoder6/width256、clip0.01，数据与原亮度/对比度/RRC均与B对齐。原生patch14输入右下补至1036²，提取后按像素坐标采样到64²；未缩小训练图像。原生24个block启用激活检查点。独立计划/状态在`runs/plans/2026-11-08/da3mono/`，独立公开评估状态在`runs/public_development_da3mono_2026-11-08/`，完成后仅在2/3评验证best_miou的5004张单尺度/窄尺度翻转；A/B队列保持原计划。 它同时改变骨干预训练和原生patch/位置编码，结果按完整骨干方案比较，不解释为单独深度监督的纯因果效应。当前没有授权Metric或双流融合。训练尚无验证/公开结果。
+11-08首组DA3MONO采用冻结骨干对照：`da3mono_va_m2f_vitl14_rrc_frozen`在PCI2/3从官方DA3MONO-LARGE encoder与新Adapter/head开始，完整冻结encoder（eval、no_grad、无encoder优化器参数）。严格复制冻结`dnv3_va_m2f_vitl16_rrc_clip001`：25轮/2500更新、1024² RRC0.5–2、每卡8×2卡×累积4=64、AdamW lr2e-4/wd0.05、poly0.9/无warmup、clip0.01、decoder6/width256、seed42、原亮度/对比度增强及uniform采样；dev_train6403与dev_val1599、场景5独立验证保持不变。保留每卡batch8以对齐Adapter普通BatchNorm，不能仅用有效batch相等代替。原生patch14仅右下补到1036²，再按像素坐标桥接64²的stride16特征；输入未缩小。独立计划/状态在`runs/plans/2026-11-08/da3mono_frozen/`，从disk02本地代码、环境与CUDA扩展运行；完成后独立队列`runs/public_development_da3mono_frozen_2026-11-08/`在2/3评验证`best_miou.pt`的公开2/4/9全5004张single/narrowflip。公平比较对象为同样按独立验证mIoU选出的clip001父权重，已在原A/B队列排好；历史clip001末轮测试结果仍按原口径保留。
 
-官方encoder源码固定在`3d835ec1a5802d64a8b8b15f817a1ab54809bfe4`，保留Apache-2.0及来源清单；仅增加einops小依赖，torch/cu126保持原版本。CPU证据覆盖342个encoder张量、304,367,616参数严格加载，归一化原生特征与官方实现四层误差均0，右下padding后的物理坐标映射误差小于0.0003像素，全部可训练encoder在last/best_miou/best_loss保存回载与0.1学习率组正确；见[evidence/da3mono_verification_20261108.json](evidence/da3mono_verification_20261108.json)。实际首轮checkpoint尚待训练产生后再核对。
+此次同时更换骨干预训练、原生patch及位置编码，按完整骨干方案比较，不解释为单独深度监督的纯因果效应。旧`rrc_fullft`误以全解冻启动，因路线纠正在第1轮完成、第2轮最后日志step114时中止；文件/checkpoint保留、旧队列禁用，不能据此作性能淘汰或初始化新运行。
+
+官方源码、严格预训练加载和原生特征/像素坐标对齐的既有证据见[evidence/da3mono_verification_20261108.json](evidence/da3mono_verification_20261108.json)。当前冻结运行的真实GPU更新、encoder无梯度/不进优化器及三种部分checkpoint重载见[evidence/da3mono_frozen_verification_20261108.json](evidence/da3mono_frozen_verification_20261108.json)；实际训练尚无验证/公开结果。
 
 ## 最终流程（方案冻结后）
 

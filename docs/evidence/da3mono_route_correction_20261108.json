@@ -1,0 +1,65 @@
+{
+  "stopped_at": "2026-11-08T14:51:28.772739+00:00",
+  "reason": "Stopped for route correction: the first DA3 comparison must freeze its pretrained backbone to align with the frozen DINOv3 clip001 baseline. This is not a performance rejection. All files/checkpoints preserved; none may initialize the replacement frozen run.",
+  "processes": [
+    {
+      "pid": 358969,
+      "start_ticks": 665040391
+    },
+    {
+      "pid": 359348,
+      "start_ticks": 665040570
+    },
+    {
+      "pid": 359490,
+      "start_ticks": 665040748
+    },
+    {
+      "pid": 359491,
+      "start_ticks": 665040748
+    },
+    {
+      "pid": 360801,
+      "start_ticks": 665042873
+    }
+  ],
+  "last_completed_epoch": {
+    "epoch": 1,
+    "global_step": 100,
+    "eval_stride": 2,
+    "evaluated_samples": 800
+  },
+  "last_logged_update": {
+    "epoch": 2,
+    "step": 114,
+    "loss": 7.755544662475586,
+    "grad_norm": 77.1634750366211,
+    "lr": [
+      0.0001917729651484228,
+      1.9177296514842278e-05,
+      1.9177296514842278e-05,
+      0.0001917729651484228
+    ],
+    "elapsed_seconds": 280.2
+  },
+  "preserved_checkpoints": [
+    {
+      "name": "best_miou.pt",
+      "bytes": 1361511898
+    },
+    {
+      "name": "last.pt",
+      "bytes": 4082152495
+    },
+    {
+      "name": "best_loss.pt",
+      "bytes": 1361511898
+    }
+  ],
+  "completion_marker_exists": false,
+  "training_plan_disabled": true,
+  "evaluation_plan_disabled": true,
+  "training_status": "cancelled",
+  "evaluation_status": "cancelled",
+  "verified_stopped": true
+}

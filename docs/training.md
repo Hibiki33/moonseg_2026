@@ -54,7 +54,9 @@
 
 ## GPU 放置与启动
 
-11-08用户追加授权一组DA3MONO骨干替换：`da3mono_va_m2f_vitl14_rrc_fullft`已在PCI2/3启动，原A/B继续运行。仅加载DA3MONO-LARGE深度预训练encoder，Adapter/head重新初始化；25轮/2500更新、1024²、每卡4×2卡×累积8=64、head/Adapter lr2e-4及encoder lr2e-5、decoder6/width256、clip0.01，数据与原亮度/对比度/RRC均与B对齐。原生patch14输入右下补至1036²，提取后按像素坐标采样到64²；未缩小训练图像。原生24个block启用激活检查点。独立计划/状态在`runs/plans/2026-11-08/da3mono/`，独立公开评估状态在`runs/public_development_da3mono_2026-11-08/`，完成后仅在2/3评验证best_miou的5004张单尺度/窄尺度翻转；A/B队列保持原计划。 两组卡限制现仅针对原A/B；本次仅追加DA3MONO这一组，不追加Metric、融合或对照。2/3设置`CUDA_DEVICE_ORDER=PCI_BUS_ID`、`CUDA_VISIBLE_DEVICES=2,3`、`NCCL_P2P_DISABLE=1`、`PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`，按UUID/空闲与双锁检查启动。
+11-08首组DA3MONO采用冻结骨干对照：`da3mono_va_m2f_vitl14_rrc_frozen`在PCI2/3从官方DA3MONO-LARGE encoder与新Adapter/head开始，完整冻结encoder（eval、no_grad、无encoder优化器参数）。严格复制冻结`dnv3_va_m2f_vitl16_rrc_clip001`：25轮/2500更新、1024² RRC0.5–2、每卡8×2卡×累积4=64、AdamW lr2e-4/wd0.05、poly0.9/无warmup、clip0.01、decoder6/width256、seed42、原亮度/对比度增强及uniform采样；dev_train6403与dev_val1599、场景5独立验证保持不变。保留每卡batch8以对齐Adapter普通BatchNorm，不能仅用有效batch相等代替。原生patch14仅右下补到1036²，再按像素坐标桥接64²的stride16特征；输入未缩小。独立计划/状态在`runs/plans/2026-11-08/da3mono_frozen/`，从disk02本地代码、环境与CUDA扩展运行；完成后独立队列`runs/public_development_da3mono_frozen_2026-11-08/`在2/3评验证`best_miou.pt`的公开2/4/9全5004张single/narrowflip。公平比较对象为同样按独立验证mIoU选出的clip001父权重，已在原A/B队列排好；历史clip001末轮测试结果仍按原口径保留。
+
+此前误启动的`da3mono_va_m2f_vitl14_rrc_fullft`因路线纠正在完成第1轮后、第2轮最后日志step114处停止；全部日志、三个checkpoint与旧计划保留，旧训练/评测计划已禁用。它不用于性能淘汰结论，也不向冻结运行提供初始化。2/3沿用PCI_BUS_ID、UUID检查、共享训练/评估双锁和`NCCL_P2P_DISABLE=1`。冻结实测与checkpoint回载证据见[evidence/da3mono_frozen_verification_20261108.json](evidence/da3mono_frozen_verification_20261108.json)，配置逐项差异、disk02进程与正式DDP更新见[启动证据](evidence/da3mono_frozen_launch_20261108.json)。
 
 11-08两条全解冻训练已获用户确认并启动：`dnv3_va_m2f_vitl16_rrc_fullft`在0/7从原生DINOv3开始联合训练25轮/2500更新，Adapter/head与骨干初始lr为2e-4/2e-5；`dnv3_va_m2f_vitl16_rrc_clip001_stage2_fullft`在4/5从clip001的第15轮`best_miou.pt`权重初始化，完整解冻后以新优化器训练5轮/500更新，lr为2e-5/2e-6。均为每卡4×2卡×累积8=64、1024²/RRC/width256/decoder6/clip0.01；4/5关闭NCCL P2P，0/7保持已验证P2P路径。`--initialize-from`不同于`--resume`，阶段加载约定见[model.md](model.md#checkpoints)。
 

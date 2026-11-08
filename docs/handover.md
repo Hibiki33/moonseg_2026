@@ -65,13 +65,15 @@ L1 相对 L0，场景 2/4/9 分别提高 0.738/0.231/0.306 个百分点，等权
 
 ## 4. 正在跑与排队（2026-11-08）
 
-11-08用户追加授权一组DA3MONO骨干替换：`da3mono_va_m2f_vitl14_rrc_fullft`已在PCI2/3启动，原A/B继续运行。仅加载DA3MONO-LARGE深度预训练encoder，Adapter/head重新初始化；25轮/2500更新、1024²、每卡4×2卡×累积8=64、head/Adapter lr2e-4及encoder lr2e-5、decoder6/width256、clip0.01，数据与原亮度/对比度/RRC均与B对齐。原生patch14输入右下补至1036²，提取后按像素坐标采样到64²；未缩小训练图像。原生24个block启用激活检查点。独立计划/状态在`runs/plans/2026-11-08/da3mono/`，独立公开评估状态在`runs/public_development_da3mono_2026-11-08/`，完成后仅在2/3评验证best_miou的5004张单尺度/窄尺度翻转；A/B队列保持原计划。 完整encoder保存/严格回载、官方源特征及坐标验证见[evidence/da3mono_verification_20261108.json](evidence/da3mono_verification_20261108.json)。
+DA3首组现为`da3mono_va_m2f_vitl14_rrc_frozen`：冻结官方DA3MONO-LARGE encoder、新Adapter/head，严格对齐冻结clip001的每卡8×2卡×累积4=64和25轮/2500更新；其余配方见[training.md](training.md#gpu-放置与启动)。训练及独立等待评测队列均从disk02代码/环境/扩展启动，计划/状态在`runs/plans/2026-11-08/da3mono_frozen/`，评测状态在`runs/public_development_da3mono_frozen_2026-11-08/`。完成后在2/3评本运行验证best_miou的公开2/4/9全5004张single/narrowflip，与原A/B队列中clip001父权重同选权重口径比较；保留共享锁、UUID检查及P2P禁用。
+
+旧DA3 fullft因冻结路线纠正在第1轮完成、第2轮最后日志step114时中止，三个checkpoint和日志保留、旧训练与评测计划禁用；新运行不加载这些checkpoint。冻结实测与回载见[evidence/da3mono_frozen_verification_20261108.json](evidence/da3mono_frozen_verification_20261108.json)。
 
 | 卡对 | 当前 | 之后 | 预计 |
 |---|---|---|---|
 | PCI 0/7 | `rrc_fullft`从原DINO预训练全解冻25轮/2500更新，初始更新正常 | 完成后评父权重及A/B的验证best | 以真实进度为准 |
 | PCI 4/5 | `rrc_clip001_stage2_fullft`从第15轮best初始化，全解冻5轮/500更新，初始更新正常 | 同上，仅用已释放的0/7或4/5 | 以真实进度为准 |
-| PCI 2/3 | `da3mono_va_m2f_vitl14_rrc_fullft`，25轮/2500更新 | 独立队列评本运行best_miou，单尺度/窄尺度翻转 | 以真实进度为准 |
+| PCI 2/3 | `da3mono_va_m2f_vitl14_rrc_frozen`，冻结骨干25轮/2500更新、每卡8×累积4 | 独立队列评本运行best_miou，单尺度/窄尺度翻转 | 以真实进度为准 |
 | 其余GPU | 本批无授权任务 | 不追加实验 | — |
 
 11-08本批计划和启动状态在`runs/plans/2026-11-08/fullft/`的`joint/stage2.json`与对应`.status.json`；训练日志在各运行目录`train.log`。B先启动，随后A；每卡4×2卡×累积8=64。阶段入口、严格加载与完整ViT保存见[training.md](training.md#gpu-放置与启动)和[model.md](model.md#checkpoints)。公开5004张单尺度/窄尺度翻转队列已排父checkpoint及A/B的best_miou，等待同两组卡释放；状态在`runs/public_development_fullft_2026-11-08/`，勿重复启动。下文为历史调度记录。
@@ -174,7 +176,7 @@ LoRA（用户明确不考虑）；混合训练（用户要求先移除）；7B �
 
 ### 环境与路径
 
-- 当前代码 `/home/nas_1/wjj/moon`（NAS，不要往里写大文件）；数据、权重、运行输出、引用 PDF 都在本地盘 `/home/disk02/wjj/moonseg/` 下，通过软链 `data/`、`ckpts/`、`runs/`、`references/` 访问。
+- 当前开发和新训练使用 `/home/disk02/wjj/moonseg/code`；原A/B已启动进程仍保留NAS运行目录，不迁移或重启。数据、权重、运行输出、引用PDF和新DA3的CUDA扩展均在本地盘 `/home/disk02/wjj/moonseg/`，通过软链访问。
 - 解释器 `.venv/bin/python`（uv 管理，`uv` 不在 PATH 时用 `PYTHON=.venv/bin/python` 传给脚本）。
 - CUDA 扩展：`bash scripts/build_ops.sh` 一次；`model.deformable_attention: auto` 自动选用，日志首行会打印 `deformable attention: cuda`。
 

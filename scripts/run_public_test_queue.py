@@ -355,6 +355,8 @@ def main():
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
     config = read_json(absolute(args.config))
+    if config.get("disabled"):
+        raise ValueError(f"Plan disabled: {config.get('disabled_reason', 'explicit cancellation')}")
     validate_config(config)
     if args.dry_run:
         plan = {"output_dir": str(absolute(config["output_dir"]).resolve()), "gpus": config["gpus"],

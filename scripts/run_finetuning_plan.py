@@ -22,10 +22,13 @@ def main():
     args = parser.parse_args()
     plan_path = Path(args.plan).resolve()
     plan = json.loads(plan_path.read_text())
+    if plan.get('disabled'):
+        raise ValueError(f"Plan disabled: {plan.get('disabled_reason', 'explicit cancellation')}")
     gpus = plan['gpus']
+    frozen_da3 = plan.get('experiment') == 'da3mono_frozen_baseline'
     if gpus not in ([0, 7], [4, 5], [2, 3]):
         raise ValueError('Only approved pairs 0/7, 4/5 and the additional DA3 pair 2/3 are permitted')
-    if gpus == [2, 3] and plan.get('experiment') != 'da3mono_backbone':
+    if gpus == [2, 3] and plan.get('experiment') not in ('da3mono_backbone', 'da3mono_frozen_baseline'):
         raise ValueError('The additional 2/3 authorization is only for the DA3MONO backbone run')
     config_path = (ROOT / plan['config']).resolve()
     content = config_path.read_bytes()
@@ -36,11 +39,33 @@ def main():
     output = (ROOT / settings['output_dir']).resolve()
     if output.parent != (ROOT / 'runs').resolve() or output.name != config_path.stem:
         raise ValueError('Expected matching config name and fresh direct child of runs')
-    if (settings['batch_size'], settings['accumulation_steps'], settings['epochs']) != (4, 8, plan['expected_epochs']):
-        raise ValueError('Plan requires batch4/accum8 and matching epoch budget')
+    batch, accumulation = (8, 4) if frozen_da3 else (4, 8)
+    if (settings['batch_size'], settings['accumulation_steps'], settings['epochs']) != (batch, accumulation, plan['expected_epochs']):
+        raise ValueError(f'Plan requires batch{batch}/accum{accumulation} and matching epoch budget')
     if settings.get('resume') or settings.get('min_effective_batch') != 64:
         raise ValueError('Fresh optimizer and effective batch64 required')
-    if config['model'].get('freeze_backbone') is not False or config['model'].get('unfreeze_last_blocks') != 0:
+    if frozen_da3:
+        if (gpus != [2, 3] or config['model'].get('freeze_backbone') is not True
+                or config['model'].get('unfreeze_last_blocks') != 0 or settings.get('initialize_from')):
+            raise ValueError('Frozen DA3 baseline requires pair2/3, a fully frozen encoder and fresh Adapter/head')
+        baseline = load_config(ROOT / 'configs/dnv3_va_m2f_vitl16_rrc_clip001.yaml')
+        for section in ('data', 'loss', 'inference'):
+            if config[section] != baseline[section]:
+                raise ValueError(f'Frozen DA3 must retain baseline {section}')
+        if ({key: value for key, value in settings.items() if key != 'output_dir'}
+                != {key: value for key, value in baseline['train'].items() if key != 'output_dir'}):
+            raise ValueError('Frozen DA3 must retain every baseline training setting except output_dir')
+        da3_values = dict(backbone='da3mono_vitl14', backbone_weights='ckpts/da3mono-large/model.safetensors',
+                          backbone_gradient_checkpointing=False, model_family='da3mono-large',
+                          source_revision='3d835ec1a5802d64a8b8b15f817a1ab54809bfe4',
+                          native_patch_size=14, adapter_feature_stride=16)
+        if any(config['model'].get(key) != value for key, value in da3_values.items()):
+            raise ValueError('Frozen DA3 requires the approved native pretrained encoder and patch14/stride16 bridge')
+        da3_only = set(da3_values)
+        if ({key: value for key, value in config['model'].items() if key not in da3_only}
+                != {key: value for key, value in baseline['model'].items() if key not in da3_only}):
+            raise ValueError('Frozen DA3 must retain baseline Adapter/head and freeze settings')
+    elif config['model'].get('freeze_backbone') is not False or config['model'].get('unfreeze_last_blocks') != 0:
         raise ValueError('These plans train the whole ViT')
     if output.exists() and any(output.iterdir()):
         raise ValueError(f'Refusing existing run: {output}')

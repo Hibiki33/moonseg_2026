@@ -1,0 +1,97 @@
+{
+  "config": "configs/da3mono_va_m2f_vitl14_rrc_frozen.yaml",
+  "device_uuid": "GPU-91456d0d-9e31-d4d4-4648-9a2489b270ee",
+  "gpu_total_bytes": 47695331328,
+  "batch_per_gpu": 8,
+  "accumulation_steps": 4,
+  "intended_world_size": 2,
+  "effective_batch": 64,
+  "real_train_samples": 6403,
+  "validation_samples": 1599,
+  "batch_plan": {
+    "batch_per_gpu": 8,
+    "world_size": 2,
+    "accumulation_steps": 4,
+    "effective_batch": 64,
+    "minimum_effective_batch": 64,
+    "drop_incomplete_updates": true,
+    "microbatches_per_epoch": 400,
+    "optimizer_steps_per_epoch": 100,
+    "samples_used_per_epoch": 6400,
+    "dropped_samples_per_epoch": 3,
+    "tail_policy": "drop incomplete shuffled optimizer batch"
+  },
+  "losses": [
+    69.97579956054688,
+    70.02011108398438,
+    70.11677551269531,
+    70.09503936767578
+  ],
+  "gradient_norm": 236.7382049560547,
+  "optimizer_updates": 1,
+  "seconds": 89.9,
+  "cuda_peak_bytes": {
+    "allocated": 40894941184,
+    "reserved": 42165338112,
+    "total": 47695331328
+  },
+  "encoder_parameter_count": 304367616,
+  "encoder_trainable_parameters": 0,
+  "optimizer_native_encoder_parameters": 0,
+  "encoder_gradients_absent": true,
+  "encoder_eval": true,
+  "encoder_forward_context": [
+    {
+      "grad_enabled": false,
+      "features_require_grad": false
+    },
+    {
+      "grad_enabled": false,
+      "features_require_grad": false
+    },
+    {
+      "grad_enabled": false,
+      "features_require_grad": false
+    },
+    {
+      "grad_enabled": false,
+      "features_require_grad": false
+    }
+  ],
+  "trainable_parameters": 35631494,
+  "trainable_tensors": 395,
+  "gradient_tensors": 395,
+  "trainable_scope": "ViT-Adapter and Mask2Former only",
+  "checkpoint_reload": {
+    "last": {
+      "omitted_frozen_tensors": 342,
+      "partial_tensors": 425,
+      "bytes": 428012125,
+      "all_adapter_head_tensors_equal": true,
+      "official_native_encoder_equal": true
+    },
+    "best_miou": {
+      "omitted_frozen_tensors": 342,
+      "partial_tensors": 425,
+      "bytes": 142709963,
+      "all_adapter_head_tensors_equal": true,
+      "official_native_encoder_equal": true
+    },
+    "best_loss": {
+      "omitted_frozen_tensors": 342,
+      "partial_tensors": 425,
+      "bytes": 142709963,
+      "all_adapter_head_tensors_equal": true,
+      "official_native_encoder_equal": true
+    }
+  },
+  "checkpoint_directory": "/home/disk02/wjj/moonseg/verification/da3_frozen_20261108",
+  "extension": {
+    "extension": "/home/disk02/wjj/moonseg/build/ms_deform_attn/MultiScaleDeformableAttention.cpython-312-x86_64-linux-gnu.so",
+    "bytes": 11518544,
+    "torch": "2.7.1+cu126",
+    "torch_cuda": "12.6",
+    "python": "3.12.15",
+    "method": "bounded copy of existing compiled extension; local ABI import passed; no file hashing"
+  }
+}

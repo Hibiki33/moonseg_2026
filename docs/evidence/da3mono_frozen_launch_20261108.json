@@ -1,0 +1,330 @@
+{
+  "recorded_at": "2026-11-08T15:00:13.160823+00:00",
+  "git_workdir": "/home/disk02/wjj/moonseg/code",
+  "runtime_workdir": "/home/disk02/wjj/moonseg/code",
+  "status": "running",
+  "latest_update": {
+    "epoch": 1,
+    "step": 10,
+    "loss": 54.211875915527344,
+    "grad_norm": 56.261253356933594,
+    "lr": [
+      0.0001992798557883554,
+      0.0001992798557883554
+    ],
+    "elapsed_seconds": 176.9
+  },
+  "config_matches_snapshot": true,
+  "baseline_config": "configs/dnv3_va_m2f_vitl16_rrc_clip001.yaml",
+  "config_differences": {
+    "train.output_dir": {
+      "baseline": "runs/dnv3_va_m2f_vitl16_rrc_clip001",
+      "frozen_da3": "runs/da3mono_va_m2f_vitl14_rrc_frozen"
+    },
+    "model.backbone_weights": {
+      "baseline": "ckpts/dinov3_vitl16_pretrain_lvd1689m-8aa4cbdd.pth",
+      "frozen_da3": "ckpts/da3mono-large/model.safetensors"
+    },
+    "model.source_revision": {
+      "baseline": null,
+      "frozen_da3": "3d835ec1a5802d64a8b8b15f817a1ab54809bfe4"
+    },
+    "model.adapter_feature_stride": {
+      "baseline": null,
+      "frozen_da3": 16
+    },
+    "model.backbone": {
+      "baseline": "vitl16",
+      "frozen_da3": "da3mono_vitl14"
+    },
+    "model.model_family": {
+      "baseline": null,
+      "frozen_da3": "da3mono-large"
+    },
+    "model.native_patch_size": {
+      "baseline": null,
+      "frozen_da3": 14
+    },
+    "model.backbone_gradient_checkpointing": {
+      "baseline": null,
+      "frozen_da3": false
+    }
+  },
+  "training_plan": {
+    "version": 1,
+    "experiment": "da3mono_frozen_baseline",
+    "config": "configs/da3mono_va_m2f_vitl14_rrc_frozen.yaml",
+    "expected_epochs": 25,
+    "expected_updates": 2500,
+    "checkpoint_policy": "validation_selected",
+    "selection": "best_miou",
+    "gpus": [
+      2,
+      3
+    ],
+    "expected_gpu_uuids": {
+      "2": "GPU-aec3a52c-8629-106e-3b66-a374628971a8",
+      "3": "GPU-91456d0d-9e31-d4d4-4648-9a2489b270ee"
+    },
+    "baseline_config": "configs/dnv3_va_m2f_vitl16_rrc_clip001.yaml",
+    "initialization": "official_pretrained_encoder_fresh_adapter_head"
+  },
+  "evaluation_plan": {
+    "version": 1,
+    "output_dir": "runs/public_development_da3mono_frozen_2026-11-08",
+    "python": "/home/disk02/wjj/moonseg/.venv/bin/python",
+    "gpus": [
+      2,
+      3
+    ],
+    "max_workers": 2,
+    "gpu_lock_dir": "runs/evaluations_2026-10-23",
+    "poll_seconds": 20,
+    "expected_samples": 5004,
+    "manifest_kind": "public_test_research_manifest",
+    "data_root": "data/research_test/LuSNAR",
+    "manifest": "data/research_test/manifest.json",
+    "weights": "model",
+    "profiles": {
+      "single": {
+        "sliding_window": false,
+        "scales": [
+          1.0
+        ],
+        "flip": false
+      },
+      "narrowflip": {
+        "sliding_window": false,
+        "scales": [
+          0.9,
+          1.0,
+          1.1
+        ],
+        "flip": true
+      }
+    },
+    "priority_runs": [],
+    "runs": [
+      {
+        "name": "da3mono_va_m2f_vitl14_rrc_frozen",
+        "label": "da3mono_frozen_best_miou",
+        "expected_epochs": 25,
+        "checkpoint": "best_miou.pt",
+        "dependency": {
+          "kind": "marker",
+          "status_path": "runs/plans/2026-11-08/da3mono_frozen/training.status.json"
+        }
+      }
+    ],
+    "checkpoint_policy": "validation_selected",
+    "expected_gpu_uuids": {
+      "2": "GPU-aec3a52c-8629-106e-3b66-a374628971a8",
+      "3": "GPU-91456d0d-9e31-d4d4-4648-9a2489b270ee"
+    }
+  },
+  "batch_plan": {
+    "batch_per_gpu": 8,
+    "world_size": 2,
+    "accumulation_steps": 4,
+    "effective_batch": 64,
+    "minimum_effective_batch": 64,
+    "drop_incomplete_updates": true,
+    "microbatches_per_epoch": 400,
+    "optimizer_steps_per_epoch": 100,
+    "samples_used_per_epoch": 6400,
+    "dropped_samples_per_epoch": 3,
+    "tail_policy": "drop incomplete shuffled optimizer batch",
+    "sampling": {
+      "mode": "uniform"
+    }
+  },
+  "resolved_config": {
+    "model": {
+      "backbone": "da3mono_vitl14",
+      "backbone_weights": "ckpts/da3mono-large/model.safetensors",
+      "freeze_backbone": true,
+      "unfreeze_last_blocks": 0,
+      "num_classes": 5,
+      "num_queries": 100,
+      "hidden_dim": 256,
+      "decoder_layers": 6,
+      "encoder_layers": 6,
+      "gradient_checkpointing": true,
+      "deformable_attention": "auto",
+      "backbone_gradient_checkpointing": false,
+      "model_family": "da3mono-large",
+      "source_revision": "3d835ec1a5802d64a8b8b15f817a1ab54809bfe4",
+      "native_patch_size": 14,
+      "adapter_feature_stride": 16
+    },
+    "loss": {
+      "ce_weight": 2.0,
+      "mask_weight": 5.0,
+      "dice_weight": 5.0,
+      "no_object_weight": 0.1,
+      "num_points": 12544
+    },
+    "data": {
+      "root": "data/LuSNAR",
+      "development_pool": true,
+      "train_manifest": "data/manifests/dev_train.json",
+      "val_manifest": "data/manifests/dev_val.json",
+      "label_stats": "data/manifests/label_stats_dev_train.json",
+      "train_scenes": [
+        1,
+        3,
+        6,
+        7,
+        8
+      ],
+      "val_scenes": [
+        5
+      ],
+      "train_mode": "random_resize_crop",
+      "crop_size": [
+        1024,
+        1024
+      ],
+      "resize_range": [
+        0.5,
+        2.0
+      ],
+      "cat_max_ratio": 0.75,
+      "crop_attempts": 10,
+      "image_size": [
+        1024,
+        1024
+      ],
+      "hflip_probability": 0.5,
+      "brightness_probability": 0.5,
+      "brightness_delta": 32,
+      "contrast_probability": 0.5,
+      "contrast_range": [
+        0.5,
+        1.5
+      ],
+      "pixel_floor": 22,
+      "gamma_probability": 0.0,
+      "shadow_probability": 0.0,
+      "scale_jitter_probability": 0.0,
+      "mean": [
+        0.485,
+        0.456,
+        0.406
+      ],
+      "std": [
+        0.229,
+        0.224,
+        0.225
+      ]
+    },
+    "train": {
+      "output_dir": "runs/da3mono_va_m2f_vitl14_rrc_frozen",
+      "seed": 42,
+      "epochs": 25,
+      "batch_size": 8,
+      "accumulation_steps": 4,
+      "min_effective_batch": 64,
+      "num_workers": 4,
+      "lr": 0.0002,
+      "backbone_lr_multiplier": 0.1,
+      "weight_decay": 0.05,
+      "warmup_iters": 0,
+      "warmup_ratio": 0.001,
+      "poly_power": 0.9,
+      "amp": "bf16",
+      "tf32": true,
+      "cudnn_benchmark": true,
+      "grad_clip": 0.01,
+      "sampling": {
+        "mode": "uniform",
+        "temperature": 0.01,
+        "min_pixels": 1
+      },
+      "validate": true,
+      "eval_every": 1,
+      "eval_stride": 2,
+      "save_every": 0,
+      "log_every": 10,
+      "resume": null
+    },
+    "inference": {
+      "sliding_window": false,
+      "scales": [
+        1.0
+      ],
+      "flip": false
+    },
+    "runtime": {
+      "deformable_attention": "cuda",
+      "torch": "2.7.1+cu126",
+      "tf32": true,
+      "cudnn_benchmark": true
+    }
+  },
+  "processes": [
+    {
+      "pid": 539033,
+      "start_ticks": 665365734,
+      "cwd": "/home/disk02/wjj/moonseg/code",
+      "command": "/home/disk02/wjj/moonseg/code/.venv/bin/python scripts/run_finetuning_plan.py --plan /home/disk02/wjj/moonseg/code/runs/plans/2026-11-08/da3mono_frozen/training.json ",
+      "environment": {}
+    },
+    {
+      "pid": 539262,
+      "start_ticks": 665365924,
+      "cwd": "/home/disk02/wjj/moonseg/code",
+      "command": "/home/disk02/wjj/moonseg/code/.venv/bin/python -m torch.distributed.run --standalone --nproc_per_node=2 -m moonseg.train --config /home/disk02/wjj/moonseg/runs/plans/2026-11-08/da3mono_frozen/da3mono_va_m2f_vitl14_rrc_frozen.yaml ",
+      "environment": {
+        "CUDA_DEVICE_ORDER": "PCI_BUS_ID",
+        "CUDA_VISIBLE_DEVICES": "2,3",
+        "NCCL_P2P_DISABLE": "1",
+        "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True"
+      }
+    },
+    {
+      "pid": 539034,
+      "start_ticks": 665365734,
+      "cwd": "/home/disk02/wjj/moonseg/code",
+      "command": "/home/disk02/wjj/moonseg/code/.venv/bin/python scripts/run_public_test_queue.py --config /home/disk02/wjj/moonseg/code/runs/plans/2026-11-08/da3mono_frozen/public_test.json ",
+      "environment": {}
+    },
+    {
+      "pid": 539413,
+      "start_ticks": 665366111,
+      "cwd": "/home/disk02/wjj/moonseg/code",
+      "command": "/home/disk02/wjj/moonseg/code/.venv/bin/python -u -m moonseg.train --config /home/disk02/wjj/moonseg/runs/plans/2026-11-08/da3mono_frozen/da3mono_va_m2f_vitl14_rrc_frozen.yaml ",
+      "environment": {
+        "CUDA_DEVICE_ORDER": "PCI_BUS_ID",
+        "CUDA_VISIBLE_DEVICES": "2,3",
+        "NCCL_P2P_DISABLE": "1",
+        "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True"
+      },
+      "loaded_deformable_attention_extension": [
+        "/home/disk02/wjj/moonseg/build/ms_deform_attn/MultiScaleDeformableAttention.cpython-312-x86_64-linux-gnu.so"
+      ]
+    },
+    {
+      "pid": 539414,
+      "start_ticks": 665366111,
+      "cwd": "/home/disk02/wjj/moonseg/code",
+      "command": "/home/disk02/wjj/moonseg/code/.venv/bin/python -u -m moonseg.train --config /home/disk02/wjj/moonseg/runs/plans/2026-11-08/da3mono_frozen/da3mono_va_m2f_vitl14_rrc_frozen.yaml ",
+      "environment": {
+        "CUDA_DEVICE_ORDER": "PCI_BUS_ID",
+        "CUDA_VISIBLE_DEVICES": "2,3",
+        "NCCL_P2P_DISABLE": "1",
+        "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True"
+      },
+      "loaded_deformable_attention_extension": [
+        "/home/disk02/wjj/moonseg/build/ms_deform_attn/MultiScaleDeformableAttention.cpython-312-x86_64-linux-gnu.so"
+      ]
+    }
+  ],
+  "public_eval_jobs": {
+    "da3mono_va_m2f_vitl14_rrc_frozen/best_miou/single": "pending",
+    "da3mono_va_m2f_vitl14_rrc_frozen/best_miou/narrowflip": "pending"
+  },
+  "comparison": "Compare both DA3 and DINOv3 clip001 validation-selected best_miou checkpoints; the existing A/B queue contains clip001_best_miou_parent.",
+  "old_fullft_route_correction": "docs/evidence/da3mono_route_correction_20261108.json",
+  "frozen_gpu_and_reload_verification": "docs/evidence/da3mono_frozen_verification_20261108.json"
+}
