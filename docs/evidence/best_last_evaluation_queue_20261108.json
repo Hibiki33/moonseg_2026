@@ -1,0 +1,90 @@
+{
+  "migrations": [
+    {
+      "migrated_at": "2026-11-08T15:38:17.773454+00:00",
+      "group": "fullft",
+      "old_parent_pid": 601364,
+      "new_parent_pid": 681874,
+      "new_parent_start_ticks": 665613900,
+      "cwd": "/home/disk02/wjj/moonseg/code",
+      "preserved_jobs": [
+        "dnv3_va_m2f_vitl16_rrc_clip001/best_miou/narrowflip",
+        "dnv3_va_m2f_vitl16_rrc_clip001/best_miou/single",
+        "dnv3_va_m2f_vitl16_rrc_clip001_stage2_fullft/best_miou/narrowflip",
+        "dnv3_va_m2f_vitl16_rrc_clip001_stage2_fullft/best_miou/single",
+        "dnv3_va_m2f_vitl16_rrc_fullft/best_miou/narrowflip",
+        "dnv3_va_m2f_vitl16_rrc_fullft/best_miou/single"
+      ],
+      "added_last_jobs": [
+        "dnv3_va_m2f_vitl16_rrc_clip001_stage2_fullft/last/narrowflip",
+        "dnv3_va_m2f_vitl16_rrc_clip001_stage2_fullft/last/single",
+        "dnv3_va_m2f_vitl16_rrc_fullft/last/narrowflip",
+        "dnv3_va_m2f_vitl16_rrc_fullft/last/single"
+      ],
+      "total_jobs": 10,
+      "max_workers": 2,
+      "plan": "/home/disk02/wjj/moonseg/runs/plans/2026-11-08/fullft/public_test.json",
+      "state_backup": "/home/disk02/wjj/moonseg/runs/plans/2026-11-08/fullft/public_test.before_best_last.json",
+      "training_processes_signalled": false
+    },
+    {
+      "migrated_at": "2026-11-08T15:38:17.916652+00:00",
+      "group": "da3mono_frozen",
+      "old_parent_pid": 604855,
+      "new_parent_pid": 681953,
+      "new_parent_start_ticks": 665613915,
+      "cwd": "/home/disk02/wjj/moonseg/code",
+      "preserved_jobs": [
+        "da3mono_va_m2f_vitl14_rrc_frozen/best_miou/narrowflip",
+        "da3mono_va_m2f_vitl14_rrc_frozen/best_miou/single"
+      ],
+      "added_last_jobs": [
+        "da3mono_va_m2f_vitl14_rrc_frozen/last/narrowflip",
+        "da3mono_va_m2f_vitl14_rrc_frozen/last/single"
+      ],
+      "total_jobs": 4,
+      "max_workers": 2,
+      "plan": "/home/disk02/wjj/moonseg/runs/plans/2026-11-08/da3mono_frozen/public_test.json",
+      "state_backup": "/home/disk02/wjj/moonseg/runs/plans/2026-11-08/da3mono_frozen/public_test.before_best_last.json",
+      "training_processes_signalled": false
+    }
+  ],
+  "baseline_last_scores_reused": [
+    "docs/evidence/public_development_last_20261029/rrc_clip001_single.json",
+    "docs/evidence/public_development_last_20261029/rrc_clip001_narrowflip.json"
+  ],
+  "baseline_last_file_identity_verified": true,
+  "new_last_jobs": 6,
+  "comparison": "Best and last results reported separately. DINO joint and DA3 last25 match the baseline budget; stage2 starts from best15 and ends after 5 additional epochs, not a continuation from baseline last25.",
+  "verification": {
+    "legacy_best_and_last25_plans": "passed",
+    "mixed_plans": "10 DINO jobs + 4 DA3 jobs; exactly 6 added last jobs; parent last reused",
+    "last_checkpoints": "CPU checks for 5/25 epochs, config/history/full1599 validation/global_step/budget; invalid cases rejected",
+    "per_checkpoint_isolation": "preparation failure isolated; policies passed separately to evaluator and checked on scores",
+    "existing_results_and_config": "completed scores adopted on restart; silent config changes rejected",
+    "launch_contract": "CPU stubs verified policy/UUID/P2P/lock arguments; no test GPU work",
+    "training_processes_signalled": false
+  },
+  "historical_audit": {
+    "completed_public_test_results": 34,
+    "tested_checkpoints": 17,
+    "historical_best_results": 26,
+    "last25_results": 8,
+    "samples_each": 5004,
+    "scene_counts": {
+      "2": 1597,
+      "4": 1320,
+      "9": 2087
+    },
+    "archived_status_and_original_scores_equal": true,
+    "evaluation_logs_confirm_model_and_checkpoint": true,
+    "confusion_matrix_miou_max_roundoff": 2.22e-16,
+    "invalid_score_records_found": 0,
+    "withdrawn_claim_group": "Treating clip001 default recipe / untested validation best15 as the test-proven best checkpoint and using that claim to justify stage2 initialization",
+    "clip001_best_public_test_completed_at_audit": false,
+    "val_best_vs_last_not_same_sample_set": {
+      "best15": 800,
+      "last25": 1599
+    }
+  }
+}

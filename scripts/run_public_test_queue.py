@@ -27,6 +27,45 @@ from moonseg.evaluate_public_test import (CHECKPOINT_POLICIES, EXPECTED_SAMPLES,
                                           SCENE_COUNTS, checkpoint_policy_metadata, validate_final_checkpoint)
 
 
+def checkpoint_runs(run, config):
+    """Expand a run without changing legacy job keys or its training dependency."""
+    if "checkpoints" in run:
+        if "checkpoint" in run or "checkpoint_policy" in run:
+            raise ValueError("Use either a single checkpoint or an explicit checkpoints list")
+        selections = run["checkpoints"]
+        if not isinstance(selections, list) or not selections:
+            raise ValueError("checkpoints must be a nonempty list")
+    else:
+        selections = [{"checkpoint": run["checkpoint"],
+                       "checkpoint_policy": run.get("checkpoint_policy", config.get(
+                           "checkpoint_policy", "validation_selected"))}]
+    seen = set()
+    for selection in selections:
+        if not isinstance(selection, dict) or set(selection) - {"checkpoint", "checkpoint_policy", "label"}:
+            raise ValueError("Checkpoint selections require checkpoint/policy and optional label")
+        checkpoint, policy = selection.get("checkpoint"), selection.get("checkpoint_policy")
+        if policy not in CHECKPOINT_POLICIES:
+            raise ValueError("Each checkpoint requires a single evaluator checkpoint policy")
+        if config.get("checkpoint_policy", "validation_selected") != "mixed" and policy != config.get(
+                "checkpoint_policy", "validation_selected"):
+            raise ValueError("Different checkpoint policies require an explicit mixed queue")
+        if checkpoint in seen:
+            raise ValueError("A run cannot evaluate the same checkpoint twice")
+        seen.add(checkpoint)
+        yield {**{key: value for key, value in run.items() if key != "checkpoints"}, **selection}
+
+
+def queue_policy_metadata(config):
+    policy = config.get("checkpoint_policy", "validation_selected")
+    if policy != "mixed":
+        return checkpoint_policy_metadata(policy)
+    policies = {selected["checkpoint_policy"] for run in config["runs"]
+                for selected in checkpoint_runs(run, config)}
+    return {"checkpoint_policy": "mixed", "checkpoint_policies": [p for p in CHECKPOINT_POLICIES if p in policies],
+            "checkpoint_selection": "Each evaluation records its own checkpoint policy and selection.",
+            "comparison_scope": "Public development comparison; compare matching checkpoint policies and budgets."}
+
+
 def dependency(run):
     """A successful marker takes precedence over stale failed lane statuses."""
     directory = ROOT / "runs" / run["name"]
@@ -72,7 +111,7 @@ def validate_config(config):
             or config["max_workers"] not in (1, 2)):
         raise ValueError("Use unique nonnegative physical GPU indices and at most two workers")
     policy = config.get("checkpoint_policy", "validation_selected")
-    if policy not in CHECKPOINT_POLICIES:
+    if policy not in (*CHECKPOINT_POLICIES, "mixed"):
         raise ValueError("Unknown checkpoint policy")
     if config["profiles"] != PROFILES or config["expected_samples"] != EXPECTED_SAMPLES:
         raise ValueError("Only the fixed single/narrowflip profiles over all 5004 samples are permitted")
@@ -96,11 +135,14 @@ def validate_config(config):
     validate_cancellations(config, names)
     for run in config["runs"]:
         epochs = run["expected_epochs"]
-        if policy == "final_epoch":
-            if type(epochs) is not int or epochs != 25 or run["checkpoint"] != "last.pt":
-                raise ValueError("final_epoch evaluations require the fixed 25-epoch last.pt checkpoint")
-        elif type(epochs) is not int or epochs <= 0 or run["checkpoint"] != ("best.pt" if epochs == 80 else "best_miou.pt"):
-            raise ValueError("Use validation best_miou.pt with an explicit positive stage budget, or legacy best.pt (80 epochs)")
+        if type(epochs) is not int or epochs <= 0:
+            raise ValueError("Each run requires an explicit positive training stage budget")
+        for selected in checkpoint_runs(run, config):
+            if selected["checkpoint_policy"] == "final_epoch":
+                if selected["checkpoint"] != "last.pt":
+                    raise ValueError("final_epoch evaluations require the planned final last.pt checkpoint")
+            elif selected["checkpoint"] != ("best.pt" if epochs == 80 else "best_miou.pt"):
+                raise ValueError("Use validation best_miou.pt, or legacy best.pt (80 epochs)")
         if run["dependency"]["kind"] not in {"history", "marker"}:
             raise ValueError("Unknown training dependency")
         if run["dependency"]["kind"] == "marker" and not run["dependency"].get("status_path"):
@@ -144,22 +186,30 @@ def prepare_checkpoint(run, policy):
 
 def job_order(config):
     by_name = {run["name"]: run for run in config["runs"]}
-    for profile in PROFILES:
-        for name in config["priority_runs"]:
-            yield by_name[name], profile
-    for run in config["runs"]:
-        if run["name"] not in config["priority_runs"]:
+    if config.get("checkpoint_policy") != "mixed":
+        # Keep the scheduling order of existing single-checkpoint plans.
+        for profile in PROFILES:
+            for name in config["priority_runs"]:
+                for selected in checkpoint_runs(by_name[name], config):
+                    yield selected, profile
+        ordered = [run for run in config["runs"] if run["name"] not in config["priority_runs"]]
+    else:
+        ordered = [by_name[name] for name in config["priority_runs"]]
+        ordered.extend(run for run in config["runs"] if run["name"] not in config["priority_runs"])
+    for run in ordered:
+        for selected in checkpoint_runs(run, config):
             for profile in PROFILES:
-                yield run, profile
+                yield selected, profile
 
 
 def score_result(path, job, config):
     value = read_json(path)
-    policy = config.get("checkpoint_policy", "validation_selected")
+    policy = job.get("checkpoint_policy", config.get("checkpoint_policy", "validation_selected"))
     if value.get("checkpoint_policy", "validation_selected") != policy:
         raise ValueError("Score checkpoint policy does not match this planned evaluation")
-    if policy == "final_epoch" and any(value.get(key) != expected for key, expected in checkpoint_policy_metadata(policy).items()):
-        raise ValueError("Final scores must identify the fixed-budget public development comparison")
+    if (policy == "final_epoch" or config.get("checkpoint_policy") == "mixed") and any(
+            value.get(key) != expected for key, expected in checkpoint_policy_metadata(policy).items()):
+        raise ValueError("Scores must identify their checkpoint selection and public development comparison")
     if (value.get("evaluation_kind") != MANIFEST_KIND or value.get("official_score") is not False
             or value.get("evaluated_samples") != EXPECTED_SAMPLES or value.get("weights") != "model"
             or value.get("scene_sample_counts") != SCENE_COUNTS or "val_loss" in value):
@@ -210,12 +260,16 @@ class Queue(ValidationQueue):
         self.children, self.gpu_locks, self.stopping = {}, {}, False
         self.state.update(parent_pid=os.getpid(), parent_start_ticks=process_info(os.getpid())["start_ticks"],
                           status="running", started_at=now(), evaluation_kind=MANIFEST_KIND, official_score=False,
-                          **checkpoint_policy_metadata(config.get("checkpoint_policy", "validation_selected")))
+                          **queue_policy_metadata(config))
         for run, profile in job_order(config):
             key = f"{run['name']}/{Path(run['checkpoint']).stem}/{profile}"
             self.state["jobs"].setdefault(key, {"run": run["name"], "label": run["label"],
                 "checkpoint": run["checkpoint"], "profile": profile, "weights": "model", "status": "pending",
-                "checkpoint_policy": config.get("checkpoint_policy", "validation_selected")})
+                **checkpoint_policy_metadata(run["checkpoint_policy"])})
+            job = self.state["jobs"][key]
+            if job.get("checkpoint_policy", "validation_selected") != run["checkpoint_policy"]:
+                raise ValueError(f"Saved job checkpoint policy differs: {key}")
+            job.update(expected_epochs=run["expected_epochs"], **checkpoint_policy_metadata(run["checkpoint_policy"]))
         for job in self.state["jobs"].values():
             if job["status"] == "launching":
                 self.fail(job, "Parent interrupted during launch; inspect log/PID before a manual retry")
@@ -230,27 +284,32 @@ class Queue(ValidationQueue):
         for key, job in self.state["jobs"].items():
             result = job.get("result", {})
             rows.append({"job": key, **{field: job.get(field) for field in (
-                "run", "label", "checkpoint", "checkpoint_policy", "epoch", "global_step", "weights", "profile", "status",
+                "run", "label", "checkpoint", "checkpoint_policy", "checkpoint_selection", "comparison_scope",
+                "expected_epochs", "epoch", "global_step", "weights", "profile", "status",
                 "gpu", "pid", "elapsed_seconds", "score_path", "log_path", "error", "cancellation_reason")},
                 **{field: result.get(field) for field in (
                     "mIoU", "mAcc", "pooled", "scene_equal_macro", "scenes", "scene_sample_counts", "evaluated_samples")}})
         atomic_json(self.output / "aggregate.json", {"updated_at": now(), "status": self.state["status"],
             "evaluation_kind": MANIFEST_KIND, "official_score": False,
             "metric_scope": "Pooled pixels and equal scene macro; no organizer-weighted official total.",
-            **checkpoint_policy_metadata(self.config.get("checkpoint_policy", "validation_selected")),
+            **queue_policy_metadata(self.config),
             "evaluations": rows})
 
     def prepare(self, run):
-        jobs = [job for job in self.state["jobs"].values() if job["run"] == run["name"]]
+        for selected in checkpoint_runs(run, self.config):
+            self.prepare_selection(selected)
+
+    def prepare_selection(self, run):
+        jobs = [job for job in self.state["jobs"].values()
+                if job["run"] == run["name"] and job["checkpoint"] == run["checkpoint"]]
         if all(job["status"] in TERMINAL or "config_path" in job for job in jobs):
             return
         try:
             ready, message = dependency(run)
-            self.state["runs"][run["name"]] = {"ready": ready, "dependency": message}
+            self.set_run_status(run, {"ready": ready, "dependency": message})
             if not ready:
                 return
-            config_path, checkpoint, metadata = prepare_checkpoint(
-                run, self.config.get("checkpoint_policy", "validation_selected"))
+            config_path, checkpoint, metadata = prepare_checkpoint(run, run["checkpoint_policy"])
             for job in jobs:
                 if job["status"] in TERMINAL:
                     continue
@@ -259,13 +318,21 @@ class Queue(ValidationQueue):
                 job.update(**metadata, config_path=str(config_path), checkpoint_path=str(checkpoint),
                            score_path=str(output / "scores.json"), log_path=str(output / "evaluation.log"))
         except Exception as error:
-            self.state["runs"][run["name"]] = {"ready": False, "error": str(error)}
+            self.set_run_status(run, {"ready": False, "error": str(error)})
             for job in jobs:
                 if job["status"] == "pending":
                     if isinstance(error, TrainingBlocked):
                         job.update(status="blocked", error=str(error), finished_at=now())
                     else:
                         self.fail(job, f"Run preparation: {error}")
+
+    def set_run_status(self, run, value):
+        if self.config.get("checkpoint_policy") == "mixed":
+            state = self.state["runs"].setdefault(run["name"], {})
+            state.setdefault("checkpoints", {})[run["checkpoint"]] = {
+                **value, **checkpoint_policy_metadata(run["checkpoint_policy"])}
+        else:
+            self.state["runs"][run["name"]] = value
 
     def finish(self, job, returncode=None):
         score = Path(job["score_path"])
@@ -323,7 +390,7 @@ class Queue(ValidationQueue):
                        PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True")
             command = [str(python_path(self.config["python"])), "-m", "moonseg.evaluate_public_test", "--config",
                        job["config_path"], "--checkpoint", job["checkpoint_path"], "--weights", "model",
-                       "--checkpoint-policy", self.config.get("checkpoint_policy", "validation_selected"),
+                       "--checkpoint-policy", job["checkpoint_policy"],
                        "--data-root", str(absolute(self.config["data_root"])), "--manifest",
                        str(absolute(self.config["manifest"])), "--profile", job["profile"],
                        "--output", str(score.with_name("scores.partial.json"))]
@@ -364,9 +431,12 @@ def main():
                 "max_workers": config["max_workers"], "weights": "model", "profiles": PROFILES,
                 "expected_samples": EXPECTED_SAMPLES, "scene_sample_counts": SCENE_COUNTS,
                 "evaluation_kind": MANIFEST_KIND, "official_score": False, "runs": [],
-                **checkpoint_policy_metadata(config.get("checkpoint_policy", "validation_selected")),
-                "job_order": [f"{run['label']}/{profile}" for run, profile in job_order(config)]}
-        for run in config["runs"]:
+                **queue_policy_metadata(config),
+                "job_order": [f"{run['name']}/{Path(run['checkpoint']).stem}/{profile}"
+                              for run, profile in job_order(config)]}
+        for run, profile in job_order(config):
+            if profile != next(iter(PROFILES)):
+                continue
             if run["name"] in config.get("cancelled_runs", []):
                 plan["runs"].append({**run, "ready": False, "status": "cancelled"})
                 continue
@@ -374,8 +444,7 @@ def main():
                 ready, message = dependency(run)
                 item = {**run, "ready": ready, "dependency_status": message}
                 if ready:
-                    _, _, item["checkpoint_metadata"] = prepare_checkpoint(
-                        run, config.get("checkpoint_policy", "validation_selected"))
+                    _, _, item["checkpoint_metadata"] = prepare_checkpoint(run, run["checkpoint_policy"])
                 plan["runs"].append(item)
             except Exception as error:
                 plan["runs"].append({**run, "ready": False, "error": str(error)})

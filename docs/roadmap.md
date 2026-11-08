@@ -24,13 +24,17 @@
 
 后续公开开发的首批建议先限制为两个配方：全六场景 L1 均匀采样，再做全六场景 L1 + RCS，其他增强维持基线，避免直接叠加当前负收益项。使用 `dev_final_train.json`（1/3/5/6/7/8，共 8002 帧），RCS 统计改用 `label_stats_dev_final_train.json`；1024²、8×2×4=64、seed42、lr2e-4 不变。每轮 125 次更新，20 轮为 2500 次，与旧五场景的 25×100 匹配；若沿用 25 轮则为 3125 次，应作为独立预算变化记录。先取得全量 L1 基准，再确定训练长度/学习率等搜索范围；场景 9 优先，同时记录 2/4 回退及每类 IoU，不猜测官方场景权重。共同留出 6 的因果对照保留为诊断备选，不作为这条开发路线的必需前置。
 
-工程准备情况：全量清单与 RCS 统计已有；训练入口支持 `validate: false`，此时不建立场景 5 验证集，也不会产生验证 best_miou/best_loss。现有队列仍要求 25 轮、末轮场景 5 全量验证及 best_miou，不能直接复用为新协议；实际执行前需明确新的固定更新点/选权重方式，并调整完成判据和评估依赖。当前只记录后续路线，未修改代码或启动扫参。
+工程准备情况：全量清单与 RCS 统计已有；训练入口支持 `validate: false`，此时不建立场景 5 验证集，也不会产生验证 best_miou/best_loss。现有训练完成与评测链仍依赖独立场景5验证、完整history及计划预算，不能直接复用为无验证集的新协议；实际执行前需明确新的固定更新点/选权重方式，并调整完成判据和评估依赖。当前只记录后续路线，未修改代码或启动扫参。
 
 权重选择按是否保留独立验证集区分（用户2026-11-08澄清）：当前场景5仍独立留出，可以按验证mIoU或验证loss选择best权重；后续场景5并入训练、没有独立验证集时，使用末轮 `last.pt`。现有 `best_loss.pt` 指最低验证loss，不引入按训练loss选择模型的方案。此前将“统一取latest”写成所有开发实验的硬性原则，是对适用阶段的误解；完整跑完预算与保存、选择验证best并不冲突。poly调度依赖总轮数，长训练的中途checkpoint不等同于短训练的最终checkpoint。轮数搜索仍按用户要求暂缓，待尚未纳入的数据安排后再决定；该次权重选择澄清本身未启动训练或评估；其后11-08已另行确认并启动A/B。
 
+用户反复明确：路线收益和后续微调起点必须依据公开场景2/4/9的测试结果，场景5验证排名只产生候选，不能代替测试证据。clip001已测试的是第25轮last；第15轮best仅在场景5隔帧800张上选出，尚未完整复评或完成公开测试，不能称为测试集已验证最佳。当前A已从best15启动，因此仅检验该起点继续微调的效果，不能代表从clip001 last25继续解冻；补测A的last5也不改变其初始化来源。现有训练按用户要求继续，后续更换起点须先核对对应测试结果。
+
+11-08结论复核：历史13个所选权重的26项公开测试，以及10-29四个末轮权重的8项公开测试，共34份归档、原始scores和队列result一致，评测日志对应model权重及5004张公开2/4/9；逐场景混淆矩阵复算通过，未发现需要作废的测试分数。需撤回的是“clip001已是test最佳权重、best15已胜last25、A从已验证最佳继续微调”这一类证据越界表述。TTA在17组同checkpoint对照的场景9均提高；clip001只在last的TTA上较L1微升0.037个百分点，single反降0.081；decoder9与width384的否定结论均限定当前25轮last，不能外推其未测best。RCS的场景9提高伴随场景2/4下降，RRC的场景9收益未获第二seed一致支持；这些已测取舍仍成立，不应一并作废。
+
 ## 当前训练与评估（2026-10-29）
 
-本节表格及完成时间是10-29历史记录；11-08已在2/3追加独立DA3MONO冻结单骨干训练（详见下文）；原A/B已启动，父权重与A/B的best_miou公开单尺度/TTA在同两组GPU释放后接续，执行计划为`runs/plans/2026-11-08/fullft/`，参数与阶段入口见下文两条已启动路线。
+本节表格及完成时间是10-29历史记录；11-08已在2/3追加独立DA3MONO冻结单骨干训练（详见下文）；原A/B已启动，父权重best及A/B的best+last公开单尺度/TTA在同两组GPU释放后由原队列接续，执行计划为`runs/plans/2026-11-08/fullft/`，参数与阶段入口见下文两条已启动路线。
 
 11-08数据核对：用户提供的官方训练/测试包已下载到 `data/LuSNAR_official`。训练8002对RGB/标签和测试5004张RGB，共21,008个PNG与原公开池逐字节一致，官方时间戳清单也完全对应，正式清单已转录生成。用户确认现有训练数据与官方一致，已有测试结论有效，无需更改数据或因来源差异重训、重复评估。沿用data/LuSNAR及原清单，当前仍训练1/3/6/7/8、留出5。细节与证据见 [data.md](data.md#官方数据一致性核对)。
 
@@ -135,13 +139,15 @@ H+ RRC 第 1 轮验证后，在第 2 轮第一次损失计算时显存溢出：a
 
 本批按每卡4×2卡×累积8=64执行。依据为既有ViT-L全解冻合成容量记录：Ada单卡batch4峰值allocated40.22/reserved43.41GiB，batch5 OOM；不是本批真实DDP长跑的显存保证。两组均有49140MiB显存，正式实施时需确认DDP及累积后的实际峰值。现有gradient_checkpointing只覆盖Adapter，不能假定已给DINOv3各block启用激活检查点。
 
-所有任务保留AdamW、wd0.05、poly0.9、无warmup和bf16；5轮是本次短微调的候选预算，25轮沿用已有参考预算，均不宣称最优。当前有独立场景5，主比较统一按验证mIoU选best，另保留best_loss和last诊断。clip001的best_miou与best_loss同为第15轮。原A/B两组卡释放后，补测固定父权重和新模型best的公开单尺度/TTA；后续追加的DA3MONO仅使用独立2/3计划。最终看公开场景9、2/4回退及各类IoU，原有测试结果继续有效。
+所有任务保留AdamW、wd0.05、poly0.9、无warmup和bf16；5轮是本次短微调的候选预算，25轮沿用已有参考预算，均不宣称最优。当前有独立场景5，保留验证mIoU选出的best作为待测候选；本批同时评last，以公开测试结果判断收益与后续起点，分别按best对best、last对last比较，不新增best_loss公开评估。clip001的best_miou与best_loss同为第15轮。原A/B两组卡释放后，补测固定父权重best和新模型best、last的公开单尺度/TTA；后续追加的DA3MONO仅使用独立2/3计划。最终看公开场景9、2/4回退及各类IoU，原有测试结果继续有效。
 
 冻结对照作为首批结果出来后的候选，不预先排队：A0从与A相同的父权重开始，以相同每卡batch、学习率、预算和新优化器继续冻结训练，用于区分解冻与额外训练收益；B0从与B相同初始化开始，以相同每卡batch和预算冻结训练。B0与旧冻结基线的区别是每卡batch4而非8，Adapter普通BatchNorm统计不同，梯度累积不能消除这一差异。若需要对照，只在上述两组卡上接续。A和B之间阶段预算不同，不直接将其分数差解释成训练时机的单一因果效应。
 
-实际运行B为`runs/dnv3_va_m2f_vitl16_rrc_fullft`，A为`runs/dnv3_va_m2f_vitl16_rrc_clip001_stage2_fullft`；均已通过真实DDP初始更新，尚未完成首轮，暂无结果结论。单计划启动器`run_finetuning_plan.py`支持上述batch与预算，计划/状态在`runs/plans/2026-11-08/fullft/`，校验共享训练与评估锁、UUID及空闲后启动。GPU环境为PCI_BUS_ID、expandable_segments:True；0/7保持P2P，4/5设置NCCL_P2P_DISABLE=1。公开评估队列已支持5轮阶段并排好父权重及A/B的best_miou单尺度/TTA，只在上述卡对释放后运行，状态在`runs/public_development_fullft_2026-11-08/`。CPU实模型保存/回载已核对三个checkpoint投影均覆盖343个可训练ViT张量，缺失可训练ViT键仍严格拒绝；证据[evidence/fullft_checkpoint_verification_20261108.json](evidence/fullft_checkpoint_verification_20261108.json)，使用实模型上的模拟学习扰动，实际训练首轮checkpoint尚待生成后检查。
+实际运行B为`runs/dnv3_va_m2f_vitl16_rrc_fullft`，A为`runs/dnv3_va_m2f_vitl16_rrc_clip001_stage2_fullft`；均已通过真实DDP初始更新，尚未完成首轮，暂无结果结论。单计划启动器`run_finetuning_plan.py`支持上述batch与预算，计划/状态在`runs/plans/2026-11-08/fullft/`，校验共享训练与评估锁、UUID及空闲后启动。GPU环境为PCI_BUS_ID、expandable_segments:True；0/7保持P2P，4/5设置NCCL_P2P_DISABLE=1。公开评估原队列扩为父权重best及A/B各best+last的单尺度/TTA，共10项，每队列最多2个单卡任务，只在上述卡对释放后运行，状态在`runs/public_development_fullft_2026-11-08/`。CPU实模型保存/回载已核对三个checkpoint投影均覆盖343个可训练ViT张量，缺失可训练ViT键仍严格拒绝；证据[evidence/fullft_checkpoint_verification_20261108.json](evidence/fullft_checkpoint_verification_20261108.json)，使用实模型上的模拟学习扰动，实际训练首轮checkpoint尚待生成后检查。
 
-新的训练对照须保持相同数据划分、训练预算、权重选择标准与推理设置。此前13次训练的验证best结果仍是当前划分下的有效依据；10-29新增三项训练目前只有last.pt的公开测试结果，其验证best尚待补评。不能把新方案末轮与旧基线最佳轮直接混报成单变量收益，也不能把末轮退化扩大为验证best同样退化。五场景训练下每轮100次更新；轮数搜索若恢复，不能直接套用全六场景的125次更新/轮。
+best对best、last对last分别报告。clip001已有25轮/2500更新last的[单尺度](evidence/public_development_last_20261029/rrc_clip001_single.json)和[TTA](evidence/public_development_last_20261029/rrc_clip001_narrowflip.json)结果直接复用，不重复评父last；本次仅给A、B、DA3各补两项last，共追加6项。B与DA3的25轮last可与该基线比较；A的last是从第15轮best初始化后5轮/500更新，属于不同初始化与预算的阶段诊断，不声称相同总预算。两个原评测队列均保持最多2个单卡任务；队列顶层`mixed`、单项选择策略及计划轮数分别记录，last仍须严格通过配置/history/末轮全量验证和步数预算检查。备份后显式迁移原计划与status，已有完成结果保留、不重跑；格式见[training.md](training.md#gpu-放置与启动)。
+
+新的训练对照须保持相同数据划分、训练预算、权重选择标准与推理设置。此前13个验证所选权重已完成公开测试，其公开测试结果仍是当前划分下的有效依据；10-29新增三项训练目前只有last.pt的公开测试结果，其验证best尚待补评。不能把新方案末轮与旧基线最佳轮直接混报成单变量收益，也不能把末轮退化扩大为验证best同样退化。五场景训练下每轮100次更新；轮数搜索若恢复，不能直接套用全六场景的125次更新/轮。
 
 本轮实现核对发现，当前 RCS 以 64.95% 概率先选撞击坑、28.74% 选岩石，但所有 6403 张图都含岩石，选岩石等价于在全部图中均匀抽一张。场景 1 不含坑，预期图像抽样占比从均匀的 17.09% 降至 6.01%；场景 7 从 25.39% 升至 33.29%。裁剪前岩石像素期望占比从 2.193% 降至 1.761%，坑从 1.377% 升至 1.820%。这些统计保留用于理解现有 RCS，但不是测试回退的因果证明，也不是增强后的实际像素分布。可复算证据在 [evidence/rcs_sampling_audit.json](evidence/rcs_sampling_audit.json)，只使用训练清单和已有训练标签统计。
 
@@ -149,7 +155,7 @@ H+ RRC 第 1 轮验证后，在第 2 轮第一次损失计算时显存溢出：a
 
 ### DA3MONO单骨干替换（11-08追加）
 
-11-08首组DA3MONO采用冻结骨干对照：`da3mono_va_m2f_vitl14_rrc_frozen`在PCI2/3从官方DA3MONO-LARGE encoder与新Adapter/head开始，完整冻结encoder（eval、no_grad、无encoder优化器参数）。严格复制冻结`dnv3_va_m2f_vitl16_rrc_clip001`：25轮/2500更新、1024² RRC0.5–2、每卡8×2卡×累积4=64、AdamW lr2e-4/wd0.05、poly0.9/无warmup、clip0.01、decoder6/width256、seed42、原亮度/对比度增强及uniform采样；dev_train6403与dev_val1599、场景5独立验证保持不变。保留每卡batch8以对齐Adapter普通BatchNorm，不能仅用有效batch相等代替。原生patch14仅右下补到1036²，再按像素坐标桥接64²的stride16特征；输入未缩小。独立计划/状态在`runs/plans/2026-11-08/da3mono_frozen/`，从disk02本地代码、环境与CUDA扩展运行；完成后独立队列`runs/public_development_da3mono_frozen_2026-11-08/`在2/3评验证`best_miou.pt`的公开2/4/9全5004张single/narrowflip。公平比较对象为同样按独立验证mIoU选出的clip001父权重，已在原A/B队列排好；历史clip001末轮测试结果仍按原口径保留。
+11-08首组DA3MONO采用冻结骨干对照：`da3mono_va_m2f_vitl14_rrc_frozen`在PCI2/3从官方DA3MONO-LARGE encoder与新Adapter/head开始，完整冻结encoder（eval、no_grad、无encoder优化器参数）。严格复制冻结`dnv3_va_m2f_vitl16_rrc_clip001`：25轮/2500更新、1024² RRC0.5–2、每卡8×2卡×累积4=64、AdamW lr2e-4/wd0.05、poly0.9/无warmup、clip0.01、decoder6/width256、seed42、原亮度/对比度增强及uniform采样；dev_train6403与dev_val1599、场景5独立验证保持不变。保留每卡batch8以对齐Adapter普通BatchNorm，不能仅用有效batch相等代替。原生patch14仅右下补到1036²，再按像素坐标桥接64²的stride16特征；输入未缩小。独立计划/状态在`runs/plans/2026-11-08/da3mono_frozen/`，从disk02本地代码、环境与CUDA扩展运行；完成后独立队列`runs/public_development_da3mono_frozen_2026-11-08/`在2/3评`best_miou.pt`与`last.pt`的公开2/4/9全5004张single/narrowflip，共4项，每队列最多2个单卡任务。best比较对象为原A/B队列中的clip001验证best，25轮last比较对象直接复用clip001已有末轮结果。
 
 此次同时更换骨干预训练、原生patch及位置编码，按完整骨干方案比较，不解释为单独深度监督的纯因果效应。旧`rrc_fullft`误以全解冻启动，因路线纠正在第1轮完成、第2轮最后日志step114时中止；文件/checkpoint保留、旧队列禁用，不能据此作性能淘汰或初始化新运行。
 
