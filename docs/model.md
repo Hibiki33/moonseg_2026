@@ -10,7 +10,7 @@ All model settings belong to `config['model']`:
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `backbone` | `vitb16` | `vitb16` or `vitl16` |
+| `backbone` | `vitb16` | `vitb16`, `vitl16`, `vith16plus` or `da3mono_vitl14` |
 | `backbone_weights` | required when loading | Local native Meta `.pth` state dictionary |
 | `dinov3_repo` | repository `third_party/dinov3` | Official source directory |
 | `freeze_backbone` | `true` | Freeze only the original ViT; adapter and head train. `false` trains the whole ViT |
@@ -44,6 +44,16 @@ The original ViT always remains in evaluation mode, also when the full model ent
 The optimizer identifies original ViT parameters with `name.startswith('backbone.backbone.')` and applies `train.backbone_lr_multiplier`; matching every name containing `backbone` would incorrectly include the adapter. Biases, one-dimensional tensors and embedding tables get no weight decay: names containing `pos_embed`, `cls_token`, `storage_tokens` (DINOv3's register tokens), `register_tokens`, `mask_token`, `level_embed`, `level_encoding`, `query_feat` or `query_embed`. Every remaining decayed tensor with two or more dimensions is a linear or convolution weight (including the `class_embed`/`mask_embed` heads and, when trained, the patch-embedding convolution). Memory and speed of `unfreeze_last_blocks: 4` have not been measured; full-unfreeze capacity is in [gpu_topology.md](gpu_topology.md#显存与吞吐容量).
 
 Loading uses `pretrained=False` followed by strict native state-dictionary loading, and never starts a network download. Training (also on resume), `moonseg.evaluate` and `moonseg.predict` always build with `load_backbone=True`, because checkpoints do not contain the frozen ViT (see [Checkpoints](#checkpoints)). `load_backbone=False` is only for explicitly random-initialized smoke checks; it does not produce pretrained features. Hugging Face Transformers safetensors require conversion to the native Meta parameter layout before using this loader ([weights.md](weights.md)).
+
+## DA3MONO encoder option
+
+`model.backbone: da3mono_vitl14` loads only the official DA3MONO-LARGE depth-trained ViT-L encoder (24 blocks, dimension 1024, layers `[4,11,17,23]`, no alternate-view attention, QK norm or RoPE). `model.backbone_weights` points to `ckpts/da3mono-large/model.safetensors`. The strict loader selects only `model.backbone.pretrained.*`: 342 tensors / 304,367,616 parameters. No DA3 depth/camera head is built. DINOv3 defaults, state keys and historical configurations keep their existing behavior.
+
+The native encoder keeps `patch_size=14`; `adapter_patch_size=16` describes the feature interface only. Images stay 1024²: only the encoder input receives right/bottom zero padding to 1036² (74² patches). Official normalized patch features are bilinearly sampled at Adapter pixel centers `p=(j+0.5)*16`, using grid coordinates `g=2*p/padded_extent-1` with `align_corners=False`. This yields the existing 64² feature grid without rescaling the padded field of view. The outer network still pads arbitrary TTA sizes to /32, then applies the same independent /14 encoder padding and coordinate bridge. The segmentation spatial prior and stride4/8/16/32 decoder remain unchanged.
+
+Each image enters the native API as `[B,1,3,H,W]`; batch images are independent single views. Training calls the differentiable encoder directly. `backbone_gradient_checkpointing: true` checkpoints native blocks with `use_reentrant=False` and RNG preservation whenever gradients are enabled and block parameters train, including encoder eval mode. The original `gradient_checkpointing` option still covers Adapter interactions. The encoder remains nested at `backbone.backbone.*`, so its 0.1 LR multiplier and trainable-tensor checkpoint policy apply without special cases. All 342 trained encoder tensors enter last/best_miou/best_loss, with strict missing-key rejection.
+
+The unmodified upstream encoder and import dependencies are vendored under `third_party/depth_anything_3` at revision `3d835ec1a5802d64a8b8b15f817a1ab54809bfe4`, with the Apache-2.0 license and `SOURCE_MANIFEST.json`. The complete sparse reference checkout stays on disk02. Only einops is added; the application, GUI, rendering and depth-head dependency stacks are unused. [CPU evidence](evidence/da3mono_verification_20261108.json) records exact native weight/feature parity, physical-coordinate mapping, eval-mode encoder gradients and complete simulated-learned checkpoint/optimizer restoration.
 
 ## Training criterion
 

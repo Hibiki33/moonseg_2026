@@ -1,0 +1,38 @@
+{
+  "accepted_at": "2026-11-08T22:31:26.882196+08:00",
+  "git_workdir": "/home/disk02/wjj/moonseg/code",
+  "runtime_workdir": "/home/nas_1/wjj/moon",
+  "status": "running",
+  "latest_update": {
+    "epoch": 1,
+    "step": 59,
+    "loss": 9.633609771728516,
+    "grad_norm": 212.363525390625,
+    "lr": [
+      0.00019574694343853333,
+      1.9574694343853334e-05,
+      1.9574694343853334e-05,
+      0.00019574694343853333
+    ],
+    "elapsed_seconds": 1701.4
+  },
+  "approved_config_matches_snapshot": true,
+  "physical_gpus": [
+    2,
+    3
+  ],
+  "nccl_p2p_disabled": true,
+  "effective_batch": 64,
+  "public_eval_jobs": {
+    "da3mono_va_m2f_vitl14_rrc_fullft/best_miou/single": "pending",
+    "da3mono_va_m2f_vitl14_rrc_fullft/best_miou/narrowflip": "pending"
+  },
+  "runtime_migration_performed": false,
+  "approved_live_process_identities": {
+    "358969": 665040391,
+    "359348": 665040570,
+    "359490": 665040748,
+    "359491": 665040748,
+    "360801": 665042873
+  }
+}

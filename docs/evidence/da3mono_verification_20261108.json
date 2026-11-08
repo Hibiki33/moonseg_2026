@@ -1,0 +1,139 @@
+{
+  "encoder_tensors": 342,
+  "encoder_numel": 304367616,
+  "strict_native_keys_shapes_values": true,
+  "depth_head_tensors_excluded": 64,
+  "source_revision": "3d835ec1a5802d64a8b8b15f817a1ab54809bfe4",
+  "normalized_feature_max_abs_diffs": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "native_feature_shapes": [
+    [
+      2,
+      1,
+      20,
+      1024
+    ],
+    [
+      2,
+      1,
+      20,
+      1024
+    ],
+    [
+      2,
+      1,
+      20,
+      1024
+    ],
+    [
+      2,
+      1,
+      20,
+      1024
+    ]
+  ],
+  "independent_single_views": true,
+  "geometry": [
+    {
+      "image": [
+        1024,
+        1024
+      ],
+      "native_padded": [
+        1036,
+        1036
+      ],
+      "adapter_grid": [
+        64,
+        64
+      ],
+      "max_coordinate_error_pixels": 0.0001220703125
+    },
+    {
+      "image": [
+        928,
+        1024
+      ],
+      "native_padded": [
+        938,
+        1036
+      ],
+      "adapter_grid": [
+        58,
+        64
+      ],
+      "max_coordinate_error_pixels": 0.0001220703125
+    },
+    {
+      "image": [
+        1152,
+        1152
+      ],
+      "native_padded": [
+        1162,
+        1162
+      ],
+      "adapter_grid": [
+        72,
+        72
+      ],
+      "max_coordinate_error_pixels": 0.0001220703125
+    },
+    {
+      "image": [
+        64,
+        96
+      ],
+      "native_padded": [
+        70,
+        98
+      ],
+      "adapter_grid": [
+        4,
+        6
+      ],
+      "max_coordinate_error_pixels": 7.62939453125e-06
+    }
+  ],
+  "eval_mode_checkpoint_all_encoder_gradients": 342,
+  "optimizer_groups": [
+    {
+      "lr": 0.0002,
+      "weight_decay": 0.0,
+      "tensors": 260,
+      "encoder": false
+    },
+    {
+      "lr": 2e-05,
+      "weight_decay": 0.0,
+      "tensors": 245,
+      "encoder": true
+    },
+    {
+      "lr": 2e-05,
+      "weight_decay": 0.05,
+      "tensors": 97,
+      "encoder": true
+    },
+    {
+      "lr": 0.0002,
+      "weight_decay": 0.05,
+      "tensors": 135,
+      "encoder": false
+    }
+  ],
+  "checkpoint_trainable_encoder_tensors": 342,
+  "missing_trainable_encoder_key_rejected": true,
+  "saved_and_reloaded": [
+    "last",
+    "best_miou",
+    "best_loss"
+  ],
+  "optimizer_moment_groups_restored": 4,
+  "checkpoint_files": "/home/disk02/wjj/moonseg/verification/da3mono_20261108",
+  "no_depth_or_camera_head": true
+}

@@ -23,12 +23,16 @@ def main():
     plan_path = Path(args.plan).resolve()
     plan = json.loads(plan_path.read_text())
     gpus = plan['gpus']
-    if gpus not in ([0, 7], [4, 5]):
-        raise ValueError('Only approved pairs 0/7 and 4/5 are permitted')
+    if gpus not in ([0, 7], [4, 5], [2, 3]):
+        raise ValueError('Only approved pairs 0/7, 4/5 and the additional DA3 pair 2/3 are permitted')
+    if gpus == [2, 3] and plan.get('experiment') != 'da3mono_backbone':
+        raise ValueError('The additional 2/3 authorization is only for the DA3MONO backbone run')
     config_path = (ROOT / plan['config']).resolve()
     content = config_path.read_bytes()
     config = load_config(config_path)
     settings = config['train']
+    if gpus == [2, 3] and config['model'].get('backbone') != 'da3mono_vitl14':
+        raise ValueError('The additional 2/3 pair requires the DA3MONO encoder')
     output = (ROOT / settings['output_dir']).resolve()
     if output.parent != (ROOT / 'runs').resolve() or output.name != config_path.stem:
         raise ValueError('Expected matching config name and fresh direct child of runs')
@@ -64,7 +68,7 @@ def main():
         env.update(CUDA_DEVICE_ORDER='PCI_BUS_ID', CUDA_VISIBLE_DEVICES=','.join(map(str, gpus)),
                    PYTORCH_CUDA_ALLOC_CONF='expandable_segments:True',
                    PYTHON=str(ROOT / '.venv/bin/python'), OMP_NUM_THREADS='4', NPROC_PER_NODE='2')
-        if gpus == [4, 5]:
+        if gpus in ([4, 5], [2, 3]):
             env['NCCL_P2P_DISABLE'] = '1'
         else:
             env.pop('NCCL_P2P_DISABLE', None)

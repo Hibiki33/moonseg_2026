@@ -242,6 +242,8 @@ def _build_adapter(adapter_module, backbone, settings):
         drop_path_rate=float(settings.get("adapter_drop_path", 0.1)),
         with_cp=bool(settings.get("gradient_checkpointing", True)),
     )
+    # DA3 keeps its native patch14 encoder while bridging only extracted features to /16.
+    adapter.patch_size = getattr(backbone, "adapter_patch_size", backbone.patch_size)
     adapter.freeze_backbone = bool(settings.get("freeze_backbone", True))
     unfreeze = settings.get("unfreeze_last_blocks", 0)
     if isinstance(unfreeze, bool) or not isinstance(unfreeze, int) or not 0 <= unfreeze <= depth:
@@ -316,13 +318,17 @@ class DINOv3Mask2Former(nn.Module):
 def build_model(config: dict, load_backbone: bool = True) -> DINOv3Mask2Former:
     settings = config.get("model", {})
     architecture = str(settings.get("backbone", "vitb16")).removeprefix("dinov3_")
-    if architecture not in BACKBONES:
+    if architecture not in (*BACKBONES, "da3mono_vitl14"):
         raise ValueError(f"model.backbone must be one of {', '.join(BACKBONES)}")
     source = settings.get("dinov3_repo", Path(__file__).resolve().parents[2] / "third_party/dinov3")
     backbones, adapter_module, pixel_module, decoder_module, ops = _official_modules(source)
     deformable_attention, attention_detail = _select_deformable_attention(ops, settings)
-    backbone = getattr(backbones, "dinov3_" + architecture)(pretrained=False)
-    if load_backbone:
+    if architecture == "da3mono_vitl14":
+        from .da3mono import build_da3mono
+        backbone = build_da3mono(settings, load_weights=load_backbone)
+    else:
+        backbone = getattr(backbones, "dinov3_" + architecture)(pretrained=False)
+    if load_backbone and architecture != "da3mono_vitl14":
         weights = settings.get("backbone_weights")
         if not weights:
             raise ValueError("Set model.backbone_weights to official local DINOv3 weights; no automatic download is performed")

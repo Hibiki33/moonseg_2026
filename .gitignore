@@ -6,7 +6,7 @@
 /predictions/
 /submissions/
 /manifests/
-/build/
+/build
 /.venv
 /.cache
 __pycache__/

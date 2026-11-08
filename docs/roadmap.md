@@ -30,7 +30,7 @@
 
 ## 当前训练与评估（2026-10-29）
 
-本节表格及完成时间是10-29历史记录；11-08当前A/B已启动，父权重与A/B的best_miou公开单尺度/TTA在同两组GPU释放后接续，执行计划为`runs/plans/2026-11-08/fullft/`，参数与阶段入口见下文两条已启动路线。
+本节表格及完成时间是10-29历史记录；11-08已在2/3追加独立DA3MONO单骨干训练（详见下文）；原A/B已启动，父权重与A/B的best_miou公开单尺度/TTA在同两组GPU释放后接续，执行计划为`runs/plans/2026-11-08/fullft/`，参数与阶段入口见下文两条已启动路线。
 
 11-08数据核对：用户提供的官方训练/测试包已下载到 `data/LuSNAR_official`。训练8002对RGB/标签和测试5004张RGB，共21,008个PNG与原公开池逐字节一致，官方时间戳清单也完全对应，正式清单已转录生成。用户确认现有训练数据与官方一致，已有测试结论有效，无需更改数据或因来源差异重训、重复评估。沿用data/LuSNAR及原清单，当前仍训练1/3/6/7/8、留出5。细节与证据见 [data.md](data.md#官方数据一致性核对)。
 
@@ -126,7 +126,7 @@ H+ RRC 第 1 轮验证后，在第 2 轮第一次损失计算时显存溢出：a
 
 第二阶段保持第一阶段的decoder结构，通过新增`--initialize-from`（或`train.initialize_from`）先加载同来源的原始DINOv3骨干与第一阶段Adapter/head，再开启全部ViT梯度，随后新建优化器与调度器。源模型以冻结语义严格加载，原有checkpoint加载器不放宽；架构、预训练路径、数据及来源、选择元数据均检查。源优化器/RNG/最佳记录不继承。阶段来源写入`stage_initialization.json`与checkpoint，后续`--resume last.pt`恢复本阶段完整权重与优化器。最后4个block保留后继候选。
 
-11-08用户已确认以下两条路线并授权实施；B先启动、随后实现阶段入口并启动A，只按两组双卡安排：PCI 0/7（Ada）与4/5（A6000）各跑一条主路线，首批仅两项；后续评估和可能的对照也在这两组卡上接续。两条主路线本批统一全量解冻ViT-L，只解冻最后4个block保留为后继候选。沿用当前五场景训练、场景5验证、1024²、RRC、decoder6/width256、clip0.01、seed42和原损失设置。
+11-08用户已确认以下两条路线并授权实施；B先启动、随后实现阶段入口并启动A，当时只按两组双卡安排（用户随后另授权DA3MONO一组2/3，见下文）：PCI 0/7（Ada）与4/5（A6000）各跑一条主路线，首批仅两项；后续评估和可能的对照也在这两组卡上接续。两条主路线本批统一全量解冻ViT-L，只解冻最后4个block保留为后继候选。沿用当前五场景训练、场景5验证、1024²、RRC、decoder6/width256、clip0.01、seed42和原损失设置。
 
 | 已启动任务 | 初始化与骨干训练范围 | 预算 / 初始学习率（Adapter及head / 骨干） | 卡位 |
 |---|---|---|---|
@@ -135,7 +135,7 @@ H+ RRC 第 1 轮验证后，在第 2 轮第一次损失计算时显存溢出：a
 
 本批按每卡4×2卡×累积8=64执行。依据为既有ViT-L全解冻合成容量记录：Ada单卡batch4峰值allocated40.22/reserved43.41GiB，batch5 OOM；不是本批真实DDP长跑的显存保证。两组均有49140MiB显存，正式实施时需确认DDP及累积后的实际峰值。现有gradient_checkpointing只覆盖Adapter，不能假定已给DINOv3各block启用激活检查点。
 
-所有任务保留AdamW、wd0.05、poly0.9、无warmup和bf16；5轮是本次短微调的候选预算，25轮沿用已有参考预算，均不宣称最优。当前有独立场景5，主比较统一按验证mIoU选best，另保留best_loss和last诊断。clip001的best_miou与best_loss同为第15轮。两组卡释放后，补测固定父权重和新模型best的公开单尺度/TTA；不另开第三组卡。最终看公开场景9、2/4回退及各类IoU，原有测试结果继续有效。
+所有任务保留AdamW、wd0.05、poly0.9、无warmup和bf16；5轮是本次短微调的候选预算，25轮沿用已有参考预算，均不宣称最优。当前有独立场景5，主比较统一按验证mIoU选best，另保留best_loss和last诊断。clip001的best_miou与best_loss同为第15轮。原A/B两组卡释放后，补测固定父权重和新模型best的公开单尺度/TTA；后续追加的DA3MONO仅使用独立2/3计划。最终看公开场景9、2/4回退及各类IoU，原有测试结果继续有效。
 
 冻结对照作为首批结果出来后的候选，不预先排队：A0从与A相同的父权重开始，以相同每卡batch、学习率、预算和新优化器继续冻结训练，用于区分解冻与额外训练收益；B0从与B相同初始化开始，以相同每卡batch和预算冻结训练。B0与旧冻结基线的区别是每卡batch4而非8，Adapter普通BatchNorm统计不同，梯度累积不能消除这一差异。若需要对照，只在上述两组卡上接续。A和B之间阶段预算不同，不直接将其分数差解释成训练时机的单一因果效应。
 
@@ -146,6 +146,12 @@ H+ RRC 第 1 轮验证后，在第 2 轮第一次损失计算时显存溢出：a
 本轮实现核对发现，当前 RCS 以 64.95% 概率先选撞击坑、28.74% 选岩石，但所有 6403 张图都含岩石，选岩石等价于在全部图中均匀抽一张。场景 1 不含坑，预期图像抽样占比从均匀的 17.09% 降至 6.01%；场景 7 从 25.39% 升至 33.29%。裁剪前岩石像素期望占比从 2.193% 降至 1.761%，坑从 1.377% 升至 1.820%。这些统计保留用于理解现有 RCS，但不是测试回退的因果证明，也不是增强后的实际像素分布。可复算证据在 [evidence/rcs_sampling_audit.json](evidence/rcs_sampling_audit.json)，只使用训练清单和已有训练标签统计。
 
 实现依据已于 10-24 复核：[DAFormer RCS](https://github.com/lhoyer/DAFormer/blob/master/mmseg/datasets/uda_dataset.py) 同时包含图像像素门槛与裁剪后检查；[Mask2Former ADE20K 配方](https://github.com/facebookresearch/Mask2Former/blob/main/configs/ade20k/semantic-segmentation/Base-ADE20K-SemanticSegmentation.yaml) 的裁剪类别上限为 1.0、全模型梯度裁剪 0.01；[ViT-Adapter BEiTv2 配方](https://github.com/czczup/ViT-Adapter/blob/main/segmentation/configs/ade20k/mask2former_beitv2_adapter_large_896_80k_ade20k_ss.py) 使用 9 层 decoder 和 drop path 0.3，但其骨干/预训练/头部容量不同，只提供消融候选；[Rein 官方实现](https://github.com/w1oves/Rein) 提供参数高效适配方法，不代表本项目已有对应实现或收益。
+
+### DA3MONO单骨干替换（11-08追加）
+
+11-08用户追加授权一组DA3MONO骨干替换：`da3mono_va_m2f_vitl14_rrc_fullft`已在PCI2/3启动，原A/B继续运行。仅加载DA3MONO-LARGE深度预训练encoder，Adapter/head重新初始化；25轮/2500更新、1024²、每卡4×2卡×累积8=64、head/Adapter lr2e-4及encoder lr2e-5、decoder6/width256、clip0.01，数据与原亮度/对比度/RRC均与B对齐。原生patch14输入右下补至1036²，提取后按像素坐标采样到64²；未缩小训练图像。原生24个block启用激活检查点。独立计划/状态在`runs/plans/2026-11-08/da3mono/`，独立公开评估状态在`runs/public_development_da3mono_2026-11-08/`，完成后仅在2/3评验证best_miou的5004张单尺度/窄尺度翻转；A/B队列保持原计划。 它同时改变骨干预训练和原生patch/位置编码，结果按完整骨干方案比较，不解释为单独深度监督的纯因果效应。当前没有授权Metric或双流融合。训练尚无验证/公开结果。
+
+官方encoder源码固定在`3d835ec1a5802d64a8b8b15f817a1ab54809bfe4`，保留Apache-2.0及来源清单；仅增加einops小依赖，torch/cu126保持原版本。CPU证据覆盖342个encoder张量、304,367,616参数严格加载，归一化原生特征与官方实现四层误差均0，右下padding后的物理坐标映射误差小于0.0003像素，全部可训练encoder在last/best_miou/best_loss保存回载与0.1学习率组正确；见[evidence/da3mono_verification_20261108.json](evidence/da3mono_verification_20261108.json)。实际首轮checkpoint尚待训练产生后再核对。
 
 ## 最终流程（方案冻结后）
 
@@ -158,7 +164,7 @@ H+ RRC 第 1 轮验证后，在第 2 轮第一次损失计算时显存溢出：a
 
 - 场景 2/4/9 标签只用于用户明确要求的公开测试研究评估，不进入训练；不用测试图像做伪标签、自训练、TENT 式更新或 AdaBN 式统计重估。
 - 比赛流程仍受官方训练材料范围约束；公开测试研究结果不是官方比赛成绩，也不修改赛事数据使用条款。训练增强只作用于训练清单中的 RGB 与对应标签。
-- 预训练权重只用来源可核验的 DINOv3（LVD-1689M），申报来源与预训练数据范围（[weights.md](weights.md)）；不用 COCO-Stuff/Hypersim 等额外分割数据预训练头部，也不用官方 7B Mask2Former head。
+- 预训练权重使用来源可核验的DINOv3（LVD-1689M）及11-08用户追加授权的DA3MONO-LARGE encoder，申报来源与预训练数据范围（[weights.md](weights.md)）；不用 COCO-Stuff/Hypersim 等额外分割数据预训练头部，也不用官方 7B Mask2Former head。
 - 已核对当前训练图像和标签与官方样本一致，保留数据来源及核对证据；既有权重与实验结论继续使用，不因获取渠道不同强制重训。是否加入场景5另按实验计划决定。
 
 ## 实验记录

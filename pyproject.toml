@@ -16,6 +16,7 @@ dependencies = [
     "PyYAML>=6,<7",
     "omegaconf>=2.3,<3",
     "safetensors>=0.5,<1",
+    "einops>=0.8,<0.9",
 ]
 
 [tool.uv]

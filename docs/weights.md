@@ -70,3 +70,9 @@ ViT-H+ 使用 SwiGLU（gated）MLP：Transformers 配置为 `use_gated_mlp: true
 - 这些检查不是精度验证；没有与官方预训练参考输出做独立数值对齐。
 
 如果已有 Meta 授权的原生 `.pth` URL，可在本机设置 `DINOV3_WEIGHTS_URL` 后用 `--weights-provider meta` 下载；签名 URL 不写入项目记录。
+
+## DA3MONO-LARGE（11-08追加骨干实验）
+
+用户要求先下载权重，已完成后再启动训练。资产在`ckpts/da3mono-large/`（真实目录disk02），包含`model.safetensors`、官方模型配置/模型卡及`source.json`。下载来源为[ModelScope depth-anything/DA3MONO-LARGE](https://modelscope.cn/models/depth-anything/DA3MONO-LARGE)，修订`ad5c2cd9fd6245ce3591227b4c53fea4b20bb240`；官方HF模型元数据修订`f465978e618db8cc79c83b8bbf24964857db1875`。模型卡许可为Apache-2.0。
+
+文件1,336,734,448字节，406个F32张量、334,171,394参数；模型配置、键/形状、参数总量及文件长度与官方HF元数据一致，未另下载HF整文件做逐字节对照。分割模型只加载其中342个encoder张量/304,367,616参数，排除64个深度head张量。源码固定为官方仓库修订`3d835ec1a5802d64a8b8b15f817a1ab54809bfe4`，最小未改动源码与许可证保存在`third_party/depth_anything_3/`；完整稀疏checkout在disk02的references。详细CPU加载与回载证据见[evidence/da3mono_verification_20261108.json](evidence/da3mono_verification_20261108.json)。

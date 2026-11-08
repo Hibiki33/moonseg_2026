@@ -28,7 +28,7 @@ width384训练与全部测试已结束：19:14完成25轮，场景5末轮验证9
 | 方案比较优先级 | 场景 9 mIoU 优先，同时看撞击坑/岩石/山体 IoU；检查场景 2/4 回退，等权均值作为辅助 | 用户强调场景 9；官方数值权重不在本地假定 |
 | TTA | 尺度 0.9/1.0/1.1 + 水平翻转，概率平均；作为统一评估设置，在每个新实验上与单尺度同时测 | 第 3 节；本批评估队列 |
 | 数据 | 21,008个PNG与官方包逐字节一致；用户确认沿用data/LuSNAR、原清单及当前划分，既有训练测试结论有效，无需因数据来源差异重训或重测；官方副本留作归档 | 用户11-08确认；[data.md](data.md#官方数据一致性核对) |
-| GPU | 11-08仅0/7（Ada）与4/5（A6000，须`NCCL_P2P_DISABLE=1`）各训练一项，评估也只在这两组释放后接续；按UUID查空闲 | 用户 10-29 授权寻找空卡，覆盖此前固定卡位；[gpu_topology.md](gpu_topology.md) |
+| GPU | 11-08原A/B为0/7与4/5；用户随后另授权DA3MONO一组2/3，独立训练及后评估；4/5与2/3须`NCCL_P2P_DISABLE=1`，按UUID查空闲 | 用户 10-29 授权寻找空卡，覆盖此前固定卡位；[gpu_topology.md](gpu_topology.md) |
 
 ## 3. 实验结果汇总（场景 5；mIoU 为隔 2 帧 800 帧，标注"全量"者为 1599 帧）
 
@@ -65,11 +65,14 @@ L1 相对 L0，场景 2/4/9 分别提高 0.738/0.231/0.306 个百分点，等权
 
 ## 4. 正在跑与排队（2026-11-08）
 
+11-08用户追加授权一组DA3MONO骨干替换：`da3mono_va_m2f_vitl14_rrc_fullft`已在PCI2/3启动，原A/B继续运行。仅加载DA3MONO-LARGE深度预训练encoder，Adapter/head重新初始化；25轮/2500更新、1024²、每卡4×2卡×累积8=64、head/Adapter lr2e-4及encoder lr2e-5、decoder6/width256、clip0.01，数据与原亮度/对比度/RRC均与B对齐。原生patch14输入右下补至1036²，提取后按像素坐标采样到64²；未缩小训练图像。原生24个block启用激活检查点。独立计划/状态在`runs/plans/2026-11-08/da3mono/`，独立公开评估状态在`runs/public_development_da3mono_2026-11-08/`，完成后仅在2/3评验证best_miou的5004张单尺度/窄尺度翻转；A/B队列保持原计划。 完整encoder保存/严格回载、官方源特征及坐标验证见[evidence/da3mono_verification_20261108.json](evidence/da3mono_verification_20261108.json)。
+
 | 卡对 | 当前 | 之后 | 预计 |
 |---|---|---|---|
 | PCI 0/7 | `rrc_fullft`从原DINO预训练全解冻25轮/2500更新，初始更新正常 | 完成后评父权重及A/B的验证best | 以真实进度为准 |
 | PCI 4/5 | `rrc_clip001_stage2_fullft`从第15轮best初始化，全解冻5轮/500更新，初始更新正常 | 同上，仅用已释放的0/7或4/5 | 以真实进度为准 |
-| 其余GPU | 本批无授权任务 | 不安排第三组卡 | — |
+| PCI 2/3 | `da3mono_va_m2f_vitl14_rrc_fullft`，25轮/2500更新 | 独立队列评本运行best_miou，单尺度/窄尺度翻转 | 以真实进度为准 |
+| 其余GPU | 本批无授权任务 | 不追加实验 | — |
 
 11-08本批计划和启动状态在`runs/plans/2026-11-08/fullft/`的`joint/stage2.json`与对应`.status.json`；训练日志在各运行目录`train.log`。B先启动，随后A；每卡4×2卡×累积8=64。阶段入口、严格加载与完整ViT保存见[training.md](training.md#gpu-放置与启动)和[model.md](model.md#checkpoints)。公开5004张单尺度/窄尺度翻转队列已排父checkpoint及A/B的best_miou，等待同两组卡释放；状态在`runs/public_development_fullft_2026-11-08/`，勿重复启动。下文为历史调度记录。
 
@@ -112,7 +115,7 @@ width384启动前重新查卡，2/4/5/6已有其他项目进程，选择空闲0/
 
 ### B1. 几何双流：DINOv3 语义 token + DA3/VGGT 几何 token
 
-动机：撞击坑是凹陷、岩石是凸起、山体是远处起伏、天空在无穷远，而阴影只改亮度；终稿论文把撞击坑错误归因于"外观太像月壤"，几何特征正好补这一点。机制：Depth Anything 3 / VGGT 的 ViT 以 DINOv2 初始化、经大规模多视角几何监督，patch token 编码深度与表面朝向。实现草图由省到贵：(0) 冻结 DA 推伪深度/法线，作辅助头目标，推理不变；(A) 在 4 个交互层位把两路 token 拼通道、线性降维后进现有 Adapter；(B) 每层位加 cross-attention，DINO 作 query、DA3 作 key/value；(C) 两路 token 拼成 8192 长序列过 2–4 个联合自注意力块。网格对齐：DA3 输入缩到 896²（patch 14 → 64×64）与 DINOv3 1024²（patch 16 → 64×64）一致。代价：多一个冻结 ViT-L 前向，每卡 batch 约降到 5–6。风险：从头训练的融合层在 6.4k 张图上过拟合（C 最甚）。合规：须核对 DA3/VGGT 训练数据无 LuSNAR 测试场景（DA3 晚于 LuSNAR 公开，不能靠时间排除）、权重许可（VGGT 为 CC-BY-NC）并申报；LuMon 系列深度模型因训练含 LuSNAR 禁用；公开包里的深度/双目/LiDAR 禁用。先做 (0) 或 (A)。
+动机：撞击坑是凹陷、岩石是凸起、山体是远处起伏、天空在无穷远，而阴影只改亮度；终稿论文把撞击坑错误归因于"外观太像月壤"，几何特征正好补这一点。机制：Depth Anything 3 / VGGT 的 ViT 以 DINOv2 初始化、经大规模多视角几何监督，patch token 编码深度与表面朝向。实现草图由省到贵：(0) 冻结 DA 推伪深度/法线，作辅助头目标，推理不变；(A) 在 4 个交互层位把两路 token 拼通道、线性降维后进现有 Adapter；(B) 每层位加 cross-attention，DINO 作 query、DA3 作 key/value；(C) 两路 token 拼成 8192 长序列过 2–4 个联合自注意力块。历史融合草图曾建议DA3缩到896²；11-08实际单骨干替换保留1024²、原生patch14，并用右下padding及像素坐标桥接至stride16，后续融合也应优先沿用保留视场的方案。代价：多一个冻结 ViT-L 前向，每卡 batch 约降到 5–6。风险：从头训练的融合层在 6.4k 张图上过拟合（C 最甚）。合规：须核对 DA3/VGGT 训练数据无 LuSNAR 测试场景（DA3 晚于 LuSNAR 公开，不能靠时间排除）、权重许可（VGGT 为 CC-BY-NC）并申报；LuMon 系列深度模型因训练含 LuSNAR 禁用；公开包里的深度/双目/LiDAR 禁用。先做 (0) 或 (A)。
 
 ### B2. 地平线归一化的位置先验
 
@@ -235,7 +238,7 @@ PCI 序号即 `nvidia-smi` 序号（脚本固定 `CUDA_DEVICE_ORDER=PCI_BUS_ID`�
 - 不自行改代码，代码改动派子 agent；子 agent 不得再派子 agent；不做冒烟测试训练，验证用静态审查与 CPU 单元检查。
 - 一次只改一项；候选写进 roadmap 而不是直接进配置；结果写进本文第 3 节和 roadmap 的实验记录。
 - 不往 NAS 写训练输出；只保留 `last.pt`、`best_miou.pt`、`best_loss.pt`。
-- 公开场景 2/4/9 标签按用户 2026-10-23 的明确指令用于独立研究评估；不用测试图做任何自适应，不把研究清单接入训练。赛事条款见 challenge.md，研究评估不改写官方规则。预训练权重只用来源可核验的 DINOv3 并申报。
+- 公开场景 2/4/9 标签按用户 2026-10-23 的明确指令用于独立研究评估；不用测试图做任何自适应，不把研究清单接入训练。赛事条款见 challenge.md，研究评估不改写官方规则。预训练权重使用来源可核验的DINOv3及11-08用户追加授权的DA3MONO-LARGE，并申报；来源见weights.md。
 
 ## 11. 待办
 

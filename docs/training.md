@@ -54,9 +54,11 @@
 
 ## GPU 放置与启动
 
+11-08用户追加授权一组DA3MONO骨干替换：`da3mono_va_m2f_vitl14_rrc_fullft`已在PCI2/3启动，原A/B继续运行。仅加载DA3MONO-LARGE深度预训练encoder，Adapter/head重新初始化；25轮/2500更新、1024²、每卡4×2卡×累积8=64、head/Adapter lr2e-4及encoder lr2e-5、decoder6/width256、clip0.01，数据与原亮度/对比度/RRC均与B对齐。原生patch14输入右下补至1036²，提取后按像素坐标采样到64²；未缩小训练图像。原生24个block启用激活检查点。独立计划/状态在`runs/plans/2026-11-08/da3mono/`，独立公开评估状态在`runs/public_development_da3mono_2026-11-08/`，完成后仅在2/3评验证best_miou的5004张单尺度/窄尺度翻转；A/B队列保持原计划。 两组卡限制现仅针对原A/B；本次仅追加DA3MONO这一组，不追加Metric、融合或对照。2/3设置`CUDA_DEVICE_ORDER=PCI_BUS_ID`、`CUDA_VISIBLE_DEVICES=2,3`、`NCCL_P2P_DISABLE=1`、`PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`，按UUID/空闲与双锁检查启动。
+
 11-08两条全解冻训练已获用户确认并启动：`dnv3_va_m2f_vitl16_rrc_fullft`在0/7从原生DINOv3开始联合训练25轮/2500更新，Adapter/head与骨干初始lr为2e-4/2e-5；`dnv3_va_m2f_vitl16_rrc_clip001_stage2_fullft`在4/5从clip001的第15轮`best_miou.pt`权重初始化，完整解冻后以新优化器训练5轮/500更新，lr为2e-5/2e-6。均为每卡4×2卡×累积8=64、1024²/RRC/width256/decoder6/clip0.01；4/5关闭NCCL P2P，0/7保持已验证P2P路径。`--initialize-from`不同于`--resume`，阶段加载约定见[model.md](model.md#checkpoints)。
 
-本批使用单计划启动器`scripts/run_finetuning_plan.py`，计划与启动状态在`runs/plans/2026-11-08/fullft/`中的`joint/stage2.json`与对应`.status.json`，训练日志在各运行目录的`train.log`。启动前核对物理UUID/进程占用，同时持有既有训练与评估GPU锁，并向torchrun继承锁描述符；历史队列和配置不改。训练完成后校验完整history、全量末轮验证及三个checkpoint，再写`queue_completed.json`。公开评估计划为同目录`public_test.json`，状态在`runs/public_development_fullft_2026-11-08/`；只等这两组卡释放，补评父权重及A/B的验证`best_miou.pt`，每项覆盖5004张单尺度与窄尺度翻转，不增第三组卡。
+本批使用单计划启动器`scripts/run_finetuning_plan.py`，计划与启动状态在`runs/plans/2026-11-08/fullft/`中的`joint/stage2.json`与对应`.status.json`，训练日志在各运行目录的`train.log`。启动前核对物理UUID/进程占用，同时持有既有训练与评估GPU锁，并向torchrun继承锁描述符；历史队列和配置不改。训练完成后校验完整history、全量末轮验证及三个checkpoint，再写`queue_completed.json`。公开评估计划为同目录`public_test.json`，状态在`runs/public_development_fullft_2026-11-08/`；只等这两组卡释放，补评父权重及A/B的验证`best_miou.pt`，每项覆盖5004张单尺度与窄尺度翻转；这是原A/B队列，追加DA3MONO使用上述独立2/3计划。
 
 | 运行目录 | 配置 | 物理 GPU（PCI 序） | 启动时必需的环境变量 | 实际每卡显存 |
 |---|---|---|---|---:|
