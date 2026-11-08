@@ -107,9 +107,17 @@ def dependency(run):
 def validate_config(config):
     gpus = config["gpus"]
     if (not isinstance(gpus, list) or not gpus or any(type(gpu) is not int or gpu < 0 for gpu in gpus)
-            or len(gpus) != len(set(gpus)) or type(config["max_workers"]) is not int
-            or config["max_workers"] not in (1, 2)):
-        raise ValueError("Use unique nonnegative physical GPU indices and at most two workers")
+            or len(gpus) != len(set(gpus))):
+        raise ValueError("Use unique nonnegative physical GPU indices")
+    extra = config.get("temporary_extra_gpus", [])
+    if "temporary_extra_gpus" in config and (
+            not isinstance(extra, list) or len(extra) != 2
+            or any(type(gpu) is not int or gpu < 0 for gpu in extra)
+            or len(set(extra)) != 2 or not set(extra) <= set(gpus)):
+        raise ValueError("temporary_extra_gpus must name two distinct planned nonnegative physical GPU indices")
+    if (type(config["max_workers"]) is not int
+            or not 1 <= config["max_workers"] <= min(len(gpus), 2 + len(extra))):
+        raise ValueError("Use at most two workers unless temporary_extra_gpus explicitly permits up to four")
     policy = config.get("checkpoint_policy", "validation_selected")
     if policy not in (*CHECKPOINT_POLICIES, "mixed"):
         raise ValueError("Unknown checkpoint policy")

@@ -1,0 +1,51 @@
+{
+  "authorized_on": "2026-11-08T17:19:37.690288+00:00",
+  "scope": "Only existing jobs in fullft public evaluation batch 2026-11-08; no permission carried to future training or evaluation",
+  "temporary_extra_gpus": [
+    1,
+    6
+  ],
+  "max_workers": 4,
+  "fresh_gpu_snapshot": {
+    "1": {
+      "uuid": "GPU-7a08a1f1-4c2d-9548-661a-537359ea1f29",
+      "pids": []
+    },
+    "6": {
+      "uuid": "GPU-d5e7669a-511e-925f-cc3f-d23bde2b6cef",
+      "pids": []
+    }
+  },
+  "old_parent": {
+    "pid": 933583,
+    "start_ticks": 666181003
+  },
+  "new_parent": {
+    "pid": 950402,
+    "start_ticks": 666221892,
+    "state": "R"
+  },
+  "preserved_running_evaluators": {
+    "dnv3_va_m2f_vitl16_rrc_clip001_stage2_fullft/best_miou/narrowflip": {
+      "pid": 770015,
+      "start_ticks": 665782741
+    },
+    "dnv3_va_m2f_vitl16_rrc_clip001_stage2_fullft/last/single": {
+      "pid": 933674,
+      "start_ticks": 666181184
+    }
+  },
+  "jobs_unchanged": true,
+  "training_processes_signalled": false,
+  "plan": "/home/disk02/wjj/moonseg/runs/plans/2026-11-08/fullft/public_test.json",
+  "backup": "/home/disk02/wjj/moonseg/runs/plans/2026-11-08/fullft/public_test.before_extra_gpus_20261109.json",
+  "launched_last5_tta": {
+    "pid": 950508,
+    "start_ticks": 666222082,
+    "gpu": 1,
+    "gpu_uuid": "GPU-7a08a1f1-4c2d-9548-661a-537359ea1f29",
+    "checkpoint_path": "/home/disk02/wjj/moonseg/runs/dnv3_va_m2f_vitl16_rrc_clip001_stage2_fullft/last.pt",
+    "status": "running"
+  },
+  "unused_extra_card_reason": "GPU6 has no additional ready evaluation; remaining joint jobs wait for training completion"
+}
