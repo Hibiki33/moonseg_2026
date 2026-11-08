@@ -1,0 +1,33 @@
+{
+  "updated_at": "2026-11-08T17:59:21.002896+00:00",
+  "allowed_gpus": [
+    0,
+    7,
+    2,
+    3
+  ],
+  "fullft_queue_gpus": [
+    0,
+    7
+  ],
+  "da3_queue_gpus": [
+    2,
+    3
+  ],
+  "one_time_running_gpu1_test": {
+    "dnv3_va_m2f_vitl16_rrc_clip001_stage2_fullft/last/narrowflip": {
+      "pid": 950508,
+      "start_ticks": 666222082,
+      "gpu": 1
+    }
+  },
+  "new_parent": {
+    "pid": 1043511,
+    "start_ticks": 666460223,
+    "state": "R"
+  },
+  "training_processes_signalled": false,
+  "temporary_extra_gpu_authorization_removed": true,
+  "plan": "/home/disk02/wjj/moonseg/runs/plans/2026-11-08/fullft/public_test.json",
+  "backup": "/home/disk02/wjj/moonseg/runs/plans/2026-11-08/fullft/public_test.before_four_gpu_limit_20261109.json"
+}

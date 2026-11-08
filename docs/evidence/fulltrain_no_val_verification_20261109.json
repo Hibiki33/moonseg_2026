@@ -1,0 +1,519 @@
+{
+  "created_at": "2026-11-08T18:13:42.814080+00:00",
+  "scope": "CPU-only full-training scheduler and no-validation checkpoint verification",
+  "result": "passed",
+  "passed_checks": 65,
+  "cuda_initialized": false,
+  "production_gpu_queries": false,
+  "production_gpu_locks_modified": false,
+  "existing_processes_or_plans_modified": false,
+  "gpu_training_or_evaluation_launched": false,
+  "verification_artifacts": {
+    "metadata_worker_checks": "/home/disk02/wjj/moonseg/verification/fulltrain_scheduler_20261109/verification.json",
+    "lane_flow_checks": "/home/disk02/wjj/moonseg/verification/fulltrain_scheduler_20261109/flow_verification.json",
+    "temporary_scripts": [
+      "/home/disk02/wjj/moonseg/verification/fulltrain_scheduler_20261109/verify.py",
+      "/home/disk02/wjj/moonseg/verification/fulltrain_scheduler_20261109/verify_flow.py"
+    ]
+  },
+  "files": {
+    "scripts/run_fulltrain_plan.py": {
+      "size": 27322,
+      "mtime_ns": 1794161552789572875,
+      "inode": 356996908
+    },
+    "moonseg/evaluate_public_test.py": {
+      "size": 18500,
+      "mtime_ns": 1794161088272383676,
+      "inode": 356996132
+    },
+    "scripts/run_public_test_queue.py": {
+      "size": 28062,
+      "mtime_ns": 1794161552790572859,
+      "inode": 356996150
+    }
+  },
+  "checks": [
+    {
+      "name": "no_val_10_epochs",
+      "status": "passed"
+    },
+    {
+      "name": "no_val_15_epochs",
+      "status": "passed"
+    },
+    {
+      "name": "no_val_20_epochs",
+      "status": "passed"
+    },
+    {
+      "name": "no_val_25_epochs",
+      "status": "passed"
+    },
+    {
+      "name": "wrong_final_step",
+      "status": "passed",
+      "rejection": "Final checkpoint global_step differs from final training history"
+    },
+    {
+      "name": "wrong_final_epoch",
+      "status": "passed",
+      "rejection": "Final checkpoint epoch/global_step does not complete resolved train.epochs"
+    },
+    {
+      "name": "wrong_total_budget",
+      "status": "passed",
+      "rejection": "No-validation checkpoint has an incorrect total optimizer-step budget"
+    },
+    {
+      "name": "wrong_world_size",
+      "status": "passed",
+      "rejection": "No-validation checkpoint must preserve the two-GPU batch64/125-update recipe"
+    },
+    {
+      "name": "wrong_batch_plan",
+      "status": "passed",
+      "rejection": "No-validation checkpoint must preserve the two-GPU batch64/125-update recipe"
+    },
+    {
+      "name": "missing_sampling_receipt",
+      "status": "passed",
+      "rejection": "No-validation checkpoint must preserve the two-GPU batch64/125-update recipe"
+    },
+    {
+      "name": "missing_training_sample",
+      "status": "passed",
+      "rejection": "No-validation checkpoint data provenance differs from the full training manifest"
+    },
+    {
+      "name": "wrong_data_provenance",
+      "status": "passed",
+      "rejection": "No-validation checkpoint data provenance differs from the full training manifest"
+    },
+    {
+      "name": "validation_snapshot_nonempty",
+      "status": "passed",
+      "rejection": "No-validation checkpoint data provenance differs from the full training manifest"
+    },
+    {
+      "name": "stage_initialization_rejected",
+      "status": "passed",
+      "rejection": "No-validation runs must start independently from native pretraining with fresh Adapter/head"
+    },
+    {
+      "name": "selected_checkpoint_rejected",
+      "status": "passed",
+      "rejection": "No-validation runs must start independently from native pretraining with fresh Adapter/head"
+    },
+    {
+      "name": "fake_best_score_rejected",
+      "status": "passed",
+      "rejection": "No-validation checkpoint contains validation-based selection state"
+    },
+    {
+      "name": "config_mismatch_data",
+      "status": "passed",
+      "rejection": "Final checkpoint differs from resolved data configuration"
+    },
+    {
+      "name": "config_mismatch_model",
+      "status": "passed",
+      "rejection": "Final checkpoint differs from resolved model configuration"
+    },
+    {
+      "name": "config_mismatch_loss",
+      "status": "passed",
+      "rejection": "Final checkpoint differs from resolved loss configuration"
+    },
+    {
+      "name": "config_mismatch_inference",
+      "status": "passed",
+      "rejection": "Final checkpoint differs from resolved inference configuration"
+    },
+    {
+      "name": "config_mismatch_train",
+      "status": "passed",
+      "rejection": "Final checkpoint differs from resolved critical train configuration"
+    },
+    {
+      "name": "wrong_expected_epochs",
+      "status": "passed",
+      "rejection": "Final checkpoint requires the planned resolved train.epochs"
+    },
+    {
+      "name": "best_filename_rejected",
+      "status": "passed",
+      "rejection": "final_epoch policy requires last.pt"
+    },
+    {
+      "name": "early_validation_rejected",
+      "status": "passed",
+      "rejection": "No-validation training history contains validation or checkpoint selection"
+    },
+    {
+      "name": "early_eval_samples_rejected",
+      "status": "passed",
+      "rejection": "No-validation training history contains validation or checkpoint selection"
+    },
+    {
+      "name": "early_val_loss_rejected",
+      "status": "passed",
+      "rejection": "No-validation training history contains validation or checkpoint selection"
+    },
+    {
+      "name": "early_selected_best_rejected",
+      "status": "passed",
+      "rejection": "No-validation training history contains validation or checkpoint selection"
+    },
+    {
+      "name": "intermediate_wrong_step",
+      "status": "passed",
+      "rejection": "No-validation history must contain exactly 125 optimizer updates per epoch"
+    },
+    {
+      "name": "missing_epoch_rejected",
+      "status": "passed",
+      "rejection": "Final checkpoint requires complete history epochs 1..25"
+    },
+    {
+      "name": "unexpected_best_file_rejected",
+      "status": "passed",
+      "rejection": "No-validation run contains an unexpected selected/stage checkpoint"
+    },
+    {
+      "name": "provenance_receipt_mismatch",
+      "status": "passed",
+      "rejection": "No-validation run data_provenance.json differs from checkpoint provenance"
+    },
+    {
+      "name": "real_existing_val_final_epoch",
+      "status": "passed"
+    },
+    {
+      "name": "real_existing_val_validation_selected",
+      "status": "passed"
+    },
+    {
+      "name": "public_queue_no_val_dependency",
+      "status": "passed"
+    },
+    {
+      "name": "public_queue_no_val_best_rejected",
+      "status": "passed",
+      "rejection": "No-validation runs permit only final_epoch checkpoint evaluation"
+    },
+    {
+      "name": "validate_real_plan_07",
+      "status": "passed"
+    },
+    {
+      "name": "real_predecessor_wait_07",
+      "status": "passed"
+    },
+    {
+      "name": "env_gpu_uuid_and_locality_07",
+      "status": "passed"
+    },
+    {
+      "name": "validate_real_plan_23",
+      "status": "passed"
+    },
+    {
+      "name": "real_predecessor_wait_23",
+      "status": "passed"
+    },
+    {
+      "name": "env_gpu_uuid_and_locality_23",
+      "status": "passed"
+    },
+    {
+      "name": "unapproved_gpu_rejected",
+      "status": "passed",
+      "rejection": "Expected one version-1 full-training lane on GPUs 0/7 or 2/3"
+    },
+    {
+      "name": "wrong_job_order_rejected",
+      "status": "passed",
+      "rejection": "The approved sequential epoch budgets for [0, 7] are [10, 25]"
+    },
+    {
+      "name": "wrong_budget_rejected",
+      "status": "passed",
+      "rejection": "dnv3_va_m2f_vitl16_fulltrain_clip001_e10: config must preserve the approved independent frozen clip.01 recipe/budget"
+    },
+    {
+      "name": "missing_uuid_rejected",
+      "status": "passed",
+      "rejection": "Freeze one distinct physical GPU UUID for each lane GPU"
+    },
+    {
+      "name": "real_completed_predecessor_strict_scores",
+      "status": "passed"
+    },
+    {
+      "name": "failed_predecessor_rejected",
+      "status": "passed",
+      "rejection": "Predecessor queue contains an unsuccessful evaluation; automatic continuation refused"
+    },
+    {
+      "name": "partial_predecessor_queue_rejected",
+      "status": "passed",
+      "rejection": "Predecessor queue GPU assignment or complete job membership changed"
+    },
+    {
+      "name": "partial_5003_public_score_rejected",
+      "status": "passed",
+      "rejection": "Scores must cover all public research samples with model weights and no loss"
+    },
+    {
+      "name": "bad_score_weights",
+      "status": "passed",
+      "rejection": "Scores must cover all public research samples with model weights and no loss"
+    },
+    {
+      "name": "bad_score_checkpoint_policy",
+      "status": "passed",
+      "rejection": "Score checkpoint policy does not match this planned evaluation"
+    },
+    {
+      "name": "bad_score_checkpoint_epoch",
+      "status": "passed",
+      "rejection": "Score provenance does not match this planned evaluation"
+    },
+    {
+      "name": "bad_score_scene_sample_counts",
+      "status": "passed",
+      "rejection": "Scores must cover all public research samples with model weights and no loss"
+    },
+    {
+      "name": "worker_inherits_gpu_lock_fd",
+      "status": "passed"
+    },
+    {
+      "name": "adopt_running_cpu_stage",
+      "status": "passed"
+    },
+    {
+      "name": "worker_releases_lock_after_exit",
+      "status": "passed"
+    },
+    {
+      "name": "completed_stage_cannot_launch_twice",
+      "status": "passed",
+      "rejection": "Refusing a second execution of stage cpu_success"
+    },
+    {
+      "name": "completed_receipt_rechecked",
+      "status": "passed"
+    },
+    {
+      "name": "failed_cpu_stage_not_adopted",
+      "status": "passed",
+      "rejection": "Stage cpu_failure failed; inspect /home/disk02/wjj/moonseg/verification/fulltrain_scheduler_20261109/case_rml2oco7/worker/stages/cpu_failure/receipt.json and /home/disk02/wjj/moonseg/verification/fulltrain_scheduler_20261109/case_rml2oco7/cpu_failure.log"
+    },
+    {
+      "name": "failed_stage_cannot_retry",
+      "status": "passed",
+      "rejection": "Refusing a second execution of stage cpu_failure"
+    },
+    {
+      "name": "ambiguous_launch_refuses_duplicate",
+      "status": "passed",
+      "rejection": "Stage ambiguous has no live worker/completion receipt. Inspect its log and child PID in the receipt; this ambiguous attempt will never be launched again"
+    },
+    {
+      "name": "full_lane_dependency_locks_train_test_order_07",
+      "status": "passed",
+      "events": [
+        [
+          "dependency",
+          0
+        ],
+        [
+          "dependency",
+          1
+        ],
+        [
+          "dependency",
+          2
+        ],
+        [
+          "idle",
+          "dnv3_va_m2f_vitl16_fulltrain_clip001_e10"
+        ],
+        [
+          "launch",
+          "dnv3_va_m2f_vitl16_fulltrain_clip001_e10_train"
+        ],
+        [
+          "wait",
+          "dnv3_va_m2f_vitl16_fulltrain_clip001_e10_train"
+        ],
+        [
+          "idle",
+          "dnv3_va_m2f_vitl16_fulltrain_clip001_e10"
+        ],
+        [
+          "launch",
+          "dnv3_va_m2f_vitl16_fulltrain_clip001_e10_single"
+        ],
+        [
+          "launch",
+          "dnv3_va_m2f_vitl16_fulltrain_clip001_e10_narrowflip"
+        ],
+        [
+          "wait",
+          "dnv3_va_m2f_vitl16_fulltrain_clip001_e10_single"
+        ],
+        [
+          "wait",
+          "dnv3_va_m2f_vitl16_fulltrain_clip001_e10_narrowflip"
+        ],
+        [
+          "verified_tests",
+          "dnv3_va_m2f_vitl16_fulltrain_clip001_e10"
+        ],
+        [
+          "idle",
+          "dnv3_va_m2f_vitl16_fulltrain_clip001_e25"
+        ],
+        [
+          "launch",
+          "dnv3_va_m2f_vitl16_fulltrain_clip001_e25_train"
+        ],
+        [
+          "wait",
+          "dnv3_va_m2f_vitl16_fulltrain_clip001_e25_train"
+        ],
+        [
+          "idle",
+          "dnv3_va_m2f_vitl16_fulltrain_clip001_e25"
+        ],
+        [
+          "launch",
+          "dnv3_va_m2f_vitl16_fulltrain_clip001_e25_single"
+        ],
+        [
+          "launch",
+          "dnv3_va_m2f_vitl16_fulltrain_clip001_e25_narrowflip"
+        ],
+        [
+          "wait",
+          "dnv3_va_m2f_vitl16_fulltrain_clip001_e25_single"
+        ],
+        [
+          "wait",
+          "dnv3_va_m2f_vitl16_fulltrain_clip001_e25_narrowflip"
+        ],
+        [
+          "verified_tests",
+          "dnv3_va_m2f_vitl16_fulltrain_clip001_e25"
+        ]
+      ]
+    },
+    {
+      "name": "completed_lane_restart_no_duplicate_07",
+      "status": "passed"
+    },
+    {
+      "name": "full_lane_dependency_locks_train_test_order_23",
+      "status": "passed",
+      "events": [
+        [
+          "dependency",
+          0
+        ],
+        [
+          "dependency",
+          1
+        ],
+        [
+          "dependency",
+          2
+        ],
+        [
+          "idle",
+          "dnv3_va_m2f_vitl16_fulltrain_clip001_e15"
+        ],
+        [
+          "launch",
+          "dnv3_va_m2f_vitl16_fulltrain_clip001_e15_train"
+        ],
+        [
+          "wait",
+          "dnv3_va_m2f_vitl16_fulltrain_clip001_e15_train"
+        ],
+        [
+          "idle",
+          "dnv3_va_m2f_vitl16_fulltrain_clip001_e15"
+        ],
+        [
+          "launch",
+          "dnv3_va_m2f_vitl16_fulltrain_clip001_e15_single"
+        ],
+        [
+          "launch",
+          "dnv3_va_m2f_vitl16_fulltrain_clip001_e15_narrowflip"
+        ],
+        [
+          "wait",
+          "dnv3_va_m2f_vitl16_fulltrain_clip001_e15_single"
+        ],
+        [
+          "wait",
+          "dnv3_va_m2f_vitl16_fulltrain_clip001_e15_narrowflip"
+        ],
+        [
+          "verified_tests",
+          "dnv3_va_m2f_vitl16_fulltrain_clip001_e15"
+        ],
+        [
+          "idle",
+          "dnv3_va_m2f_vitl16_fulltrain_clip001_e20"
+        ],
+        [
+          "launch",
+          "dnv3_va_m2f_vitl16_fulltrain_clip001_e20_train"
+        ],
+        [
+          "wait",
+          "dnv3_va_m2f_vitl16_fulltrain_clip001_e20_train"
+        ],
+        [
+          "idle",
+          "dnv3_va_m2f_vitl16_fulltrain_clip001_e20"
+        ],
+        [
+          "launch",
+          "dnv3_va_m2f_vitl16_fulltrain_clip001_e20_single"
+        ],
+        [
+          "launch",
+          "dnv3_va_m2f_vitl16_fulltrain_clip001_e20_narrowflip"
+        ],
+        [
+          "wait",
+          "dnv3_va_m2f_vitl16_fulltrain_clip001_e20_single"
+        ],
+        [
+          "wait",
+          "dnv3_va_m2f_vitl16_fulltrain_clip001_e20_narrowflip"
+        ],
+        [
+          "verified_tests",
+          "dnv3_va_m2f_vitl16_fulltrain_clip001_e20"
+        ]
+      ]
+    },
+    {
+      "name": "completed_lane_restart_no_duplicate_23",
+      "status": "passed"
+    }
+  ],
+  "limits": [
+    "No full GPU training/evaluation was run by these checks. No synthetic model tensors were evaluated.",
+    "No-validation positive cases exercise the exact training metadata/history/snapshot format with CPU fixture weights.",
+    "Full lane sequence checks stub GPU availability and stage execution; lock inheritance/adoption uses actual CPU subprocess workers and isolated lock files.",
+    "Existing val/best and completed-public-queue checks read real existing production checkpoints/scores on CPU."
+  ]
+}

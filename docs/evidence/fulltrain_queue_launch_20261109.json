@@ -1,0 +1,155 @@
+{
+  "launched_at": "2026-11-08T18:12:46.731897+00:00",
+  "allowed_gpus": [
+    0,
+    7,
+    2,
+    3
+  ],
+  "lane_order": {
+    "0,7": [
+      10,
+      25
+    ],
+    "2,3": [
+      15,
+      20
+    ]
+  },
+  "train_samples": 8002,
+  "validate": false,
+  "checkpoint_policy": "final_epoch",
+  "test_profiles": [
+    "single",
+    "narrowflip"
+  ],
+  "start_condition": "Complete predecessor training and all its public tests before acquiring its GPU pair",
+  "supervisors": [
+    {
+      "lane": "lane_07",
+      "pid": 1077991,
+      "start_ticks": 666540796,
+      "plan": "/home/disk02/wjj/moonseg/runs/plans/2026-11-09/fulltrain/lane_07.json",
+      "cwd": "/home/disk02/wjj/moonseg/code",
+      "log": "/home/disk02/wjj/moonseg/runs/plans/2026-11-09/fulltrain/lane_07.launcher.log",
+      "initial_gpu_visibility": "empty for CPU supervisor; stage worker sets exact approved UUIDs",
+      "verified_status": "waiting_dependency",
+      "gpu_stages_started": 0,
+      "child_processes": 0,
+      "config_snapshots": [
+        "dnv3_va_m2f_vitl16_fulltrain_clip001_e10.yaml",
+        "dnv3_va_m2f_vitl16_fulltrain_clip001_e25.yaml"
+      ]
+    },
+    {
+      "lane": "lane_23",
+      "pid": 1077992,
+      "start_ticks": 666540796,
+      "plan": "/home/disk02/wjj/moonseg/runs/plans/2026-11-09/fulltrain/lane_23.json",
+      "cwd": "/home/disk02/wjj/moonseg/code",
+      "log": "/home/disk02/wjj/moonseg/runs/plans/2026-11-09/fulltrain/lane_23.launcher.log",
+      "initial_gpu_visibility": "empty for CPU supervisor; stage worker sets exact approved UUIDs",
+      "verified_status": "waiting_dependency",
+      "gpu_stages_started": 0,
+      "child_processes": 0,
+      "config_snapshots": [
+        "dnv3_va_m2f_vitl16_fulltrain_clip001_e15.yaml",
+        "dnv3_va_m2f_vitl16_fulltrain_clip001_e20.yaml"
+      ]
+    }
+  ],
+  "existing_training_processes_signalled": false,
+  "plans": {
+    "lane_07": {
+      "version": 1,
+      "id": "fulltrain_20261109_lane_07",
+      "gpus": [
+        0,
+        7
+      ],
+      "expected_gpu_uuids": {
+        "0": "GPU-0ffe3205-b1ee-ae93-3052-66609665f5b1",
+        "7": "GPU-a8ecdaa9-88ae-d4b7-f87e-b013ef33b516"
+      },
+      "predecessor": {
+        "status_path": "runs/public_development_fullft_2026-11-08/status.json",
+        "parent_pid": 1043511,
+        "parent_start_ticks": 666460223,
+        "expected_job_keys": [
+          "dnv3_va_m2f_vitl16_rrc_clip001/best_miou/single",
+          "dnv3_va_m2f_vitl16_rrc_clip001/best_miou/narrowflip",
+          "dnv3_va_m2f_vitl16_rrc_clip001_stage2_fullft/best_miou/single",
+          "dnv3_va_m2f_vitl16_rrc_clip001_stage2_fullft/best_miou/narrowflip",
+          "dnv3_va_m2f_vitl16_rrc_clip001_stage2_fullft/last/single",
+          "dnv3_va_m2f_vitl16_rrc_clip001_stage2_fullft/last/narrowflip",
+          "dnv3_va_m2f_vitl16_rrc_fullft/best_miou/single",
+          "dnv3_va_m2f_vitl16_rrc_fullft/best_miou/narrowflip",
+          "dnv3_va_m2f_vitl16_rrc_fullft/last/single",
+          "dnv3_va_m2f_vitl16_rrc_fullft/last/narrowflip"
+        ]
+      },
+      "jobs": [
+        {
+          "name": "dnv3_va_m2f_vitl16_fulltrain_clip001_e10",
+          "config": "configs/dnv3_va_m2f_vitl16_fulltrain_clip001_e10.yaml",
+          "expected_epochs": 10,
+          "expected_updates": 1250
+        },
+        {
+          "name": "dnv3_va_m2f_vitl16_fulltrain_clip001_e25",
+          "config": "configs/dnv3_va_m2f_vitl16_fulltrain_clip001_e25.yaml",
+          "expected_epochs": 25,
+          "expected_updates": 3125
+        }
+      ],
+      "public_test": {
+        "data_root": "data/research_test/LuSNAR",
+        "manifest": "data/research_test/manifest.json"
+      },
+      "poll_seconds": 30
+    },
+    "lane_23": {
+      "version": 1,
+      "id": "fulltrain_20261109_lane_23",
+      "gpus": [
+        2,
+        3
+      ],
+      "expected_gpu_uuids": {
+        "2": "GPU-aec3a52c-8629-106e-3b66-a374628971a8",
+        "3": "GPU-91456d0d-9e31-d4d4-4648-9a2489b270ee"
+      },
+      "predecessor": {
+        "status_path": "runs/public_development_da3mono_frozen_2026-11-08/status.json",
+        "parent_pid": 681953,
+        "parent_start_ticks": 665613915,
+        "expected_job_keys": [
+          "da3mono_va_m2f_vitl14_rrc_frozen/best_miou/single",
+          "da3mono_va_m2f_vitl14_rrc_frozen/best_miou/narrowflip",
+          "da3mono_va_m2f_vitl14_rrc_frozen/last/single",
+          "da3mono_va_m2f_vitl14_rrc_frozen/last/narrowflip"
+        ]
+      },
+      "jobs": [
+        {
+          "name": "dnv3_va_m2f_vitl16_fulltrain_clip001_e15",
+          "config": "configs/dnv3_va_m2f_vitl16_fulltrain_clip001_e15.yaml",
+          "expected_epochs": 15,
+          "expected_updates": 1875
+        },
+        {
+          "name": "dnv3_va_m2f_vitl16_fulltrain_clip001_e20",
+          "config": "configs/dnv3_va_m2f_vitl16_fulltrain_clip001_e20.yaml",
+          "expected_epochs": 20,
+          "expected_updates": 2500
+        }
+      ],
+      "public_test": {
+        "data_root": "data/research_test/LuSNAR",
+        "manifest": "data/research_test/manifest.json"
+      },
+      "poll_seconds": 30
+    }
+  },
+  "verification": "docs/evidence/fulltrain_no_val_verification_20261109.json"
+}

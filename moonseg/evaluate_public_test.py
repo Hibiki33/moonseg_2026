@@ -30,6 +30,88 @@ PROFILES = {
     "narrowflip": {"sliding_window": False, "scales": [0.9, 1.0, 1.1], "flip": True},
 }
 CHECKPOINT_POLICIES = ("validation_selected", "final_epoch")
+FULLTRAIN_SCENES = [1, 3, 5, 6, 7, 8]
+FULLTRAIN_SAMPLES = 8002
+FULLTRAIN_UPDATES_PER_EPOCH = 125
+
+
+def fulltrain_data_snapshot(config):
+    """Read the exact six-scene training membership, without constructing a val dataset."""
+    from .data.manifest import (is_allowed, load_manifest, manifest_provenance,
+                                read_allowlist, require_complete_allowlist)
+
+    data = config["data"]
+    if (config["train"].get("validate") is not False or data.get("val_manifest") is not None
+            or data.get("val_scenes") != [] or data.get("train_scenes") != FULLTRAIN_SCENES):
+        raise ValueError("No-validation full training requires six train scenes and no validation split")
+    records = load_manifest(data["train_manifest"], Path(data["root"]).resolve(), FULLTRAIN_SCENES,
+                            data.get("official_allowlist"), need_label=True,
+                            allow_development_pool=data.get("development_pool", False))
+    if len(records) != FULLTRAIN_SAMPLES or sorted({record["scene"] for record in records}) != FULLTRAIN_SCENES:
+        raise ValueError("No-validation full training requires all 8002 six-scene samples")
+    # The public-pool config retains its provenance; membership is independently
+    # checked against the organizer's downloaded training list.
+    official = read_allowlist("data/LuSNAR_official/official_train_allowlist.json")
+    require_complete_allowlist(records, official)
+    if any(not is_allowed(record, official) for record in records):
+        raise ValueError("Full-training membership differs from the official training allowlist")
+    stats = json.loads(Path(data["label_stats"]).read_text())
+    if (stats.get("num_samples") != FULLTRAIN_SAMPLES or stats.get("scenes") != FULLTRAIN_SCENES
+            or Path(stats.get("manifest", "")).resolve() != Path(data["train_manifest"]).resolve()):
+        raise ValueError("Full-training label statistics must cover the same 8002 six-scene samples")
+    allowlist = data.get("official_allowlist")
+    return {"train_samples": records, "validation_samples": [],
+            "official_allowlist": Path(allowlist).read_text(encoding="utf-8") if allowlist else None,
+            "provenance": manifest_provenance(data["train_manifest"])}
+
+
+def validate_no_validation_history(rows, epochs):
+    """Every epoch must have training updates and null validation/selection fields."""
+    if [row.get("epoch") for row in rows] != list(range(1, epochs + 1)):
+        raise ValueError(f"No-validation history requires exactly epochs 1..{epochs}")
+    null_fields = ("validation", "eval_stride", "evaluated_samples", "val_loss", "miou_ma3",
+                   "best_miou", "best_miou_epoch", "best_loss", "best_loss_epoch")
+    for epoch, row in enumerate(rows, 1):
+        if type(row.get("global_step")) is not int or row["global_step"] != epoch * FULLTRAIN_UPDATES_PER_EPOCH:
+            raise ValueError("No-validation history must contain exactly 125 optimizer updates per epoch")
+        if any(key not in row or row[key] is not None for key in null_fields) or row.get("saved_best") != []:
+            raise ValueError("No-validation training history contains validation or checkpoint selection")
+
+
+def validate_no_validation_checkpoint(config, path, checkpoint, rows):
+    """Require complete training and data receipts for the fixed full-training recipe."""
+    from .train import training_batch_plan
+
+    settings = config["train"]
+    snapshot = fulltrain_data_snapshot(config)
+    expected_batch = training_batch_plan(FULLTRAIN_SAMPLES, 2, settings)
+    if settings.get("sampling", {}).get("mode", "uniform") != "uniform":
+        raise ValueError("No-validation full training requires uniform sampling")
+    expected_batch["sampling"] = {"mode": "uniform"}
+    if (expected_batch["optimizer_steps_per_epoch"] != FULLTRAIN_UPDATES_PER_EPOCH
+            or expected_batch["effective_batch"] != 64 or checkpoint.get("world_size") != 2
+            or checkpoint.get("batch_plan") != expected_batch):
+        raise ValueError("No-validation checkpoint must preserve the two-GPU batch64/125-update recipe")
+    validate_no_validation_history(rows, settings["epochs"])
+    if checkpoint.get("total_steps") != settings["epochs"] * FULLTRAIN_UPDATES_PER_EPOCH:
+        raise ValueError("No-validation checkpoint has an incorrect total optimizer-step budget")
+    if checkpoint.get("data_snapshot") != snapshot:
+        raise ValueError("No-validation checkpoint data provenance differs from the full training manifest")
+    if (settings.get("resume") is not None or settings.get("initialize_from") is not None
+            or checkpoint.get("stage_initialization") is not None or checkpoint.get("selected_by") is not None):
+        raise ValueError("No-validation runs must start independently from native pretraining with fresh Adapter/head")
+    if (any(checkpoint.get(key) is not None for key in
+            ("best_miou", "best_miou_epoch", "best_loss", "best_loss_epoch"))
+            or checkpoint.get("recent_miou") != []):
+        raise ValueError("No-validation checkpoint contains validation-based selection state")
+    directory = Path(path).parent
+    if any((directory / name).exists() for name in ("best.pt", "best_miou.pt", "best_loss.pt", "stage_initialization.json")):
+        raise ValueError("No-validation run contains an unexpected selected/stage checkpoint")
+    provenance = json.loads((directory / "data_provenance.json").read_text())
+    if {key: provenance.get(key) for key in snapshot} != snapshot:
+        raise ValueError("No-validation run data_provenance.json differs from checkpoint provenance")
+    if json.loads((directory / "batch_plan.json").read_text()) != expected_batch:
+        raise ValueError("No-validation run batch_plan.json differs from checkpoint batch plan")
 
 
 def checkpoint_policy_metadata(policy):
@@ -73,7 +155,10 @@ def validate_final_checkpoint(config, checkpoint_path, checkpoint, expected_epoc
     final = rows[-1]
     if type(final.get("global_step")) is not int or final["global_step"] != step:
         raise ValueError("Final checkpoint global_step differs from final training history")
-    if final.get("evaluated_samples") != 1599 or final.get("eval_stride") != 1:
+    if config["train"].get("validate", True) is False:
+        validate_no_validation_checkpoint(config, path, checkpoint, rows)
+    elif (final.get("evaluated_samples") != 1599 or final.get("eval_stride") != 1
+          or not final.get("validation")):
         raise ValueError("Final checkpoint history requires full scene-5 validation")
     if "total_steps" in checkpoint and checkpoint["total_steps"] != step:
         raise ValueError("Final checkpoint has not completed its fixed optimizer-step budget")

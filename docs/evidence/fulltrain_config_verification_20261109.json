@@ -1,0 +1,102 @@
+{
+  "train_samples": 8002,
+  "old_train_samples": 6403,
+  "added_scene5_samples": 1599,
+  "official_sample_membership_equal": true,
+  "train_scenes": [
+    1,
+    3,
+    5,
+    6,
+    7,
+    8
+  ],
+  "test_scenes": [
+    2,
+    4,
+    9
+  ],
+  "configs": [
+    {
+      "config": "configs/dnv3_va_m2f_vitl16_fulltrain_clip001_e10.yaml",
+      "epochs": 10,
+      "updates": 1250,
+      "batch_plan": {
+        "batch_per_gpu": 8,
+        "world_size": 2,
+        "accumulation_steps": 4,
+        "effective_batch": 64,
+        "minimum_effective_batch": 64,
+        "drop_incomplete_updates": true,
+        "microbatches_per_epoch": 500,
+        "optimizer_steps_per_epoch": 125,
+        "samples_used_per_epoch": 8000,
+        "dropped_samples_per_epoch": 2,
+        "tail_policy": "drop incomplete shuffled optimizer batch"
+      },
+      "fresh_pretrained_encoder": "ckpts/dinov3_vitl16_pretrain_lvd1689m-8aa4cbdd.pth",
+      "validation": false
+    },
+    {
+      "config": "configs/dnv3_va_m2f_vitl16_fulltrain_clip001_e15.yaml",
+      "epochs": 15,
+      "updates": 1875,
+      "batch_plan": {
+        "batch_per_gpu": 8,
+        "world_size": 2,
+        "accumulation_steps": 4,
+        "effective_batch": 64,
+        "minimum_effective_batch": 64,
+        "drop_incomplete_updates": true,
+        "microbatches_per_epoch": 500,
+        "optimizer_steps_per_epoch": 125,
+        "samples_used_per_epoch": 8000,
+        "dropped_samples_per_epoch": 2,
+        "tail_policy": "drop incomplete shuffled optimizer batch"
+      },
+      "fresh_pretrained_encoder": "ckpts/dinov3_vitl16_pretrain_lvd1689m-8aa4cbdd.pth",
+      "validation": false
+    },
+    {
+      "config": "configs/dnv3_va_m2f_vitl16_fulltrain_clip001_e20.yaml",
+      "epochs": 20,
+      "updates": 2500,
+      "batch_plan": {
+        "batch_per_gpu": 8,
+        "world_size": 2,
+        "accumulation_steps": 4,
+        "effective_batch": 64,
+        "minimum_effective_batch": 64,
+        "drop_incomplete_updates": true,
+        "microbatches_per_epoch": 500,
+        "optimizer_steps_per_epoch": 125,
+        "samples_used_per_epoch": 8000,
+        "dropped_samples_per_epoch": 2,
+        "tail_policy": "drop incomplete shuffled optimizer batch"
+      },
+      "fresh_pretrained_encoder": "ckpts/dinov3_vitl16_pretrain_lvd1689m-8aa4cbdd.pth",
+      "validation": false
+    },
+    {
+      "config": "configs/dnv3_va_m2f_vitl16_fulltrain_clip001_e25.yaml",
+      "epochs": 25,
+      "updates": 3125,
+      "batch_plan": {
+        "batch_per_gpu": 8,
+        "world_size": 2,
+        "accumulation_steps": 4,
+        "effective_batch": 64,
+        "minimum_effective_batch": 64,
+        "drop_incomplete_updates": true,
+        "microbatches_per_epoch": 500,
+        "optimizer_steps_per_epoch": 125,
+        "samples_used_per_epoch": 8000,
+        "dropped_samples_per_epoch": 2,
+        "tail_policy": "drop incomplete shuffled optimizer batch"
+      },
+      "fresh_pretrained_encoder": "ckpts/dinov3_vitl16_pretrain_lvd1689m-8aa4cbdd.pth",
+      "validation": false
+    }
+  ],
+  "training_created": false
+}

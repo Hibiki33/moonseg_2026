@@ -24,7 +24,8 @@ from scripts.run_evaluation_queue import (Queue as ValidationQueue, TrainingBloc
                                           process_info, read_json, TERMINAL, apply_queue_policy,
                                           validate_cancellations, python_path)
 from moonseg.evaluate_public_test import (CHECKPOINT_POLICIES, EXPECTED_SAMPLES, MANIFEST_KIND, PROFILES,
-                                          SCENE_COUNTS, checkpoint_policy_metadata, validate_final_checkpoint)
+                                          SCENE_COUNTS, checkpoint_policy_metadata, validate_final_checkpoint,
+                                          validate_no_validation_history)
 
 
 def checkpoint_runs(run, config):
@@ -99,7 +100,16 @@ def dependency(run):
         return False, f"waiting for epoch {epochs}; last epoch {rows[-1].get('epoch') if rows else None}"
     if [row.get("epoch") for row in rows] != list(range(1, epochs + 1)):
         raise ValueError(f"History must contain exactly epochs 1..{epochs}: {history}")
-    if rows[-1].get("evaluated_samples") != 1599 or rows[-1].get("eval_stride") != 1:
+    resolved_path = directory / "resolved_config.json"
+    resolved = read_json(resolved_path) if resolved_path.exists() else {}
+    if resolved.get("train", {}).get("validate", True) is False:
+        selections = checkpoint_runs(run, {"checkpoint_policy": "mixed"})
+        if any(selected["checkpoint_policy"] != "final_epoch" for selected in selections):
+            raise ValueError("No-validation runs permit only final_epoch checkpoint evaluation")
+        validate_no_validation_history(rows, epochs)
+        return True, f"training finished {epochs} epochs without validation; final checkpoint metadata pending"
+    if (rows[-1].get("evaluated_samples") != 1599 or rows[-1].get("eval_stride") != 1
+            or not rows[-1].get("validation")):
         raise ValueError(f"Final history must use full scene-5 validation: {history}")
     return True, f"training finished {epochs} epochs with full scene-5 validation"
 

@@ -2,17 +2,19 @@
 
 LuSNAR 月面五类语义分割。类别编号固定为月壤 0、岩石 1、撞击坑 2、山体 3、天空 4；输入仅左相机 RGB。比赛规则见 [challenge.md](challenge.md)。
 
-## 当前状态（2026-11-08）
+## 当前状态（2026-11-09）
 
-代码与Git的本地工作副本现位于 `/home/disk02/wjj/moonseg/code`，用于避开NAS读写阻塞完成开发、验收和推送。原A/B训练进程仍以 `/home/nas_1/wjj/moon` 为工作目录；DA3冻结运行从本地副本启动，但已启动训练保存的旧解释器路径引用仍保留。后续任务统一使用修正后的本地Python、源码、权重、数据、输出和可变形注意力扩展；现有训练暂不停止或重启。
+代码与Git的本地工作副本现位于 `/home/disk02/wjj/moonseg/code`，用于避开NAS读写阻塞完成开发、验收和推送。原B联合微调进程仍以 `/home/nas_1/wjj/moon` 为工作目录（A已完成）；DA3冻结运行从本地副本启动，但已启动训练保存的旧解释器路径引用仍保留。后续任务统一使用修正后的本地Python、源码、权重、数据、输出和可变形注意力扩展；现有训练暂不停止或重启。
 
-- 默认配方：冻结 DINOv3 ViT-L + ViT-Adapter + Mask2Former，1024×1024 RRC，decoder6层/hidden256，梯度裁剪 **0.01**，每卡8×两卡×累积4=有效batch64。后续从 [默认模板](configs/dnv3_va_m2f_vitl16_default.yaml) 派生独立实验，历史配置保持原值；详见 [训练说明](docs/training.md)。
-- 权重选择：当前场景5独立验证，可按验证mIoU或验证loss选best；后续场景5并入训练、无独立验证集时用last。`best_loss.pt`指最低验证loss，不按训练loss选模型；10-29的末轮对照结果按原口径保留，新三项训练的验证best尚未做公开测试。 验证best仅为待测候选，收益判断和后续微调起点须有对应公开测试结果；clip001已测last与尚待测best不能混称“最佳模型”。
-- clip0.01、decoder9、width384及各自末轮评估均已完成。width384的场景9 TTA87.892%低于同clip0.01的width256基线88.021%，三个公开场景mIoU均下降，默认保持6层/width256/clip0.01。以上为10-29已完成实验；11-08已启动下述A/B，12/18轮搜索继续暂缓，数据划分保持原状。状态与结果见 [路线记录](docs/roadmap.md)。
-- 当前训练：B在PCI0/7从原DINOv3预训练联合训练全部ViT-L，25轮/2500更新、Adapter/head与骨干lr为2e-4/2e-5；A在PCI4/5从clip001第15轮验证best初始化后全解冻，5轮/500更新、新优化器、lr为2e-5/2e-6。两者每卡4×2卡×累积8=64；父权重的best_miou与A/B的best_miou、last公开单尺度/TTA使用原评测队列，待同两组卡释放。计划/状态在`runs/plans/2026-11-08/fullft/`，勿重复启动。
+- 本批全量训练：场景1/3/5/6/7/8共8002张，冻结DINOv3-L、clip0.01；0/7按10→25轮、2/3按15→20轮接续。每项从原始预训练权重和新Adapter/head开始，关闭验证，完整训练后仅评last的普通/TTA，再开始同卡对下一项。先等原卡对训练与测试结束，计划见[训练说明](docs/training.md#全六场景训练与末轮测试)。
+- GPU范围固定0/7/2/3，训练和测试共同遵守。GPU1上已在运行的阶段last5 TTA允许结束后释放；此前临时1/6授权不再用于新任务。
+- 默认配方：冻结 DINOv3 ViT-L + ViT-Adapter + Mask2Former，1024×1024 RRC，decoder6层/hidden256，梯度裁剪 **0.01**，每卡8×两卡×累积4=有效batch64。五场景历史对照从 [默认模板](configs/dnv3_va_m2f_vitl16_default.yaml) 派生；本批全量训练使用上述独立配置，历史配置保持原值；详见 [训练说明](docs/training.md)。
+- 权重选择：本批全六场景训练关闭验证，只取最终last。原五场景实验保留best/last各自的测试结果：clip001 best15的场景9 TTA88.882%，其last25为88.021%；从best15微调得到的阶段best2为88.806%，三场景均值92.077%。有效收益与后续起点依据公开测试，不能用val排名代替。
+- clip0.01、decoder9、width384及各自末轮评估均已完成。width384的场景9 TTA87.892%低于同clip0.01的width256基线88.021%，三个公开场景mIoU均下降，默认保持6层/width256/clip0.01。以上为10-29已完成实验；原A/B和DA3按原划分完成；本批全量训练按上文加入场景5并比较10/15/20/25轮。状态与结果见 [路线记录](docs/roadmap.md)。
+- 原批次：B在PCI0/7从原DINOv3预训练联合训练全部ViT-L，25轮/2500更新、Adapter/head与骨干lr为2e-4/2e-5；A已完成在PCI4/5从clip001第15轮验证best初始化后全解冻，5轮/500更新、新优化器、lr为2e-5/2e-6。两者每卡4×2卡×累积8=64；父权重的best_miou与A/B的best_miou、last公开单尺度/TTA使用原评测队列，后续DINO评测仅在0/7运行。计划/状态在`runs/plans/2026-11-08/fullft/`，勿重复启动。
 - DA3首组已纠正为冻结骨干：`da3mono_va_m2f_vitl14_rrc_frozen`从disk02在PCI2/3启动，严格对齐冻结clip001的每卡8×2卡×累积4、25轮/2500更新与全部训练设置，仅换官方DA3MONO encoder及patch14→stride16特征接口。独立计划在`runs/plans/2026-11-08/da3mono_frozen/`，完成后在原独立队列评best_miou与last的5004张single/narrowflip：best对比clip001验证best，25轮last对比已有clip001末轮结果。误启动的DA3 fullft因路线纠正停止，全部产物保留且旧队列禁用；详见[训练说明](docs/training.md#gpu-放置与启动)。
 - 数据：公开版九个ZIP与官方训练/测试RAR均已下载。官方包位于 `data/LuSNAR_official`，8002张训练RGB、8002张训练标签、5004张测试RGB共21,008个PNG与公开版逐字节一致；无新增、缺失或内容变化，详见 [数据核对与正式清单](docs/data.md#官方数据一致性核对)。
-- 正式样本清单已从官方包内时间戳文本转录到 `data/LuSNAR_official/`，四份训练/验证/全训练池/测试清单已生成，8002张训练标签全部通过校验。用户已确认沿用现有数据路径与训练/验证划分，已有训练和测试结论继续有效，无需因数据来源差异重训或重复评估；官方场景权重数值尚未取得。
+- 正式样本清单已从官方包内时间戳文本转录到 `data/LuSNAR_official/`，四份训练/验证/全训练池/测试清单已生成，8002张训练标签全部通过校验。用户已确认沿用现有数据路径，已有训练和测试结论继续有效；11-09新批次将场景5并入训练，不因数据来源差异重复评估；官方场景权重数值尚未取得。
 - 环境与资产：uv 独立管理 Python 3.12.15 与 `.venv`（`uv.lock` 已生成，`uv pip check` 通过）；固定版本 DINOv3 源码与 ModelScope ViT-B/16、ViT-L/16 权重已就绪；官方 MSDeformAttn CUDA 扩展已编译（`build/ms_deform_attn/`）。
 
 ## 文档
