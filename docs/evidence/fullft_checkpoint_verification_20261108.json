@@ -1,0 +1,35 @@
+{
+  "date": "2026-11-08",
+  "verification_kind": "CPU serialization and strict reload on the real pretrained ViT-L + trained stage1 Adapter/head, with simulated learned perturbations; no training or GPU test",
+  "method": "Loaded clip001 best_miou epoch15 under frozen semantics using the original native DINOv3 checkpoint, enabled every ViT parameter, perturbed the first value of each trainable ViT tensor, and serialized/reloaded full and both inference checkpoint projections. Populated two optimizer momentum states explicitly to check restoration; no optimizer training steps were performed.",
+  "actual_training_checkpoint_status": "A/B real runs had not completed their first epoch when this evidence was collected. Actual epoch checkpoint files have not been verified by this CPU check.",
+  "device": "cpu",
+  "native_backbone_weights": "ckpts/dinov3_vitl16_pretrain_lvd1689m-8aa4cbdd.pth",
+  "source": {
+    "source_checkpoint": "/home/disk02/wjj/moonseg/runs/dnv3_va_m2f_vitl16_rrc_clip001/best_miou.pt",
+    "source_epoch": 15,
+    "source_epoch_zero_based": 14,
+    "source_global_step": 1500,
+    "source_selected_by": "best_miou",
+    "source_data_provenance": "public_development_pool"
+  },
+  "checks": {
+    "trainable_vit_tensors": 343,
+    "coverage_by_training_save_projection": {
+      "last.pt": 343,
+      "best_miou.pt": 343,
+      "best_loss.pt": 343
+    },
+    "all_saved_tensors_equal_after_reload": true,
+    "missing_trainable_vit_rejected": true,
+    "fresh_optimizer_state_entries": 0,
+    "restored_optimizer_state_entries": 2,
+    "stage_total_steps": 500,
+    "optimizer_initial_lrs": [
+      2.0000000000000003e-06,
+      2e-05
+    ]
+  },
+  "reproduction_script": "build/verification/verify_fullft_checkpoint.py",
+  "full_local_evidence": "build/verification/fullft_save_load.json"
+}

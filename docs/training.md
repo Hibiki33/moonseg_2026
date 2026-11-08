@@ -1,6 +1,6 @@
 # 训练配方
 
-更新：2026-10-29。后续新训练以 [`configs/dnv3_va_m2f_vitl16_default.yaml`](../configs/dnv3_va_m2f_vitl16_default.yaml) 为模板：冻结ViT-L、RRC、梯度裁剪0.01、decoder6层/hidden_dim256，五场景训练、场景5验证、有效batch64。复制模板时设置独立输出目录；25轮只是已测参考预算，最合适轮数尚待校准。用户要求完整训练并使用末轮last.pt，不early stop；best_miou/best_loss可继续保存作诊断，不用于后续末轮对照。现有结果见 [roadmap.md](roadmap.md#实验记录)。历史B/L的80轮、warmup/EMA配方及其YAML保留用于追溯，不能再当成新训练默认。
+更新：2026-11-08。后续新训练以 [`configs/dnv3_va_m2f_vitl16_default.yaml`](../configs/dnv3_va_m2f_vitl16_default.yaml) 为模板：冻结ViT-L、RRC、梯度裁剪0.01、decoder6层/hidden_dim256，五场景训练、场景5验证、有效batch64。复制模板时设置独立输出目录；25轮只是已测参考预算，最合适轮数尚待校准。当前保留独立场景5验证集，可以按验证mIoU或验证loss选择best权重；后续场景5并入训练、没有独立验证集时，使用末轮last.pt。best_loss.pt指最低验证loss，不按训练loss选择模型。完整跑完训练预算与保存、选择验证best并不冲突；10-29的末轮对照是已执行的一组实验，不是所有开发实验的硬性选权重规则。现有结果见 [roadmap.md](roadmap.md#实验记录)。历史B/L的80轮、warmup/EMA配方及其YAML保留用于追溯，不能再当成新训练默认。
 
 ## 配方与理由
 
@@ -24,9 +24,9 @@
 | EMA | 不使用（2026-10-22 移除；配置含 `train.ema` 会报错） | 所查官方分割配方都不用 EMA；两条基线中它只平滑了漂移的轨迹（见[验证协议](#验证协议)） |
 | 训练长度 | 模板25轮，五场景2500次更新；最优预算未定 | 用户暂缓12/18轮搜索，当前先做width384的25轮单变量容量消融 |
 | 采样 | `sampling.mode: uniform`，每轮重新打乱 | 稀有类采样已实现，作为候选 |
-| 数据 | 开发池 `dev_train.json`（场景 1/3/6/7/8，6403 帧）训练，`dev_val.json`（场景 5，1599 帧）验证 | 官方清单到位前的开发通道（[data.md](data.md#公开训练场景开发池)） |
+| 数据 | 当前配置仍为开发池 `dev_train.json`（场景1/3/6/7/8，6403帧）训练，`dev_val.json`（场景5，1599帧）验证 | 11-08已核对官方包内容完全一致；用户确认沿用当前数据与划分，已有训练测试结论有效，见 [data.md](data.md#官方数据一致性核对) |
 | 验证 | 每轮验证 mIoU 与验证损失；中间轮 `eval_stride: 2`（800 帧），最后一轮全量 1599 帧 | 隔帧抽样的类别占比偏差 ≤0.4%（[data.md](data.md#时间冗余)） |
-| 推理 | 模板为整图单尺度；公开评估另测0.9/1.0/1.1+翻转TTA | TTA已有正向证据；比较必须使用相同推理设置和末轮权重 |
+| 推理 | 模板为整图单尺度；公开评估另测0.9/1.0/1.1+翻转TTA | TTA已有正向证据；比较必须使用相同推理设置和权重选择口径 |
 | checkpoint | 每轮覆盖 `last.pt`；验证 mIoU 新高时覆盖 `best_miou.pt`，验证损失新低时覆盖 `best_loss.pt`；`save_every: 0` | 不存冻结骨干；格式见 [model.md](model.md#checkpoints) |
 | 其他 | seed 42，`num_workers: 4`，`log_every: 10` | 4 个 worker 每 rank 约 21 img/s，远高于训练需求（[gpu_topology.md](gpu_topology.md#显存与吞吐容量)） |
 
@@ -37,7 +37,7 @@
 | `dev_train`（场景 1/3/6/7/8） | 6403 | 6400 / 3 | 400 | 100 | 8000 |
 | 全训练池（场景 1/3/5/6/7/8） | 8002 | 8000 / 2 | 500 | 125 | 10000 |
 
-只执行完整的 64 张累积更新：每轮重新打乱后跳过尾部不足一组的样本，不让最后一次更新变成小 batch；实际数量写入 `batch_plan.json`。DDP 在第 4 次反向传播时同步梯度，再统一 unscale、裁剪和更新；调度器总步数为 epoch 数 × 每轮更新数。恢复训练要求 batch 计划不变。
+只执行完整的 64 张累积更新：每轮重新打乱后跳过尾部不足一组的样本，不让最后一次更新变成小 batch；实际数量写入 `batch_plan.json`。DDP 在累积组的最后一次反向传播时同步梯度，再统一 unscale、裁剪和更新；调度器总步数为 epoch 数 × 每轮更新数。恢复训练要求 batch 计划不变。
 
 累积 64 只表示每次优化器更新的图像数，不等价于一次前向 64 张：Adapter 的普通 BatchNorm 按每卡 microbatch（8 张）统计，mask 损失的归一化也按当前分布式 microbatch 的目标数计算。
 
@@ -47,11 +47,16 @@
 - 每轮在场景 5 上验证；中间轮按 `(scene, sample_id)` 顺序每 2 帧取 1 帧（800 帧），最后一轮评估全部 1599 帧。`history.jsonl` 记录每轮的 `eval_stride`、`evaluated_samples`、`val_loss`、`miou_ma3`、`best_miou`/`best_miou_epoch`、`best_loss`/`best_loss_epoch`、`saved_best`（本轮写入的最佳文件）与完整的 `validation`（含 `val_loss`）。
 - 验证损失 `val_loss`：与训练相同的 Mask2Former 总损失（最终层加各辅助层），每帧 batch 1、与训练相同的 autocast，模型处于 eval 模式，对所有 rank 上评估的帧取平均。当前整图单尺度推理下与 mIoU 共用同一次前向。点采样在 `fork_rng` 内用固定种子，所以结果可复现、同一帧各轮抽到相同的点，且不推进训练的随机数流。各 rank 的帧数可能不同（全量 1599 帧时为 800/799），评估期间关闭损失里按 rank 同步 mask 数的 `all_reduce`（否则会死锁），每帧用自己的 mask 数归一化。因此 `val_loss` 与 `train_loss` 量级相近但不严格可比：后者是 train 模式、每卡 8 张、跨 rank 平均归一化，且带数据增强。
 - 最佳文件：验证 mIoU 严格高于此前所有验证时写 `best_miou.pt`，验证损失严格低于此前所有验证时写 `best_loss.pt`，两者可在同一轮写入，持平不覆盖；`last.pt` 每轮覆盖。`miou_ma3` 是最近 3 次验证 mIoU 的均值，只作参考，不参与选择。最佳文件可能在抽样子集上选出，子集分数不能直接与全量比较；需要时用 `moonseg.evaluate` 在全量上分别复评两个文件（命令见 README）。
+- 场景5加入训练后设置 `validate: false`，不再产生验证best_miou/best_loss，最终使用 `last.pt`。`train_loss`仍记录用于观察优化过程，不用于挑选best模型。
 - 移除 EMA（2026-10-22）的理由：所查官方分割配方（Mask2Former、DINOv3、ViT-Adapter，见[参考配方与证据](#参考配方与证据)）都不用 EMA；两条基线截至 2026-10-22 12:20（ViT-B 64 轮、ViT-L 67 轮，800 帧子集）的 `history.jsonl` 中，原始权重 mIoU 在第 12/15 轮达到峰值 0.871/0.920 后漂移回落，EMA 最高只有 0.829/0.909，`best_source` 始终是 `model`；近 20 轮 EMA 只把轮间标准差从 0.009/0.010 压到 0.003，均值比原始权重高 0.003/0.009，仍低于早期峰值。也就是说 EMA 只平滑了一条漂移的轨迹，却让每轮验证时间翻倍。验证损失给出与 mIoU 互补的第二条选择依据。EMA 时代的 `last.pt` 仍可用新配置恢复，EMA 权重被丢弃、最佳记录重新开始；旧 checkpoint 的 `ema_model` 只在显式指定 `--weights ema_model`/`--weights-key ema_model` 时加载，`auto` 一律用 `model`（[model.md](model.md#checkpoints)）。
 - 指标为按场景累积混淆矩阵的 mIoU（只平均参考标签中出现的类别）、各类 IoU、mAcc 等，定义见 [metrics.md](metrics.md)。场景 5 分数不是排行榜成绩。
 - 第二验证场景、暗帧子集和 block bootstrap 置信区间是候选（[roadmap.md](roadmap.md) #7，依据见 [data.md](data.md#验证场景)）。
 
 ## GPU 放置与启动
+
+11-08两条全解冻训练已获用户确认并启动：`dnv3_va_m2f_vitl16_rrc_fullft`在0/7从原生DINOv3开始联合训练25轮/2500更新，Adapter/head与骨干初始lr为2e-4/2e-5；`dnv3_va_m2f_vitl16_rrc_clip001_stage2_fullft`在4/5从clip001的第15轮`best_miou.pt`权重初始化，完整解冻后以新优化器训练5轮/500更新，lr为2e-5/2e-6。均为每卡4×2卡×累积8=64、1024²/RRC/width256/decoder6/clip0.01；4/5关闭NCCL P2P，0/7保持已验证P2P路径。`--initialize-from`不同于`--resume`，阶段加载约定见[model.md](model.md#checkpoints)。
+
+本批使用单计划启动器`scripts/run_finetuning_plan.py`，计划与启动状态在`runs/plans/2026-11-08/fullft/`中的`joint/stage2.json`与对应`.status.json`，训练日志在各运行目录的`train.log`。启动前核对物理UUID/进程占用，同时持有既有训练与评估GPU锁，并向torchrun继承锁描述符；历史队列和配置不改。训练完成后校验完整history、全量末轮验证及三个checkpoint，再写`queue_completed.json`。公开评估计划为同目录`public_test.json`，状态在`runs/public_development_fullft_2026-11-08/`；只等这两组卡释放，补评父权重及A/B的验证`best_miou.pt`，每项覆盖5004张单尺度与窄尺度翻转，不增第三组卡。
 
 | 运行目录 | 配置 | 物理 GPU（PCI 序） | 启动时必需的环境变量 | 实际每卡显存 |
 |---|---|---|---|---:|

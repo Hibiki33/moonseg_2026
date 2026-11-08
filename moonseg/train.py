@@ -72,6 +72,62 @@ def make_scheduler(optimizer, total_steps, settings):
     return torch.optim.lr_scheduler.LambdaLR(optimizer, factor)
 
 
+def initialize_stage_model(config, checkpoint_path, data_snapshot):
+    """Load frozen-stage weights strictly, then enable the complete ViT before optimizer creation."""
+    from .models import build_model
+    path = Path(checkpoint_path).resolve()
+    before = path.stat()
+    checkpoint = load_checkpoint(path)
+    source = checkpoint.get("config", {})
+    target_model = config["model"]
+    source_model = source.get("model", {})
+    if (target_model.get("freeze_backbone") is not False or target_model.get("unfreeze_last_blocks", 0) != 0
+            or source_model.get("freeze_backbone") is not True or source_model.get("unfreeze_last_blocks", 0) != 0):
+        raise ValueError("Weights-only stage initialization requires a frozen source and a fully trainable target ViT")
+    architecture = lambda value: {key: item for key, item in value.items()
+                                  if key not in {"freeze_backbone", "unfreeze_last_blocks"}}
+    if architecture(source_model) != architecture(target_model):
+        raise ValueError("Stage initialization requires identical architecture and native pretrained backbone path")
+    for section in ("data", "loss", "inference"):
+        if source.get(section) != config.get(section):
+            raise ValueError(f"Stage initialization requires unchanged {section} configuration")
+    if checkpoint.get("data_snapshot") != data_snapshot:
+        raise ValueError("Stage source sample membership or data provenance differs")
+    epoch, step = checkpoint.get("epoch"), checkpoint.get("global_step")
+    if type(epoch) is not int or epoch < 0 or type(step) is not int or step <= 0:
+        raise ValueError("Stage source needs valid epoch/global_step provenance")
+    selection = checkpoint.get("selected_by")
+    if path.name in ("best_miou.pt", "best_loss.pt"):
+        if selection != path.stem or checkpoint.get(f"{selection}_epoch") != epoch + 1:
+            raise ValueError("Stage source selection metadata differs from checkpoint name/epoch")
+    elif path.name != "last.pt":
+        raise ValueError("Stage source must be best_miou.pt, best_loss.pt or last.pt")
+    # Construct the source trainability policy so only genuinely frozen native tensors may be absent.
+    model = build_model({**config, "model": source_model}, load_backbone=True)
+    tolerated = load_partial_state_dict(model, checkpoint["model"], "stage source model")
+    model.backbone.backbone.requires_grad_(True)
+    model.backbone.freeze_backbone = False
+    model.backbone.backbone_trainable = True
+    state = partial_state_dict(model)
+    trainable_vit = {key for key, parameter in model.named_parameters()
+                     if key.startswith("backbone.backbone.") and parameter.requires_grad}
+    if not trainable_vit or not trainable_vit.issubset(state):
+        raise RuntimeError("Stage checkpoint policy omits trainable ViT tensors")
+    after = path.stat()
+    identity = lambda stat: (stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns)
+    if identity(before) != identity(after):
+        raise ValueError("Stage source checkpoint changed during initialization")
+    metadata = {"source_checkpoint": str(path), "source_epoch": epoch + 1,
+                "source_epoch_zero_based": epoch, "source_global_step": step,
+                "source_selected_by": selection or "last", "source_data_provenance": data_snapshot["provenance"],
+                "source_file_identity": dict(device=before.st_dev, inode=before.st_ino,
+                                             size=before.st_size, mtime_ns=before.st_mtime_ns),
+                "native_backbone_weights": target_model["backbone_weights"],
+                "source_frozen_tensors_restored": tolerated, "trainable_vit_tensors": len(trainable_vit),
+                "optimizer_schedule": "Fresh optimizer, scheduler, scaler, RNG seed and best selection; stage-local epoch/step"}
+    return model, metadata
+
+
 def resolve_train_settings(settings):
     """Fill defaults in place, so resolved_config.json and checkpoints record the values used."""
     if "ema" in settings:
@@ -184,6 +240,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", required=True)
     parser.add_argument("--resume", help="Trusted full checkpoint; resumes at the following epoch")
+    parser.add_argument("--initialize-from", help="Trusted weights-only frozen-stage checkpoint; fresh optimizer/schedule")
     args = parser.parse_args()
     config = load_config(args.config)
     settings = resolve_train_settings(config["train"])
@@ -227,9 +284,16 @@ def main():
                         num_workers=workers, collate_fn=collate_samples, pin_memory=device.type == "cuda",
                         worker_init_fn=seed_worker, persistent_workers=False, drop_last=drop_last)
     resume_path = args.resume or settings.get("resume")
+    initialize_path = args.initialize_from or settings.get("initialize_from")
+    if resume_path and args.initialize_from:
+        raise ValueError("--resume and --initialize-from are mutually exclusive")
     from .models import build_criterion, build_model
-    # The pretrained backbone always comes from model.backbone_weights; checkpoints omit frozen tensors.
-    model = build_model(config, load_backbone=True).to(device)
+    stage_initialization = None
+    if initialize_path and not resume_path:
+        model, stage_initialization = initialize_stage_model(config, initialize_path, data_snapshot)
+    else:
+        model = build_model(config, load_backbone=True)
+    model = model.to(device)
     criterion = build_criterion(config).to(device)
     optimizer = make_optimizer(model, settings)
     epochs = int(settings.get("epochs", 80))
@@ -265,6 +329,7 @@ def main():
         if checkpoint["config"].get("inference") != config.get("inference"):
             raise ValueError("Epoch-boundary resume requires unchanged validation inference settings")
         load_partial_state_dict(model, checkpoint["model"], "model")
+        stage_initialization = checkpoint.get("stage_initialization")
         optimizer.load_state_dict(checkpoint["optimizer"])
         scheduler.load_state_dict(checkpoint["scheduler"])
         scaler.load_state_dict(checkpoint["scaler"])
@@ -285,6 +350,9 @@ def main():
         output.mkdir(parents=True, exist_ok=True)
         write_json({**config, "runtime": runtime}, output / "resolved_config.json")
         write_json(batch_plan, output / "batch_plan.json")
+        if stage_initialization:
+            write_json(stage_initialization, output / "stage_initialization.json")
+            print(json.dumps({"stage_initialization": stage_initialization}), flush=True)
         note = (DEVELOPMENT_NOTE if development else
                 "Only explicit official allowlist samples admitted; public discovery grants no training permission.")
         write_json({**data_snapshot, "note": note}, output / "data_provenance.json")
@@ -382,6 +450,7 @@ def main():
                      "rng_states": states, "epoch": epoch, "global_step": global_step, **best,
                      "world_size": world_size, "total_steps": total_steps,
                      "config": config, "sampler_epoch": epoch, "data_snapshot": data_snapshot, "batch_plan": batch_plan,
+                     "stage_initialization": stage_initialization,
                      "frozen_backbone": {"weights": config["model"].get("backbone_weights"),
                                          "note": "Frozen DINOv3 tensors are not stored; rebuild the model with "
                                                  "model.backbone_weights before loading these weights."},

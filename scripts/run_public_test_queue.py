@@ -43,7 +43,10 @@ def dependency(run):
         else:
             status = absolute(dep["status_path"])
             if status.exists():
-                for lane in read_json(status).get("lanes", {}).values():
+                state = read_json(status)
+                if state.get("plan", {}).get("config", "").endswith(f"/{run['name']}.yaml") and state.get("status") == "failed":
+                    raise TrainingBlocked(f"Training plan failed: {state.get('error', state.get('exit_code'))}")
+                for lane in state.get("lanes", {}).values():
                     for job in lane.get("jobs", []):
                         if job.get("name") == run["name"] and (
                                 job.get("status") == "failed" or lane.get("status") == "failed"):
@@ -77,6 +80,10 @@ def validate_config(config):
         raise ValueError("Research manifest and model weights are mandatory")
     if config["gpu_lock_dir"] != "runs/evaluations_2026-10-23":
         raise ValueError("GPU locks must coordinate the existing scene-5 evaluation queue")
+    if "expected_gpu_uuids" in config:
+        expected = config['expected_gpu_uuids']
+        if set(expected) != {str(gpu) for gpu in gpus} or len(set(expected.values())) != len(gpus):
+            raise ValueError("Expected one distinct frozen UUID per evaluation GPU")
     output = absolute(config["output_dir"]).resolve()
     if not output.is_relative_to((ROOT / "runs").resolve()) or output == absolute(config["gpu_lock_dir"]).resolve():
         raise ValueError("Use a distinct public-test output directory under external runs storage")
@@ -92,8 +99,8 @@ def validate_config(config):
         if policy == "final_epoch":
             if type(epochs) is not int or epochs != 25 or run["checkpoint"] != "last.pt":
                 raise ValueError("final_epoch evaluations require the fixed 25-epoch last.pt checkpoint")
-        elif epochs not in (25, 80) or run["checkpoint"] != ("best.pt" if epochs == 80 else "best_miou.pt"):
-            raise ValueError("Use existing validation best_miou.pt (25 epochs), or legacy best.pt (80 epochs)")
+        elif type(epochs) is not int or epochs <= 0 or run["checkpoint"] != ("best.pt" if epochs == 80 else "best_miou.pt"):
+            raise ValueError("Use validation best_miou.pt with an explicit positive stage budget, or legacy best.pt (80 epochs)")
         if run["dependency"]["kind"] not in {"history", "marker"}:
             raise ValueError("Unknown training dependency")
         if run["dependency"]["kind"] == "marker" and not run["dependency"].get("status_path"):
@@ -301,6 +308,9 @@ class Queue(ValidationQueue):
             snapshot = gpu_snapshot()
             if gpu not in snapshot:
                 raise ValueError(f"Physical GPU {gpu} is absent")
+            expected_uuid = self.config.get("expected_gpu_uuids", {}).get(str(gpu))
+            if expected_uuid is not None and snapshot[gpu]['uuid'] != expected_uuid:
+                raise ValueError(f"Physical GPU {gpu} UUID differs from the approved plan")
             if snapshot[gpu]["pids"]:
                 lock.close()
                 return False
@@ -309,7 +319,8 @@ class Queue(ValidationQueue):
                          "GROUP_RANK", "ROLE_RANK", "ROLE_WORLD_SIZE", "TORCHELASTIC_RUN_ID"):
                 env.pop(name, None)
             env.update(CUDA_DEVICE_ORDER="PCI_BUS_ID", CUDA_VISIBLE_DEVICES=snapshot[gpu]["uuid"],
-                       NCCL_P2P_DISABLE="1", OMP_NUM_THREADS="4", PYTHONUNBUFFERED="1")
+                       NCCL_P2P_DISABLE="1", OMP_NUM_THREADS="4", PYTHONUNBUFFERED="1",
+                       PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True")
             command = [str(absolute(self.config["python"])), "-m", "moonseg.evaluate_public_test", "--config",
                        job["config_path"], "--checkpoint", job["checkpoint_path"], "--weights", "model",
                        "--checkpoint-policy", self.config.get("checkpoint_policy", "validation_selected"),

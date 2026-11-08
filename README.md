@@ -2,12 +2,14 @@
 
 LuSNAR 月面五类语义分割。类别编号固定为月壤 0、岩石 1、撞击坑 2、山体 3、天空 4；输入仅左相机 RGB。比赛规则见 [challenge.md](challenge.md)。
 
-## 当前状态（2026-10-29）
+## 当前状态（2026-11-08）
 
 - 默认配方：冻结 DINOv3 ViT-L + ViT-Adapter + Mask2Former，1024×1024 RRC，decoder6层/hidden256，梯度裁剪 **0.01**，每卡8×两卡×累积4=有效batch64。后续从 [默认模板](configs/dnv3_va_m2f_vitl16_default.yaml) 派生独立实验，历史配置保持原值；详见 [训练说明](docs/training.md)。
-- clip0.01、decoder9、width384及各自末轮评估均已完成。width384的场景9 TTA87.892%低于同clip0.01的width256基线88.021%，三个公开场景mIoU均下降，默认保持6层/width256/clip0.01。当前无排队任务；12/18轮搜索继续暂缓，数据划分保持原状。状态与结果见 [路线记录](docs/roadmap.md)。
-- 数据：九个 LuSNAR 原始包已完整下载（52,301,555,752 字节），整理出 8002 对训练 RGB/标签与 5004 张测试 RGB。官方清单到位前使用公开训练场景开发池（`data.development_pool: true`），最终提交模型必须在组织方清单上从骨干重训，边界见 [docs/data.md](docs/data.md)。
-- 官方训练包计划 10 月 22 日起发放；正式样本清单与场景权重尚未取得。
+- 权重选择：当前场景5独立验证，可按验证mIoU或验证loss选best；后续场景5并入训练、无独立验证集时用last。`best_loss.pt`指最低验证loss，不按训练loss选模型；10-29的末轮对照结果按原口径保留，新三项训练的验证best尚未做公开测试。
+- clip0.01、decoder9、width384及各自末轮评估均已完成。width384的场景9 TTA87.892%低于同clip0.01的width256基线88.021%，三个公开场景mIoU均下降，默认保持6层/width256/clip0.01。以上为10-29已完成实验；11-08已启动下述A/B，12/18轮搜索继续暂缓，数据划分保持原状。状态与结果见 [路线记录](docs/roadmap.md)。
+- 当前训练：B在PCI0/7从原DINOv3预训练联合训练全部ViT-L，25轮/2500更新、Adapter/head与骨干lr为2e-4/2e-5；A在PCI4/5从clip001第15轮验证best初始化后全解冻，5轮/500更新、新优化器、lr为2e-5/2e-6。两者每卡4×2卡×累积8=64；父权重与A/B的best_miou公开单尺度/TTA已排队，待同两组卡释放。计划/状态在`runs/plans/2026-11-08/fullft/`，勿重复启动。
+- 数据：公开版九个ZIP与官方训练/测试RAR均已下载。官方包位于 `data/LuSNAR_official`，8002张训练RGB、8002张训练标签、5004张测试RGB共21,008个PNG与公开版逐字节一致；无新增、缺失或内容变化，详见 [数据核对与正式清单](docs/data.md#官方数据一致性核对)。
+- 正式样本清单已从官方包内时间戳文本转录到 `data/LuSNAR_official/`，四份训练/验证/全训练池/测试清单已生成，8002张训练标签全部通过校验。用户已确认沿用现有数据路径与训练/验证划分，已有训练和测试结论继续有效，无需因数据来源差异重训或重复评估；官方场景权重数值尚未取得。
 - 环境与资产：uv 独立管理 Python 3.12.15 与 `.venv`（`uv.lock` 已生成，`uv pip check` 通过）；固定版本 DINOv3 源码与 ModelScope ViT-B/16、ViT-L/16 权重已就绪；官方 MSDeformAttn CUDA 扩展已编译（`build/ms_deform_attn/`）。
 
 ## 文档
@@ -105,7 +107,7 @@ uv run --no-sync python tools/prepare_data.py --root data/LuSNAR --development-p
 uv run --no-sync python tools/label_stats.py --manifest data/manifests/dev_train.json --development-pool
 ```
 
-清单格式、校验规则、开发池边界和切换到正式清单的步骤见 [docs/data.md](docs/data.md)。
+清单格式、校验规则、开发池边界和官方数据一致性核对的步骤见 [docs/data.md](docs/data.md)。
 
 ## 训练、验证与推理
 
@@ -145,7 +147,7 @@ uv run --no-sync python tools/package_submission.py \
 
 推理默认整图、单尺度、无翻转 TTA，输出恢复原输入尺寸。预测 ZIP 只包含 `test/Moon_2/submission/*.png`、`test/Moon_4/submission/*.png`、`test/Moon_9/submission/*.png`；完整评分口径与一次提交限制见 [challenge.md](challenge.md)，本地指标定义见 [docs/metrics.md](docs/metrics.md)。新训练保存 `last.pt`（完整恢复状态）与 `best_miou.pt`、`best_loss.pt`（仅权重，不能用于 `--resume`）；旧 B/L 的最佳文件名为 `best.pt`。它们不含冻结的 DINOv3 张量，评估、预测和复现包都需要 `model.backbone_weights` 指向的预训练文件（[docs/model.md](docs/model.md#checkpoints)）。最终在全部训练场景上重训的流程见 [docs/roadmap.md](docs/roadmap.md#最终流程方案冻结后)。仓库同时提供顶层 `train.py`、`predict.py` 作为复现入口。
 
-按用户 2026-10-23 的明确要求，公开 LuSNAR 场景 2/4/9 的 5004 张图另用 `moonseg.evaluate_public_test` 做离线研究评估。标签位于 `data/research_test/`，不进入训练加载器；权重按场景 5 验证选择，固定评估单尺度和窄尺度 TTA。这不是比赛正式成绩。当前后台队列为 `scripts/run_public_test_queue.py`，当前计划在 `runs/plans/2026-10-23/vitl_priority/public_test.json`，可用 `--dry-run` 检查；已启动实例不要重复运行。结果在 `runs/public_test_research_2026-10-23/aggregate.json`，指标与数据口径见 [docs/metrics.md](docs/metrics.md) 和 [docs/data.md](docs/data.md#开发清单)。ViT-L 优先队列与完整训练状态见 [docs/handover.md](docs/handover.md#4-正在跑与排队2026-10-23)。
+按用户 2026-10-23 的明确要求，公开 LuSNAR 场景 2/4/9 的 5004 张图另用 `moonseg.evaluate_public_test` 做离线研究评估。标签位于 `data/research_test/`，不进入训练加载器；权重按场景 5 验证选择，固定评估单尺度和窄尺度 TTA。这不是比赛正式成绩。11-08当前后台队列为 `scripts/run_public_test_queue.py`，计划在 `runs/plans/2026-11-08/fullft/public_test.json`，可用 `--dry-run` 检查；已启动实例不要重复运行。父权重和A/B的best_miou评估等待PCI0/7或4/5释放，结果在 `runs/public_development_fullft_2026-11-08/aggregate.json`。10-23历史计划 `runs/plans/2026-10-23/vitl_priority/public_test.json` 及结果 `runs/public_test_research_2026-10-23/aggregate.json` 保留追溯；指标与数据口径见 [docs/metrics.md](docs/metrics.md) 和 [docs/data.md](docs/data.md#开发清单)。当前训练与队列状态见 [docs/handover.md](docs/handover.md#4-正在跑与排队2026-11-08)。
 
 ## Git
 

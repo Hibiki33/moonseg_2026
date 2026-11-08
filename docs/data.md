@@ -1,6 +1,6 @@
 # LuSNAR 数据：实测事实、开发池边界与清单工具
 
-核对日期：2026-10-24；论文相关事实已于 2026-10-22 按 TGRS 终稿（[paper_alignment.md](paper_alignment.md)）复核。本文是数据事实的唯一出处：比赛训练池（场景 1/3/5/6/7/8）的实测统计、公开训练场景开发池的使用边界，以及清单与标签统计工具。本文的场景相似性、光照和阴影统计仍来自 2026-10-21 的 RGB 分析，当时没有读取测试标签；原始数字见 [evidence/data_stats.json](evidence/data_stats.json)，其历史记录 `meta.test_labels_read = 0` 保持不变。2026-10-23 起按用户要求读取公开测试标签计算模型指标，具体入口与边界见下文“开发清单”，不能把历史统计口径误读为当前从未读取测试标签。
+核对日期：2026-11-08；官方包核对与正式清单见下文“官方数据一致性核对”。论文相关事实已于 2026-10-22 按 TGRS 终稿（[paper_alignment.md](paper_alignment.md)）复核。本文是数据事实的唯一出处：比赛训练池（场景 1/3/5/6/7/8）的实测统计、公开训练场景开发池的使用边界，以及清单与标签统计工具。本文的场景相似性、光照和阴影统计仍来自 2026-10-21 的 RGB 分析，当时没有读取测试标签；原始数字见 [evidence/data_stats.json](evidence/data_stats.json)，其历史记录 `meta.test_labels_read = 0` 保持不变。2026-10-23 起按用户要求读取公开测试标签计算模型指标，具体入口与边界见下文“开发清单”，不能把历史统计口径误读为当前从未读取测试标签。
 
 亮度定义为 Y = 0.299R + 0.587G + 0.114B，直接作用于存储的 8 位值。该批统计未使用测试标签，"非天空"用天空 proxy 近似：A34 为 max(RGB)≤34 且与首行 8 连通的区域，B34 为每列自顶向下的连续暗像素前缀。两者在训练场景上与真天空的 IoU 为 0.957–0.990；测试场景非天空统计仍是近似，不能当成精确标签统计。
 
@@ -18,7 +18,7 @@
 | 8 | 训练 | 1351 | 中 | 丰富 | 4 个（27.91–100.68，0.06–0.15） |
 | 9 | 测试，权重最高 | 2087 | 高 | 丰富 | 4 个（22.11–59.64，0.05–0.15，两个 d/D 仅 0.05） |
 
-- 帧数为公开 ZIP 剔除 `Thumbs.db` 后的左相机 RGB 数，合计 13,006，与 TGRS 终稿 §IV-A 的 13,006 张图像一致；训练池 8002 对 RGB+标签，测试场景 5004 张 RGB。这些是公开原始池计数，不是官方最终样本数。终稿 §III-C 称 "The sequence length for each scene ranges from 1000 to 2000 frames"，§IV-A 称数据来自 "eight short sequences and one long sequence"；场景 9 的 2087 帧应当就是那条长序列（推断）。
+- 帧数为公开 ZIP 剔除 `Thumbs.db` 后的左相机 RGB 数，合计 13,006，与 TGRS 终稿 §IV-A 的 13,006 张图像一致；训练池 8002 对 RGB+标签，测试场景 5004 张 RGB。这些数字最初来自公开原始池，2026-11-08已逐项确认与官方包及其时间戳清单一致。终稿 §III-C 称 "The sequence length for each scene ranges from 1000 to 2000 frames"，§IV-A 称数据来自 "eight short sequences and one long sequence"；场景 9 的 2087 帧应当就是那条长序列（推断）。
 - 撞击坑一列在 2026-10-22 改正了场景 7：表 III 中场景 7 的五个坑直径为 24.64、67.77、20.82、14.54、33.72 m，此前误把首尾两项当作范围。终稿与 arXiv v3 的表 III 数值相同，但终稿正文称其为 "the major impact craters"（v3 为 "all impact craters"）；图 2(d) 的撞击坑数按场景 1–9 为 0/1/1/3/3/3/5/6/6，场景 8、9 各比表 III 多 2 个，所以表中个数只是主要撞击坑，不是全部。
 - 起伏与丰富度按行主序网格排列（起伏：1/4/7 低、2/5/8 中、3/6/9 高；丰富度：1/2/3 稀疏、4/5/6 中等、7/8/9 丰富），依据是 TGRS 终稿 §III-B 的 "systematic orthogonal design"、图 1 与图 2(a)(b)（横轴为起伏，纵轴为地物分布，最下一行为场景 1–3）以及 "Scenes 1, 4, and 7 exhibit relatively flat terrain, while Scenes 2, 5, and 8 feature minor undulations. In contrast, Scenes 3, 6, and 9 display significant terrain variations"；§IV-C 立体匹配段也按同一网格分组。arXiv v3 §III-B 把场景 6 写了两次的笔误，终稿已改正。比赛对测试场景的描述（2 中起伏/较稀疏、4 较平缓/中等、9 显著/较丰富）与该网格一致。
 - 终稿 §III-B 另有地貌类比：mare-like（"e.g., Scenes 1 and 4"，"flat terrain and sparse obstacles"）、transition（2、5、8）、highland-like（3、6、9，"significant topographic relief and dense obstacles"，类比月球南极环境）。这组类比基本按起伏分组，与网格的丰富度一维并不完全吻合（场景 4 在网格中为中等丰富度，场景 3 为稀疏），场景属性仍以网格为准。
@@ -147,16 +147,16 @@
 
 ## 公开训练场景开发池
 
-组织方正式训练包和固定样本清单计划自 2026-10-22 起滚动发放，当前尚未取得。为在清单到位前开发方法，`tools/prepare_data.py --development-pool` 从**公开 LuSNAR 包中比赛训练池的场景**生成开发清单。它是显式开启的工程通道，不是组织方样本清单，也不改变 [challenge.md](../challenge.md) 的任何规则。
+开发期尚未取得组织方材料时，`tools/prepare_data.py --development-pool` 从**公开 LuSNAR 包中比赛训练池的场景**生成开发清单。2026-11-08已下载用户提供的官方训练、测试包，并核对包内时间戳清单：8002对训练RGB/标签和5004张测试RGB与公开池逐字节一致，正式成员清单已从官方包内文本转录，详见下文“官方数据一致性核对”。用户已确认沿用现有数据：当前训练6403帧、验证1599帧均对应官方训练池中的相同样本，已有训练和测试结论继续有效。无需更换数据路径、清单或因获取渠道不同重训、重复评估；历史来源记录保持可追溯。
 
 | 项目 | 开发池 | 正式清单 |
 |---|---|---|
 | 清单 `kind` | `public_development_manifest` | `official_train_manifest` |
-| `official_allowlist` | `null`（不存在组织方清单） | 组织方清单路径，逐样本校验成员资格 |
+| `official_allowlist` | 历史开发记录为 `null` | 已从官方包内时间戳清单转录，逐样本校验成员资格 |
 | 样本来源 | 公开包中场景 1/3/5/6/7/8 的 `image0/color` 与 `image0/label`，按场景整体纳入 | 组织方固定样本列表 |
 | 加载条件 | 配置 `data.development_pool: true`，否则加载器报错 | 必须设置 `data.official_allowlist` |
 | 可用于 | 训练与本地验证、消融、增强与采样超参数初选、标签统计 | 方法开发及最终提交模型 |
-| 最终提交模型 | **不可用** | 唯一来源 |
+| 核对后的数据状态 | 样本和内容与官方包一致，沿用现有数据与实验结果 | 保留官方原包、时间戳清单和一致性证据 |
 
 明确允许：在 `dev_*.json` 上训练和本地验证，比较模型、增强和采样策略；用 `tools/label_stats.py --development-pool` 统计开发清单的类别像素，供开发期稀有类采样；报告开发期结果时注明 `provenance = public_development_pool`。
 
@@ -165,9 +165,9 @@
 - 场景 2/4/9 不进入训练与训练期间验证。`prepare_data.py` 生成开发清单时断言不含测试场景，`load_manifest` 对开发清单再次拒绝非 1/3/5/6/7/8 场景，`MoonDataset` 也只接受训练场景。下述公开测试研究使用独立入口，不放宽这些检查。
 - 用测试场景 RGB 做训练、伪标签、统计调参或 BN 重估；推理时读取测试 RGB 生成预测不受影响。
 - 把开发清单当作或改写为正式清单。规则写明"每个分区实际选取的样本列表由官方清单固定""不得引入官方训练清单以外的数据。禁止使用未分配的 LuSNAR 图像、标签或其衍生材料"。
-- 用开发池训练出的 checkpoint 提交，或用它初始化、继续训练最终模型；最终模型必须在组织方清单上从预训练骨干重新训练。
+- 11-08全量核对后，不再因数据来自公开下载渠道而排除既有checkpoint或要求从骨干重训；训练与测试结论按其原有数据划分、权重选择和评价口径继续使用。
 
-规则风险如实记录：challenge.md 的核对补充写明"开发训练、调参、数据统计与增强均限于官方训练清单"。开发池是在清单发放前为工程开发作出的显式例外，范围限于比赛已公布的训练场景，从不涉及测试场景。如果正式清单只是这些场景中的子集，开发池中不在清单内的样本即属于"未分配图像"，它们可能已经影响开发期的超参数选择；因此清单到位后必须完成下文"切换到正式清单"，并在方法论文中声明开发期使用过公开训练场景池。
+此前需确认正式清单是否只包含公开训练场景的子集。11-08对官方包内清单与全部PNG的核对已排除这一差异：官方训练样本恰好覆盖原公开训练池8002帧，图像和标签均未改变。方法记录仍如实保留开发期的数据获取来源，后续正式清单和数据入口见下文；样本内容一致不将本地公开测试分数变成平台成绩。
 
 ### 开发清单
 
@@ -179,9 +179,9 @@
 | `dev_val.json` | 5 | 1599 | 本地验证（官方建议场景），当前基线使用 |
 | `dev_val6_train.json` | 1、3、5、7、8 | 6900 | 开发训练（对应场景 6 验证） |
 | `dev_val6.json` | 6 | 1102 | 第二本地验证（候选） |
-| `dev_final_train.json` | 1、3、5、6、7、8 | 8002 | 开发期全训练池，用于长程或容量试验；不是最终提交模型 |
+| `dev_final_train.json` | 1、3、5、6、7、8 | 8002 | 与官方训练池一致的8002帧；当前尚未全部加入训练 |
 
-每个开发清单都写入 `kind: "public_development_manifest"`、`official_allowlist: null`、`scenes` 和说明文字：样本来自公开 LuSNAR 训练场景池，只用于方法开发，最终提交模型必须在组织方清单上重新训练。
+历史开发清单保留 `kind: "public_development_manifest"`、`official_allowlist: null`、`scenes` 以及当时的开发用途说明。11-08已确认其样本与官方包一致，这些历史来源标记不构成更换数据或重新训练的理由。
 
 2026-10-23，用户明确要求在**公开 LuSNAR 场景 2/4/9**上评价实验结论。相应标签从原始 ZIP 的 `image0/label` 提取至 `data/research_test/LuSNAR/`，RGB 软链到已有文件；清单为 `data/research_test/manifest.json`，`kind: public_test_research_manifest`。场景 2/4/9 分别有 1597/1320/2087 张，共 5004 张，尺寸 1024×1024，全部标签通过 RGB 调色板解码和图像尺寸校验，记录见同目录 `validation.json`。文件实际位于 `/home/disk02/wjj/moonseg/data/research_test/`。
 
@@ -199,15 +199,27 @@ data:
   val_scenes: [5]                   # 使用 dev_val6*.json 时改为 [6]，训练场景改为 [1,3,5,7,8]
 ```
 
-`MoonDataset` 把 `allow_development_pool=bool(config.get("development_pool", False))` 传给 `load_manifest`，并提供 `dataset.provenance`（`"official_allowlist"` 或 `"public_development_pool"`）。即使开启开发池，正式清单仍要求 `official_allowlist`；若同时给出 `official_allowlist`，开发清单内每个样本也必须属于该清单。训练启动时检查训练/验证样本和场景互不重叠；开发池运行打印警告，并把训练/验证记录、清单原文（无清单时为 `null`）和 `provenance` 写入 `data_provenance.json` 与每个 checkpoint 的 `data_snapshot`，说明文字为"development only; final submission model must be trained on the organizer's official sample list"。
+`MoonDataset` 把 `allow_development_pool=bool(config.get("development_pool", False))` 传给 `load_manifest`，并提供 `dataset.provenance`（`"official_allowlist"` 或 `"public_development_pool"`）。即使开启开发池，正式清单仍要求 `official_allowlist`；若同时给出 `official_allowlist`，开发清单内每个样本也必须属于该清单。训练启动时检查训练/验证样本和场景互不重叠；开发池运行打印警告，并把训练/验证记录、清单原文（无清单时为 `null`）和 `provenance` 写入 `data_provenance.json` 与每个 checkpoint 的 `data_snapshot`，说明文字为"development only; final submission model must be trained on the organizer's official sample list"。这是尚未取得官方包时写入的来源提示；当前已核对样本一致，不据该历史提示要求重复训练。
 
-### 切换到正式清单
+### 官方数据一致性核对
 
-1. 将组织方清单转写到 `data/official/`，运行 `prepare_data.py --official-allowlist … --validate-labels`，生成 `train.json`、`val.json`、`final_train.json` 和不含标签的 `test.json`。
-2. 配置改回正式清单：删除 `development_pool` 或设为 `false`，设置 `data.official_allowlist`。
-3. 用 `tools/label_stats.py --manifest data/manifests/final_train.json --official-allowlist …` 重新生成统计；最终训练的稀有类采样只使用这一份。
-4. 若正式清单与开发池不同，用正式 `train.json`/`val.json` 复核开发期选定的超参数。
-5. 最终模型在 `final_train.json` 上从预训练骨干重新训练，开发池 checkpoint 不参与。
+2026-11-08已取得 `LuSNAR_train.rar`（14,194,840,299字节）与 `LuSNAR_test.rar`（8,787,422,655字节），共22,982,262,954字节。实际目录为 `/home/disk02/wjj/moonseg/data/LuSNAR_official`，仓库通过已有 `data` 软链接访问；原包保留在 `archives/`，原始解压目录保留在 `raw/`，`train/`、`test/`软链接分别指向两个原始包目录。
+
+对照范围为公开版已整理的左相机图像及训练标签，全量直接比较文件字节，结果如下；没有用文件名、大小或抽样结果代替内容比较。
+
+| 内容 | 官方包数量 | 公开池数量 | 逐字节一致 | 新增 / 缺失 |
+|---|---:|---:|---:|---:|
+| 训练RGB，场景1/3/5/6/7/8 | 8002 | 8002 | 8002 | 0 / 0 |
+| 训练标签，同上 | 8002 | 8002 | 8002 | 0 / 0 |
+| 测试RGB，场景2/4/9 | 5004 | 5004 | 5004 | 0 / 0 |
+
+全部21,008个PNG一致；RGB仍为1024×1024 RGBA，训练标签仍为1024×1024 P模式，原有调色板解码适用。官方包另外带有15份时间戳文本和13个 `Thumbs.db` 缓存，归档格式和目录组织与公开ZIP不同；这些辅助文件不作为模型输入。官方测试包不含标签，所以只确认测试RGB一致，未核对组织方评分标签。完整逐文件结果位于 `data/LuSNAR_official/comparison_files.json`，汇总为同目录 `comparison_summary.json`；可入Git的证据见 [evidence/official_data_comparison_20261108.json](evidence/official_data_comparison_20261108.json)。
+
+官方各场景的 `color_timestamp.txt`、训练场景的 `label_timestamp.txt` 均与对应目录逐项一致，无重复、遗漏或图像/标签配对差异。已从这些官方包内文本转录 `official_train_allowlist.json`、`official_test_allowlist.json`，并用现有 `prepare_data.py --validate-labels --workers 16` 生成 `data/LuSNAR_official/manifests/`：`train.json`为6403帧、`val.json`为1599帧、`final_train.json`为8002帧、`test.json`为5004帧。8002张训练标签全部通过颜色与尺寸校验。成员资格来自官方包自带清单，没有将扫描公开包的结果改称官方清单。
+
+下载使用aria2，同时下载两个包，最终每包16连接。网页返回的 `/unode/stor/downloadByUrl` 忽略Range，不能分段；改用同一分享的 `/s/api/shareDownload` 后实测HTTP 206，核对与已有文件内容一致后续传。系统7z可列出RAR5目录，但无法解压部分压缩条目，最终用本地解出的Ubuntu unrar包完成解压，两包均成功退出。访问链接与提取码仅保留在被Git忽略的本机下载记录中，不转载到项目文档。
+
+用户于11-08确认：当前训练数据与官方一致，已有测试结果有效，无需更改数据。继续使用 `data/LuSNAR`、`data/manifests/dev_train.json`、`dev_val.json` 和对应标签统计；`LuSNAR_official`及其清单作为官方原包归档与一致性证据保留。当前仍训练1/3/6/7/8、验证5，不因这次数据核对更换划分或重复训练、评估。后续是否将5加入训练是独立实验安排；一旦没有独立验证集，再按已定规则使用last。
 
 ## 清单与标签统计工具
 

@@ -2,9 +2,10 @@
 # Train on scenes [1, 3, 6, 7, 8]; validate on scene 5.
 # grad_clip 0.01 is the default requested by the user on 2026-10-29.
 # Decoder: 6 layers, hidden dimension 256. The 25-epoch reference budget is not an established optimum.
-# Clone this config for future experiments and use a unique output_dir; compare final-epoch last.pt.
-# Data: public LuSNAR training-scene pool (data.development_pool). The final submission model must be
-# retrained from the backbone on the organizer's official sample list; see docs/data.md.
+# Clone this config for future experiments and use a unique output_dir.
+# With held-out validation, select best_miou/best_loss; without validation, use last.pt.
+# Data: existing LuSNAR pool (data.development_pool), verified byte-identical to official packages
+# on 2026-11-08. Keep the current paths and split; prior results remain valid. See docs/data.md.
 model:
   backbone: vitl16
   backbone_weights: ckpts/dinov3_vitl16_pretrain_lvd1689m-8aa4cbdd.pth
