@@ -64,7 +64,7 @@
 
 本批best对best、last对last分别报告。clip001现成25轮/2500更新last的[单尺度](evidence/public_development_last_20261029/rrc_clip001_single.json)与[TTA](evidence/public_development_last_20261029/rrc_clip001_narrowflip.json)证据直接复用，不重复排父last；只给A、B、DA3各追加两项last评估。B与DA3的last是25轮/2500更新；A的last是从clip001第15轮best初始化后微调5轮/500更新，初始化和预算不同，只作阶段诊断，不称为相同总预算。
 
-混合队列顶层标记`checkpoint_policy: mixed`，单项只允许`validation_selected`或`final_epoch`；run可用`checkpoints: [{"checkpoint": "best_miou.pt", "checkpoint_policy": "validation_selected"}, {"checkpoint": "last.pt", "checkpoint_policy": "final_epoch"}]`，旧单checkpoint计划保持兼容。准备、命令和分数来源核对按各checkpoint处理，状态与汇总逐项记录选择策略和计划轮数。last严格核对计划5/25轮、resolved config、完整history、末轮1599张验证、global_step及保存的更新预算；完成marker、物理UUID、共享GPU锁与单卡评测P2P禁用保留。计划变更仍拒绝静默配置漂移，迁移须先备份并显式更新原status的config，保留已有jobs和结果；同一run的每个checkpoint连续安排single/narrowflip，不增加队列或并发。
+混合队列顶层标记`checkpoint_policy: mixed`，单项只允许`validation_selected`或`final_epoch`；run可用`checkpoints: [{"checkpoint": "best_miou.pt", "checkpoint_policy": "validation_selected"}, {"checkpoint": "last.pt", "checkpoint_policy": "final_epoch"}]`，旧单checkpoint计划保持兼容。准备、命令和分数来源核对按各checkpoint处理，状态与汇总逐项记录选择策略和计划轮数。last严格核对计划5/25轮、resolved config、完整history、末轮1599张验证、global_step及保存的更新预算；完成marker、物理UUID、共享GPU锁与单卡评测P2P禁用保留。计划变更仍拒绝静默配置漂移，迁移须先备份并显式更新原status的config，保留已有jobs和结果；同一run的每个checkpoint连续安排single/narrowflip，不增加队列或并发。 11-09阶段last评估曾在配置检查阶段退出：resolved JSON中的lr=2e-05被YAML读成字符串；现按JSON格式读取，未放松配置一致性校验。两项失败日志保留并显式重试，正在运行的best TTA和训练未停止，见[evidence/last_evaluation_json_fix_20261109.json](evidence/last_evaluation_json_fix_20261109.json)。
 
 | 运行目录 | 配置 | 物理 GPU（PCI 序） | 启动时必需的环境变量 | 实际每卡显存 |
 |---|---|---|---|---:|

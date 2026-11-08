@@ -14,7 +14,8 @@ import yaml
 
 def load_config(path):
     with open(path, encoding="utf-8") as stream:
-        config = yaml.safe_load(stream)
+        # Resolved JSON must retain JSON numeric types (YAML reads 2e-05 as a string).
+        config = json.load(stream) if Path(path).suffix.lower() == ".json" else yaml.safe_load(stream)
     if not isinstance(config, dict):
         raise ValueError("Configuration must be a YAML mapping")
     return config

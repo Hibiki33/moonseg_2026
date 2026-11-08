@@ -1,0 +1,45 @@
+{
+  "time": "2026-11-08T17:12:48.804509+00:00",
+  "root_cause": "PyYAML reads JSON exponent 2e-05 as str, while checkpoint and queue JSON loader retain float",
+  "fix": "Use json.load for .json configs; keep all strict validation",
+  "cpu_validation": {
+    "real_stage2_last": [
+      5,
+      500
+    ],
+    "real_clip001_last": [
+      25,
+      2500
+    ],
+    "invalid_lr_epochs_freeze_data_scenes_initialization_rejected": 12
+  },
+  "retried_jobs": [
+    "dnv3_va_m2f_vitl16_rrc_clip001_stage2_fullft/last/single",
+    "dnv3_va_m2f_vitl16_rrc_clip001_stage2_fullft/last/narrowflip"
+  ],
+  "preserved_running_evaluators": {
+    "dnv3_va_m2f_vitl16_rrc_clip001_stage2_fullft/best_miou/narrowflip": {
+      "pid": 770015,
+      "start_ticks": 665782741
+    }
+  },
+  "old_supervisor": {
+    "pid": 681874,
+    "start_ticks": 665613900
+  },
+  "new_supervisor": {
+    "pid": 933583,
+    "start_ticks": 666181003,
+    "state": "R"
+  },
+  "training_processes_signalled": false,
+  "new_training_started": false,
+  "backup": "/home/disk02/wjj/moonseg/runs/plans/2026-11-08/fullft/public_test.before_json_parser_retry_20261109.json",
+  "retry_launch_verified": {
+    "single_pid": 933674,
+    "checkpoint": "runs/dnv3_va_m2f_vitl16_rrc_clip001_stage2_fullft/last.pt",
+    "passed_config_validation": true,
+    "model_and_local_cuda_extension_loaded": true,
+    "narrowflip": "pending behind two active evaluators"
+  }
+}
