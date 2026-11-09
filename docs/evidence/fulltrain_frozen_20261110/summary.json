@@ -1,0 +1,223 @@
+{
+  "date": "2026-11-10",
+  "scope": "Full six-scene frozen DINOv3 + ViT-Adapter + Mask2Former; complete last checkpoints, public scenes2/4/9,5004 images",
+  "training_scenes": [
+    1,
+    3,
+    5,
+    6,
+    7,
+    8
+  ],
+  "training_samples": 8002,
+  "validation": false,
+  "checkpoint_policy": "final_epoch",
+  "effective_batch": 64,
+  "profiles": {
+    "single": {
+      "scales": [
+        1.0
+      ],
+      "flip": false
+    },
+    "narrowflip": {
+      "scales": [
+        0.9,
+        1.0,
+        1.1
+      ],
+      "flip": true
+    }
+  },
+  "weighted_score_note": "1:1:2 is the official baseline-page example, not confirmed frozen final ranking weights",
+  "runs": [
+    {
+      "epochs": 10,
+      "updates": 1250,
+      "name": "dnv3_va_m2f_vitl16_fulltrain_clip001_e10",
+      "profiles": {
+        "single": {
+          "evidence": "docs/evidence/fulltrain_frozen_20261110/e10_single.json",
+          "samples": 5004,
+          "scene_mIoU_percent": {
+            "2": 93.72984500591625,
+            "4": 93.52243609112722,
+            "9": 89.31833815534773
+          },
+          "scene_equal_mIoU_percent": 92.19020641746374,
+          "scene_equal_mAcc_percent": 95.0822067704667,
+          "weighted112_estimate_percent": 91.47223935193473,
+          "scene9_class_IoU_percent": {
+            "regolith": 98.33953012000015,
+            "rock": 84.64930834593005,
+            "crater": 70.72466131367487,
+            "mountain": 93.38635976743076,
+            "sky": 99.4918312297028
+          },
+          "completed_at": "2026-11-09T02:12:59.252293+00:00"
+        },
+        "narrowflip": {
+          "evidence": "docs/evidence/fulltrain_frozen_20261110/e10_narrowflip.json",
+          "samples": 5004,
+          "scene_mIoU_percent": {
+            "2": 93.92005601652308,
+            "4": 93.75853117186033,
+            "9": 89.84202053434898
+          },
+          "scene_equal_mIoU_percent": 92.50686924091079,
+          "scene_equal_mAcc_percent": 95.16926296054368,
+          "weighted112_estimate_percent": 91.84065706427035,
+          "scene9_class_IoU_percent": {
+            "regolith": 98.42627968423001,
+            "rock": 85.59925688958442,
+            "crater": 71.22343946660999,
+            "mountain": 94.42913570047115,
+            "sky": 99.53199093084932
+          },
+          "completed_at": "2026-11-09T02:54:07.310632+00:00"
+        }
+      }
+    },
+    {
+      "epochs": 15,
+      "updates": 1875,
+      "name": "dnv3_va_m2f_vitl16_fulltrain_clip001_e15",
+      "profiles": {
+        "single": {
+          "evidence": "docs/evidence/fulltrain_frozen_20261110/e15_single.json",
+          "samples": 5004,
+          "scene_mIoU_percent": {
+            "2": 93.83389315530029,
+            "4": 93.66014808909809,
+            "9": 89.24746932449239
+          },
+          "scene_equal_mIoU_percent": 92.24717018963025,
+          "scene_equal_mAcc_percent": 95.00696660827221,
+          "weighted112_estimate_percent": 91.49724497334579,
+          "scene9_class_IoU_percent": {
+            "regolith": 98.36254330335665,
+            "rock": 85.05744853733442,
+            "crater": 69.79096986607014,
+            "mountain": 93.5687538208887,
+            "sky": 99.45763109481209
+          },
+          "completed_at": "2026-11-09T07:01:36.286387+00:00"
+        },
+        "narrowflip": {
+          "evidence": "docs/evidence/fulltrain_frozen_20261110/e15_narrowflip.json",
+          "samples": 5004,
+          "scene_mIoU_percent": {
+            "2": 93.99569995454576,
+            "4": 93.93425357024397,
+            "9": 89.83382513803267
+          },
+          "scene_equal_mIoU_percent": 92.5879262209408,
+          "scene_equal_mAcc_percent": 95.07837445285723,
+          "weighted112_estimate_percent": 91.89940095021376,
+          "scene9_class_IoU_percent": {
+            "regolith": 98.4578799052556,
+            "rock": 85.9797045542331,
+            "crater": 70.6864119612219,
+            "mountain": 94.54087072001921,
+            "sky": 99.50425854943342
+          },
+          "completed_at": "2026-11-09T08:15:59.341188+00:00"
+        }
+      }
+    },
+    {
+      "epochs": 20,
+      "updates": 2500,
+      "name": "dnv3_va_m2f_vitl16_fulltrain_clip001_e20",
+      "profiles": {
+        "single": {
+          "evidence": "docs/evidence/fulltrain_frozen_20261110/e20_single.json",
+          "samples": 5004,
+          "scene_mIoU_percent": {
+            "2": 93.92012362030535,
+            "4": 93.75550808945943,
+            "9": 89.66562700883985
+          },
+          "scene_equal_mIoU_percent": 92.44708623953487,
+          "scene_equal_mAcc_percent": 95.27167103993882,
+          "weighted112_estimate_percent": 91.75172143186111,
+          "scene9_class_IoU_percent": {
+            "regolith": 98.40542264625432,
+            "rock": 84.1738583911565,
+            "crater": 73.40222479839437,
+            "mountain": 92.92407754067402,
+            "sky": 99.42255166771999
+          },
+          "completed_at": "2026-11-09T16:01:10.085483+00:00"
+        },
+        "narrowflip": {
+          "evidence": "docs/evidence/fulltrain_frozen_20261110/e20_narrowflip.json",
+          "samples": 5004,
+          "scene_mIoU_percent": {
+            "2": 94.11115562398123,
+            "4": 94.04107238527448,
+            "9": 89.9730999195598
+          },
+          "scene_equal_mIoU_percent": 92.70844264293851,
+          "scene_equal_mAcc_percent": 95.35289023497934,
+          "weighted112_estimate_percent": 92.02460696209383,
+          "scene9_class_IoU_percent": {
+            "regolith": 98.46269592819446,
+            "rock": 85.25466628027158,
+            "crater": 72.72440510304936,
+            "mountain": 93.96081057332982,
+            "sky": 99.46292171295377
+          },
+          "completed_at": "2026-11-09T17:15:40.936697+00:00"
+        }
+      }
+    },
+    {
+      "epochs": 25,
+      "updates": 3125,
+      "name": "dnv3_va_m2f_vitl16_fulltrain_clip001_e25",
+      "profiles": {
+        "single": {
+          "evidence": "docs/evidence/fulltrain_frozen_20261110/e25_single.json",
+          "samples": 5004,
+          "scene_mIoU_percent": {
+            "2": 94.06833905174801,
+            "4": 94.23029108681092,
+            "9": 89.31782359568888
+          },
+          "scene_equal_mIoU_percent": 92.53881791141593,
+          "scene_equal_mAcc_percent": 95.36051283700665,
+          "weighted112_estimate_percent": 91.73356933248417,
+          "scene9_class_IoU_percent": {
+            "regolith": 98.39205531731909,
+            "rock": 85.12565528688172,
+            "crater": 70.71708567305801,
+            "mountain": 92.88872127277527,
+            "sky": 99.46560042841026
+          },
+          "completed_at": "2026-11-09T09:10:05.123105+00:00"
+        },
+        "narrowflip": {
+          "evidence": "docs/evidence/fulltrain_frozen_20261110/e25_narrowflip.json",
+          "samples": 5004,
+          "scene_mIoU_percent": {
+            "2": 94.27085265138189,
+            "4": 94.45538200481401,
+            "9": 89.85114160567123
+          },
+          "scene_equal_mIoU_percent": 92.85912542062236,
+          "scene_equal_mAcc_percent": 95.45480389110244,
+          "weighted112_estimate_percent": 92.1071294668846,
+          "scene9_class_IoU_percent": {
+            "regolith": 98.4766746417792,
+            "rock": 86.06756545206512,
+            "crater": 71.04479652122524,
+            "mountain": 94.14010751583314,
+            "sky": 99.52656389745343
+          },
+          "completed_at": "2026-11-09T09:51:13.782439+00:00"
+        }
+      }
+    }
+  ]
+}

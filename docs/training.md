@@ -67,11 +67,11 @@
 
 沿用本地数据实体与`dev_final_train.json`，训练场景1/3/5/6/7/8共8002张；其样本成员已核对等于原6403张加场景5的1599张，并与官方全训练清单完全一致。`validate: false`、`val_manifest: null`、`val_scenes: []`，不再用场景5选best，不按训练loss选权重。每轮125次更新、8000张，随机打乱后跳过不足完整batch的2张；完整运行后只测最终`last.pt`，公开2/4/9全部5004张分别做single和narrowflip。比较训练预算及后续路线只依据这些测试结果。
 
-计划为`runs/plans/2026-11-09/fulltrain/lane_07.json`与`lane_23.json`，每lane由`scripts/run_fulltrain_plan.py --plan <path>`管理。代码、解释器、CUDA扩展、数据和输出均走disk02本地路径；共享训练/评测锁、GPU UUID与占用检查保留，2/3训练关闭NCCL P2P，两组单卡测试均关闭P2P。新队列不继承已撤销的临时额外卡授权。数据及配置核对见[evidence/fulltrain_config_verification_20261109.json](evidence/fulltrain_config_verification_20261109.json)。 两条队列已完成上游依赖并分别开始10轮、15轮训练；状态分别在`lane_07.state/status.json`与`lane_23.state/status.json`；启动记录见[evidence/fulltrain_queue_launch_20261109.json](evidence/fulltrain_queue_launch_20261109.json)。 无验证集的末轮校验、旧checkpoint兼容和调度恢复检查见[evidence/fulltrain_no_val_verification_20261109.json](evidence/fulltrain_no_val_verification_20261109.json)。
+计划为`runs/plans/2026-11-09/fulltrain/lane_07.json`与`lane_23.json`，每lane由`scripts/run_fulltrain_plan.py --plan <path>`管理。代码、解释器、CUDA扩展、数据和输出均走disk02本地路径；共享训练/评测锁、GPU UUID与占用检查保留，2/3训练关闭NCCL P2P，两组单卡测试均关闭P2P。新队列不继承已撤销的临时额外卡授权。数据及配置核对见[evidence/fulltrain_config_verification_20261109.json](evidence/fulltrain_config_verification_20261109.json)。 两条队列已于11-10 01:15全部完成四个预算和8项末轮测试，结果见[evidence/fulltrain_frozen_20261110/summary.json](evidence/fulltrain_frozen_20261110/summary.json)；状态分别在`lane_07.state/status.json`与`lane_23.state/status.json`；启动记录见[evidence/fulltrain_queue_launch_20261109.json](evidence/fulltrain_queue_launch_20261109.json)。 无验证集的末轮校验、旧checkpoint兼容和调度恢复检查见[evidence/fulltrain_no_val_verification_20261109.json](evidence/fulltrain_no_val_verification_20261109.json)。
 
 ### 全六场景联合微调（11-09晚追加）
 
-用户根据已完成公开测试的收益，追加同样10/15/20/25轮的联合微调预算。当前2/3上的冻结20轮继续完成训练和测试；新任务使用不冲突的0/7、4/5，每条lane依次训练、并行测试last普通/TTA、再进入下一预算。该授权更新此前仅四张卡的范围，不使用1/6。
+用户根据已完成公开测试的收益，追加同样10/15/20/25轮的联合微调预算。原2/3上的冻结20轮及其测试已于11-10 01:15完成；新任务使用不冲突的0/7、4/5，每条lane依次训练、并行测试last普通/TTA、再进入下一预算。该授权更新此前仅四张卡的范围，不使用1/6。
 
 | 卡对 | 顺序 | 配置 | 完整预算 |
 |---|---:|---|---:|
