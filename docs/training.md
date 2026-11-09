@@ -90,7 +90,7 @@
 
 B5保留作者的编码器lr6e-5、head lr6e-4、AdamW衰减0.01与poly1；作者1500步warmup按batch16→64的样本数折为375步。数据增强沿用本项目1024RRC与光度方案，裁剪仍为项目默认0.01。轻量基线准备使用CE1+Dice1、不设类别权重，lr2e-4、衰减0.01；这些系数与学习率并非官方已公开配方。二者均预置全部8002张、无val、最终last，与官方轻量演示使用2400张×10轮、batch16及400张验证不同，未来分数不能称作该演示的严格复现。B5原版SyncBN与轻量原版BN均保留。
 
-SAM3配置为[`sam3_pretrained.yaml`](../configs/sam3_pretrained.yaml)，由`moonseg.evaluate_pretrained`读取官方预训练权重，固定五类文本、单尺度覆盖公开场景2/4/9全部5004张。输出标为`pretrained_only`，记录源码、权重文件身份、提示词、官方内部1008预处理及混淆矩阵；不伪造best、last或训练轮数。它使用独立uv基线环境，在物理GPU2单卡执行，使用共享GPU锁、物理UUID和`NCCL_P2P_DISABLE=1`。11-10用户要求立即使用已空闲的GPU2后，启动条件改为该卡最后的普通测试成功完成；GPU3末次TTA独立继续，不再等待整组结束。0/7与4/5的现有DINO联合微调照常，1/6不使用。本次计划为`runs/plans/2026-11-10/baselines/sam3.json`，监督进程已启动，GPU2交接记录在同目录`gpu2_handoff.json`；结果将写入同目录`sam3.state/scores/scores.json`。当前没有SAM3公开测试分数。
+SAM3配置为[`sam3_pretrained.yaml`](../configs/sam3_pretrained.yaml)，由`moonseg.evaluate_pretrained`读取官方预训练权重，固定五类文本、单尺度覆盖公开场景2/4/9全部5004张。输出标为`pretrained_only`，记录源码、权重文件身份、提示词、官方内部1008预处理及混淆矩阵；不伪造best、last或训练轮数。它使用独立uv基线环境，在物理GPU2单卡执行，使用共享GPU锁、物理UUID和`NCCL_P2P_DISABLE=1`。11-10用户要求立即使用已空闲的GPU2后，启动条件改为该卡最后的普通测试成功完成；GPU3末次TTA独立继续，不再等待整组结束。0/7与4/5的现有DINO联合微调照常，1/6不使用。本次计划为`runs/plans/2026-11-10/baselines/sam3.json`，GPU2交接记录在同目录`gpu2_handoff.json`。11-10 01:01:40评估正常退出，完整覆盖5004张，监督进程已确认完成并释放GPU2；总耗时23分45秒（含加载与单图检查），均值3.51张/秒。结果保存在同目录`sam3.state/scores/scores.json`，并[归档到Git](evidence/sam3_public_test_20261110.json)；场景等权mIoU68.486%、mAcc76.051%。按用户决定保留当前实现，不追加批量提速实验。
 
 ## GPU 放置与启动
 
