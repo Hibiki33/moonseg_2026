@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Queue one pretrained SAM3 single evaluation on GPU2 after frozen lane_23.
+"""Queue one pretrained SAM3 single evaluation on released GPU2.
 
 Reuse full-training durable stage workers and shared GPU locks. There is no
 training stage, epoch budget, retry or second reserved GPU. --dry-run is a
@@ -47,6 +47,8 @@ def predecessor_ready(plan):
     state = fulltrain.read_json(path)
     if state.get("plan") != original:
         raise ValueError("Frozen predecessor plan differs from its durable state")
+    if plan["predecessor"].get("release_gpu2_after_single") is True:
+        return released_gpu2_ready(original, state, path)
     if state.get("status") in {"failed", "cancelled", "stopped", "blocked"}:
         raise ValueError("Frozen predecessor lane did not succeed; automatic continuation refused")
     if state.get("status") != "completed":
@@ -91,6 +93,41 @@ def predecessor_ready(plan):
     if fulltrain.read_json(marker) != expected:
         raise ValueError("Frozen predecessor completion marker differs from verified state")
     return True, "complete frozen lane_23 receipts, final checkpoints and all public-test scores verified"
+
+
+def released_gpu2_ready(original, state, path):
+    """Explicit GPU2 handoff: all its work is done; only GPU3's final TTA may remain."""
+    last = original["jobs"][-1]
+    remaining = last["name"] + "_narrowflip"
+    expected = {job["name"] + suffix for job in original["jobs"]
+                for suffix in ("_train", "_single", "_narrowflip")}
+    if set(state.get("stages", {})) != expected:
+        raise ValueError("GPU2 release requires every predecessor stage to have been launched")
+    for key, stage in state["stages"].items():
+        if key == remaining:
+            if (stage.get("environment", {}).get("CUDA_VISIBLE_DEVICES") != original["expected_gpu_uuids"]["3"]
+                    or "--profile" not in stage["command"]
+                    or stage["command"][stage["command"].index("--profile") + 1] != "narrowflip"):
+                raise ValueError("The only remaining predecessor must be the final TTA on GPU3")
+            continue
+        receipt = fulltrain.read_json(fulltrain.local_path(stage["receipt_path"]))
+        if (stage.get("status") != "completed" or stage.get("exit_code") != 0
+                or receipt != stage.get("receipt") or receipt.get("status") != "completed"
+                or receipt.get("exit_code") != 0 or receipt.get("spec_path") != stage.get("spec_path")
+                or (receipt.get("pid"), receipt.get("start_ticks")) != (stage.get("pid"), stage.get("start_ticks"))):
+            raise ValueError(f"GPU2 release lacks a successful matching predecessor receipt: {key}")
+        if (fulltrain.live_stage(fulltrain.local_path(stage["spec_path"]))
+                or fulltrain.same_process({"pid": receipt.get("child_pid"),
+                                           "start_ticks": receipt.get("child_start_ticks")})):
+            return False, "waiting for completed GPU2 predecessor workers to exit"
+    verifier = object.__new__(fulltrain.Lane)
+    verifier.plan, verifier.state, verifier.directory = original, state, path.parent
+    for job in original["jobs"][:-1]:
+        verifier.verify_tests(job)
+    _, checkpoint, meta = verifier.checkpoint(last)
+    record = verifier.evaluate_records(last, checkpoint, meta)["single"]
+    fulltrain.score_result(Path(record["score_path"]), record, original["public_test"])
+    return True, "user-authorized GPU2 handoff: all GPU2 work verified complete; final GPU3 TTA runs independently"
 
 
 def plan_python(plan):
