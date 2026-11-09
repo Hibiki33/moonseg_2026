@@ -68,7 +68,7 @@ def _trainable_names(model):
 
 
 def partial_state_dict(model):
-    """State dict without the frozen pretrained DINOv3 tensors.
+    """Complete baseline state, or omit frozen pretrained DINOv3 tensors.
 
     Every tensor under ``backbone.backbone.`` that is not a trainable parameter (frozen weights and
     the deterministic RoPE/bias-mask buffers) is omitted; they are restored from
@@ -76,6 +76,10 @@ def partial_state_dict(model):
     (``model.unfreeze_last_blocks``/``freeze_backbone: false``) are kept.
     """
     model = unwrap_model(model)
+    if getattr(model, "checkpoint_full_state", False):
+        # Dense baselines need the entire encoder, including mutable BatchNorm
+        # statistics. Buffers are not named parameters and must not be dropped.
+        return dict(model.state_dict())
     trainable = _trainable_names(model)
     return {key: value for key, value in model.state_dict().items()
             if not key.startswith(FROZEN_BACKBONE_PREFIX) or key in trainable}
@@ -95,7 +99,8 @@ def load_partial_state_dict(model, state, label="model"):
     expected = model.state_dict().keys()
     # Checked before loading so a mismatched checkpoint never leaves a half-loaded model.
     tolerated = [key for key in expected if key not in state]
-    missing = [key for key in tolerated if not key.startswith(FROZEN_BACKBONE_PREFIX) or key in trainable]
+    missing = [key for key in tolerated if getattr(model, "checkpoint_full_state", False)
+               or not key.startswith(FROZEN_BACKBONE_PREFIX) or key in trainable]
     unexpected = [key for key in state if key not in expected]
     if missing or unexpected:
         raise ValueError(f"Checkpoint '{label}' does not match the model built from this config "

@@ -1,0 +1,223 @@
+{
+  "date": "2026-11-09",
+  "scope": "SAM3 text-only frozen inference baseline, official Meta source; no model training or dataset-label access",
+  "source": {
+    "repository": "https://github.com/facebookresearch/sam3",
+    "revision": "f6e51f59500a87c576c2df2323ce56b9fd7a12de",
+    "commit_date": "2026-02-24T18:28:32Z",
+    "files": 59,
+    "modifications": [],
+    "license": "SAM License, last updated November 19, 2025; see LICENSE"
+  },
+  "weights": {
+    "model": "Meta SAM 3 (original November 2025 image/video checkpoint, not SAM 3.1)",
+    "canonical_repository": "https://huggingface.co/facebook/sam3",
+    "canonical_file": "https://huggingface.co/facebook/sam3/blob/main/sam3.pt",
+    "official_implementation": "https://github.com/facebookresearch/sam3",
+    "download_repository": "https://modelscope.cn/models/facebook/sam3",
+    "mirror_revision": "f8ee5d16d5c30d0e87b1d22cbd358ce97761df56",
+    "download_url": "https://modelscope.cn/models/facebook/sam3/resolve/f8ee5d16d5c30d0e87b1d22cbd358ce97761df56/sam3.pt",
+    "metadata_url": "https://modelscope.cn/api/v1/models/facebook/sam3/repo/files?Revision=master&Recursive=true",
+    "expected_bytes": 3450062241,
+    "actual_bytes": 3450062241,
+    "download_http_status": 200,
+    "tls_verification": true,
+    "retrieved_date": "2026-11-09",
+    "license": "SAM License, last updated November 19, 2025; LICENSE saved next to checkpoint",
+    "provenance_limits": "Downloaded from the public ModelScope facebook/sam3 mirror via its normal URL. Canonical Hugging Face repository is gated; no gated content was downloaded and no access control was bypassed. The mirror model card links to the canonical official source and carries the SAM License. Byte size and complete active detector key/shape matching were checked; no cryptographic content comparison was computed.",
+    "validation": {
+      "active_detector_keys": 1134,
+      "unused_sam2_neck_keys": 22
+    }
+  },
+  "adapter": {
+    "file": "moonseg/models/sam3.py",
+    "factory": "build_sam3(config, load_weights=True)",
+    "output": "semantic_scores float32 [B,5,H,W]",
+    "class_ids": {
+      "0": "lunar regolith",
+      "1": "rock",
+      "2": "impact crater",
+      "3": "mountain",
+      "4": "sky"
+    },
+    "scoring": "For each fixed prompt, official forward_grounding semantic_seg -> bilinear logits to input H,W (align_corners=False) -> sigmoid -> concatenate channels. Final class selection is one joint argmax in shared inference.",
+    "geometry": "No points, boxes, exemplars, masks, target annotations, or previous class predictions are provided. Official empty dummy geometry only.",
+    "preprocessing": "Undo configured project data mean/std; clamp, round to uint8 RGB; official Sam3Processor transforms uint8 -> 1008x1008 resize -> float32/255 -> normalize mean/std 0.5.",
+    "coordinates": "1024x1024 dataset images preserved as input/output coordinates; official internal image resolution is 1008x1008; original unequal H,W supported.",
+    "inference": "single scale, no flip/sliding window; public-test label maps must not be read by this adapter",
+    "fallback": "No instance compositing, no per-class confidence cutoff, no uncovered-pixel fallback: dense head defines every pixel for all five prompts. Lowest index resolves exact argmax ties as in shared torch argmax.",
+    "builder_adaptation": "While the official builder executes, defers CUDA-only position/decoder-coordinate precomputation until the first forward using the original formulas, then restores both builder globals in finally. Plain caches are cleared when the adapter moves devices. Official vendored files remain unchanged.",
+    "training": "All parameters requires_grad=False, all modules eval; train(True) raises; forward has inference_mode.",
+    "checkpoint_validation": "All active detector keys/shapes required; only inactive backbone SAM2 neck tensor prefix ignored."
+  },
+  "verification": {
+    "official_import": {
+      "builder": true,
+      "processor": true,
+      "cuda_visible_devices": ""
+    },
+    "real_cpu_build": {
+      "kind": "real CPU official image model, complete pretrained checkpoint loaded via project adapter",
+      "parameters": 840509750,
+      "checkpoint_validation": {
+        "active_detector_keys": 1134,
+        "unused_sam2_neck_keys": 22
+      },
+      "elapsed_seconds": 12.089,
+      "frozen": true,
+      "eval": true,
+      "builder_globals_restored": true,
+      "cuda_visible_devices": "",
+      "full_image_forward_executed": false
+    },
+    "official_pretrained_head_cpu": {
+      "kind": "official pretrained UniversalSegmentationHead, real CPU execution on synthetic features; not accuracy",
+      "dense_shape": [
+        1,
+        1,
+        16,
+        16
+      ],
+      "dense_finite": true,
+      "instance_shape": [
+        1,
+        3,
+        16,
+        16
+      ],
+      "dense_head_weight_finite": true,
+      "dense_head_weight_abs_sum": 100.22394561767578,
+      "dense_head_bias": [
+        0.15837261080741882
+      ]
+    },
+    "meta_shapes": {
+      "kind": "real official image model on meta, original checkpoint tensor inventory",
+      "keys": 1134,
+      "checkpoint_detector_keys": 1156,
+      "missing_keys": [],
+      "shape_mismatch_keys": [],
+      "parameters": 840509750,
+      "semantic_seg_head": [
+        1,
+        256,
+        1,
+        1
+      ],
+      "cuda_available": false,
+      "verification_only_meta_adjustment": "drop_path linspace created on CPU so upstream item() works; no model formula or weight change",
+      "unused_sam2_neck_keys": [
+        "backbone.vision_backbone.sam2_convs.0.conv_1x1.bias",
+        "backbone.vision_backbone.sam2_convs.0.conv_1x1.weight",
+        "backbone.vision_backbone.sam2_convs.0.conv_3x3.bias",
+        "backbone.vision_backbone.sam2_convs.0.conv_3x3.weight",
+        "backbone.vision_backbone.sam2_convs.0.dconv_2x2_0.bias",
+        "backbone.vision_backbone.sam2_convs.0.dconv_2x2_0.weight",
+        "backbone.vision_backbone.sam2_convs.0.dconv_2x2_1.bias",
+        "backbone.vision_backbone.sam2_convs.0.dconv_2x2_1.weight",
+        "backbone.vision_backbone.sam2_convs.1.conv_1x1.bias",
+        "backbone.vision_backbone.sam2_convs.1.conv_1x1.weight",
+        "backbone.vision_backbone.sam2_convs.1.conv_3x3.bias",
+        "backbone.vision_backbone.sam2_convs.1.conv_3x3.weight",
+        "backbone.vision_backbone.sam2_convs.1.dconv_2x2.bias",
+        "backbone.vision_backbone.sam2_convs.1.dconv_2x2.weight",
+        "backbone.vision_backbone.sam2_convs.2.conv_1x1.bias",
+        "backbone.vision_backbone.sam2_convs.2.conv_1x1.weight",
+        "backbone.vision_backbone.sam2_convs.2.conv_3x3.bias",
+        "backbone.vision_backbone.sam2_convs.2.conv_3x3.weight",
+        "backbone.vision_backbone.sam2_convs.3.conv_1x1.bias",
+        "backbone.vision_backbone.sam2_convs.3.conv_1x1.weight",
+        "backbone.vision_backbone.sam2_convs.3.conv_3x3.bias",
+        "backbone.vision_backbone.sam2_convs.3.conv_3x3.weight"
+      ],
+      "unexpected_active_detector_keys": [],
+      "validation": "All 1134 active detector keys/shapes match; 22 SAM2 neck keys intentionally unused with instance interactivity disabled."
+    },
+    "processor_and_adapter_contract": {
+      "type": "official processor plus synthetic detector; not real model accuracy",
+      "original_rgb_uint8_round_trip": true,
+      "official_transform_exact_match": true,
+      "input_shape": [
+        1,
+        3,
+        1024,
+        1024
+      ],
+      "processor_shape": [
+        1,
+        3,
+        1008,
+        1008
+      ],
+      "output_shape": [
+        1,
+        5,
+        1024,
+        1024
+      ],
+      "resize_before_sigmoid": true,
+      "class_prompt_permutation_changes_only_channel_order": true,
+      "rectangular_output": [
+        31,
+        47
+      ],
+      "train_true_rejected": true,
+      "all_parameters_frozen": true
+    },
+    "full_image_forward": false,
+    "gpu_execution": false,
+    "public_test_accuracy": "Not run; 5004-image evaluation must use shared prediction/evaluation integration on an authorized free GPU.",
+    "first_device_forward_review": {
+      "review": "Official processor creates FindStage IDs on the input device. Text outputs are cached by device and autocast mode/dtype. Module _apply clears text, position and decoder-coordinate caches plus official cached _device attributes. Registered vision rotary buffers move with the model. torchvision v2 CUDA uint8 resize casts to float32 before bilinear interpolation.",
+      "real_small_grounding_contract": {
+        "real_official_grounding_with_synthetic_small_vision": true,
+        "scores_shape": [
+          1,
+          5,
+          31,
+          47
+        ],
+        "finite": true,
+        "cache_reuse_exact": true,
+        "cache_cleared_on_module_apply": true,
+        "cpu_bfloat16_autocast_finite": true,
+        "verification_only_adjustments": [
+          "synthetic small vision features",
+          "skip pin_memory transfer optimization with CUDA hidden"
+        ],
+        "cuda_visible_devices": "",
+        "seconds": 19.773357410915196
+      },
+      "cpu_only_limit": "The unmodified official geometry encoder unconditionally calls pin_memory even for an empty box prompt, which requires a visible CUDA driver. The external CPU contract temporarily omitted only that transfer optimization; production adapter/vendor were not modified. Full official inference is intended for CUDA.",
+      "gpu_execution_performed": false
+    }
+  },
+  "environment": {
+    "python": "3.12.15",
+    "versions": {
+      "torch": "2.7.1+cu126",
+      "torchvision": "0.22.1+cu126",
+      "numpy": "2.5.4",
+      "timm": "1.0.17",
+      "ftfy": "6.1.1",
+      "regex": "2026.11.9",
+      "iopath": "0.1.10",
+      "huggingface_hub": "0.36.0",
+      "tqdm": "4.70.1",
+      "psutil": "7.2.2",
+      "pycocotools": "2.0.11",
+      "decord": "0.6.0",
+      "setuptools": "80.10.2"
+    },
+    "external_dependencies_directory": "/home/disk02/wjj/moonseg/.cache/sam3-python",
+    "production_venv_changed": false,
+    "torch_or_cuda_upgraded": false
+  },
+  "limits": [
+    "This fixed dense-head adaptation is not an exact reproduction of the LuSNAR paper, whose SAM3 adaptation is undisclosed.",
+    "Prompts and scoring are fixed without reading test labels or selecting prompts from test results.",
+    "No full-image SAM3 forward or dataset accuracy was measured in this CPU-only verification.",
+    "Mirror provenance is corroborated by license/model card, file size, and official state-key/shape compatibility; cryptographic equality was not computed."
+  ]
+}

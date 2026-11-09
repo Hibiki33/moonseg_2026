@@ -17,9 +17,11 @@ ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
     TORCH_CUDA_ARCH_LIST="8.6;8.9" \
     PYTHONUNBUFFERED=1
 WORKDIR /workspace
+ARG BASELINES=0
 
 COPY pyproject.toml uv.lock .python-version ./
-RUN uv sync --locked --no-install-project --no-cache
+RUN if [ "$BASELINES" = 1 ]; then uv sync --locked --extra baselines --no-install-project --no-cache; \
+    else uv sync --locked --no-install-project --no-cache; fi
 
 # Keep source paths intact: model loaders locate vendored code relative to moonseg.
 COPY moonseg/ moonseg/
@@ -28,8 +30,9 @@ COPY scripts/ scripts/
 COPY configs/ configs/
 COPY tools/ tools/
 COPY train.py predict.py ./
-RUN uv sync --locked --no-build-isolation --no-cache \
-    && FORCE_CUDA=1 MAX_JOBS=4 bash scripts/build_ops.sh \
+RUN if [ "$BASELINES" = 1 ]; then uv sync --locked --extra baselines --no-build-isolation --no-cache; \
+    else uv sync --locked --no-build-isolation --no-cache; fi
+RUN FORCE_CUDA=1 MAX_JOBS=4 bash scripts/build_ops.sh \
     && mkdir -p data ckpts runs
 
 # Dataset, pretrained weights and run outputs are supplied as runtime bind mounts.

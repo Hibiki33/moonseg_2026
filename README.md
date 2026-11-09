@@ -2,19 +2,20 @@
 
 LuSNAR 月面五类语义分割。类别编号固定为月壤 0、岩石 1、撞击坑 2、山体 3、天空 4；输入仅左相机 RGB。比赛规则见 [challenge.md](challenge.md)。
 
-## 当前状态（2026-11-09）
+## 当前状态（2026-11-10）
 
 代码与Git的开发副本位于 `/home/disk02/wjj/moonseg/code`。原A/B与DA3训练及测试已完成，当前全六场景任务的Python、源码、CUDA扩展、数据和输出均走disk02本地路径。
 
-- 当前训练：新增全六场景DINOv3联合微调，0/7按10→25轮、4/5按15→20轮，10轮与15轮已启动；原2/3冻结20轮继续。全部8002张、无val，各预算独立初始化，训完只测last普通/TTA。仅每轮覆盖一个含完整微调骨干的last用于恢复，不存独立中间epoch文件，见[训练说明](docs/training.md#全六场景联合微调11-09晚追加)。
+- 当前训练：新增全六场景DINOv3联合微调，0/7按10→25轮、4/5按15→20轮，10轮与15轮已启动；原2/3冻结20轮已完成，普通/TTA测试进行中。全部8002张、无val，各预算独立初始化，训完只测last普通/TTA。仅每轮覆盖一个含完整微调骨干的last用于恢复，不存独立中间epoch文件，见[训练说明](docs/training.md#全六场景联合微调11-09晚追加)。
 - 本批GPU授权：新联合微调只使用0/7和4/5；原2/3任务完成其训练与测试。1/6保持空闲。
+- 新增基线：SegFormer-B5、SAM3和官方轻量DeepLabV3+/MobileNetV3-Large均接入第一手源码；只安排SAM3固定文本推理，B5与轻量基线的训练轮数待定，配置中`epochs: null`且不排训练。实现与参数量见[模型说明](docs/model.md#first-party-baselines)，准备配方见[训练说明](docs/training.md#基线准备与sam3推理)。
 - 默认配方：冻结 DINOv3 ViT-L + ViT-Adapter + Mask2Former，1024×1024 RRC，decoder6层/hidden256，梯度裁剪 **0.01**，每卡8×两卡×累积4=有效batch64。五场景历史对照从 [默认模板](configs/dnv3_va_m2f_vitl16_default.yaml) 派生；本批全量训练使用上述独立配置，历史配置保持原值；详见 [训练说明](docs/training.md)。
 - 已测最佳路线：DINOv3从分割训练第一步联合微调骨干与Adapter/head。公开测试TTA的best15在场景2/4/9为95.146/93.840/91.401%，均值93.462%；last25为95.275/93.409/90.689%，均值93.124%，两种选择口径均优于对应冻结基线。各场景、普通/TTA及best/last完整对照见[路线记录](docs/roadmap.md#实验记录)。新全量训练仍只取last，路线收益以公开测试为准。
 - clip0.01、decoder9、width384及各自末轮评估均已完成。width384的场景9 TTA87.892%低于同clip0.01的width256基线88.021%，三个公开场景mIoU均下降，默认保持6层/width256/clip0.01。以上为10-29已完成实验；原A/B和DA3按原划分完成；本批全量训练按上文加入场景5并比较10/15/20/25轮。状态与结果见 [路线记录](docs/roadmap.md)。
 - 原DINO批次已完成全部10项公开测试。阶段解冻从clip001 best15开始：阶段best2场景9 TTA88.806%、均值92.077%；阶段last5为88.536%、92.082%，继续训练未改善场景9。原测试结果保留，不重复启动。
 - 冻结DA3MONO已完成25轮及4项公开测试：best14场景9 TTA88.049%、均值91.078%；last25为87.386%、91.386%，当前替换方案不优于对应冻结DINOv3。原误启动的DA3全量微调记录保留，不用于结果比较。
 - 数据：公开版九个ZIP与官方训练/测试RAR均已下载。官方包位于 `data/LuSNAR_official`，8002张训练RGB、8002张训练标签、5004张测试RGB共21,008个PNG与公开版逐字节一致；无新增、缺失或内容变化，详见 [数据核对与正式清单](docs/data.md#官方数据一致性核对)。
-- 正式样本清单已从官方包内时间戳文本转录到 `data/LuSNAR_official/`，四份训练/验证/全训练池/测试清单已生成，8002张训练标签全部通过校验。用户已确认沿用现有数据路径，已有训练和测试结论继续有效；11-09新批次将场景5并入训练，不因数据来源差异重复评估；官方场景权重数值尚未取得。
+- 正式样本清单已从官方包内时间戳文本转录到 `data/LuSNAR_official/`，四份训练/验证/全训练池/测试清单已生成，8002张训练标签全部通过校验。用户已确认沿用现有数据路径，已有训练和测试结论继续有效；11-09新批次将场景5并入训练，不因数据来源差异重复评估；官方基线页给出场景权重1:1:2，但评价规则页尚未明确将该数值冻结为最终权重，见[评分说明](challenge.md#已核实的评价口径)。
 - 环境与资产：uv 独立管理 Python 3.12.15 与 `.venv`（`uv.lock` 已生成，`uv pip check` 通过）；固定版本 DINOv3 源码与 ModelScope ViT-B/16、ViT-L/16 权重已就绪；官方 MSDeformAttn CUDA 扩展已编译（`build/ms_deform_attn/`）。
 
 ## 文档
@@ -47,9 +48,11 @@ bash scripts/setup_env.sh
 
 `uv.lock` 随代码保留。迁移时复制代码及锁文件，重新运行安装脚本（内部使用 `uv sync --locked`）；不复制 `.venv`，也不依赖其他人的解释器路径。数据和模型存储位置通过下载脚本的 `--storage` 设置。训练、预测脚本直接使用本地 `.venv/bin/python`，也可用 `PYTHON` 指定同一环境的解释器；环境安装完成后不在运行入口隐式同步依赖。
 
+SAM3与轻量基线使用独立环境，运行 `bash scripts/setup_baseline_env.sh`，依赖同样由`uv.lock`固定，环境落在`/home/disk02/wjj/moonseg/.venv-baselines`并软链到代码目录。它保留PyTorch2.7.1/cu126，增加官方源码需要的timm等依赖及仍含`pkg_resources`的setuptools80；不重装正在训练的`.venv`。decord0.6.0发布的py3通用wheel内部误标cp36，安装脚本仅在独立环境原子修正该标签，不改库代码或共享缓存；实际导入与`uv pip check`均已通过。SegFormer适配不要求额外包。
+
 ### Docker
 
-[Dockerfile](Dockerfile)使用CUDA12.6.3 devel、uv0.13.4与`.python-version`指定的Python3.12.15，按`uv.lock`安装PyTorch2.7.1/cu126等依赖。构建时编译A6000/Ada所需的sm86/sm89可变形注意力扩展；`FORCE_CUDA=1`支持只有CUDA toolkit、没有可见GPU的构建环境，仅修改临时setup副本。数据、权重和输出在运行时挂载，`.dockerignore`排除`.venv/.cache/build`、Git、模型/数据、日志及`.da3tmp`。当前完成文件和静态检查，尚未实际构建或测试容器。
+[Dockerfile](Dockerfile)使用CUDA12.6.3 devel、uv0.13.4与`.python-version`指定的Python3.12.15，按`uv.lock`安装PyTorch2.7.1/cu126等依赖。构建时编译A6000/Ada所需的sm86/sm89可变形注意力扩展；`FORCE_CUDA=1`支持只有CUDA toolkit、没有可见GPU的构建环境，仅修改临时setup副本。数据、权重和输出在运行时挂载，`.dockerignore`排除`.venv/.cache/build`、Git、模型/数据、日志及`.da3tmp`。当前完成文件和静态检查，尚未实际构建或测试容器。需要SAM3/轻量基线时增加`--build-arg BASELINES=1`，安装同一锁文件中的基线依赖。
 
 ```bash
 docker build --platform linux/amd64 -t moonseg:cu126 .
@@ -111,6 +114,8 @@ bash scripts/bootstrap.sh --only weights --weights-provider modelscope --backbon
 原始 ZIP 的目录结构、整理规则和实际数量见 [docs/data.md](docs/data.md#文件格式与标签解码)。
 
 本机系统 DNS 曾将 CAS 下载域名解析到错误证书端点。curl 方式支持 `--dns-resolver https://dns.alidns.com/resolve` 或 `--resolve-host HOST:443:IP`，仅影响当前下载进程，并保留 TLS 证书校验；不要通过关闭证书校验掩盖这类故障。分块下载复用 HF Mirror 的重定向地址，避免每个并发分块重复访问镜像而触发限流。权重来源、Meta 原生 URL 选项与转换边界见 [docs/weights.md](docs/weights.md)。
+
+三种基线权重由 `tools/download_baseline_assets.py` 下载，支持`--only sam3|segformer|deeplabv3plus|all`；来源、固定版本、字节数和转换记录随资产保存。默认使用HF镜像，SAM3使用已核实的ModelScope镜像；重文件继续存到disk02的`checkpoints`，不进入Git。
 
 ## 数据清单
 

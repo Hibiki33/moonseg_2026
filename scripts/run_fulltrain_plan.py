@@ -261,6 +261,9 @@ class Lane:
         self.state.update(**changes, updated_at=now())
         atomic_json(self.status_path, self.state)
 
+    def predecessor_ready(self):
+        return predecessor_ready(self.plan)
+
     def wait_stage(self, key):
         stage = self.state["stages"][key]
         spec_path, receipt_path = Path(stage["spec_path"]), Path(stage["receipt_path"])
@@ -362,7 +365,7 @@ class Lane:
                 return 0
             self.save(status="waiting_dependency")
             while True:
-                ready, message = predecessor_ready(self.plan)
+                ready, message = self.predecessor_ready()
                 self.save(dependency=message)
                 if ready:
                     break
@@ -380,7 +383,7 @@ class Lane:
                             except BlockingIOError:
                                 time.sleep(self.plan["poll_seconds"])
                         locks.append(lock)
-                if not predecessor_ready(self.plan)[0]:
+                if not self.predecessor_ready()[0]:
                     raise ValueError("Predecessor changed while acquiring GPU locks")
                 for job in self.plan["jobs"]:
                     self.execute_job(job, locks)

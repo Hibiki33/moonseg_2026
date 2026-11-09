@@ -1,0 +1,473 @@
+{
+  "date": "2026-11-10",
+  "scope": "Shared baseline integration and queue preparation; no new supervised baseline training",
+  "shared_checks": {
+    "unchanged_m2f_scores": true,
+    "dense_logits_before_softmax_and_no_sam_double_activation": true,
+    "segformer": {
+      "parameters": 84597834,
+      "complete_state_keys": 1070,
+      "loss": 1.7117093801498413,
+      "all_trainable_params_receive_grad": true,
+      "full_encoder_saved": true,
+      "lr_groups": [
+        5.9999999999999995e-05,
+        0.0006
+      ]
+    },
+    "unbudgeted_templates_rejected_before_cuda": true,
+    "cuda_not_initialized": true,
+    "deeplabv3plus": {
+      "parameters": 4709381,
+      "complete_state_keys": 369,
+      "loss": 2.472168445587158,
+      "odd_shape_tta": [
+        1,
+        5,
+        49,
+        73
+      ],
+      "missing_encoder_bn_rejected": true,
+      "legacy_frozen_policy_preserved": true,
+      "cuda_initialized": false
+    }
+  },
+  "sam3_scheduler_checks": {
+    "passed": 50,
+    "checks": [
+      {
+        "check": "real_config",
+        "passed": true
+      },
+      {
+        "check": "real_first_party_source_weights_provenance",
+        "passed": true
+      },
+      {
+        "check": "real_complete_5004_public_dataset",
+        "passed": true
+      },
+      {
+        "check": "reject_architecture",
+        "passed": true,
+        "rejection": "Use the frozen official SAM3 model with the five fixed predeclared class prompts"
+      },
+      {
+        "check": "reject_classes",
+        "passed": true,
+        "rejection": "Use the frozen official SAM3 model with the five fixed predeclared class prompts"
+      },
+      {
+        "check": "reject_prompts",
+        "passed": true,
+        "rejection": "Use the frozen official SAM3 model with the five fixed predeclared class prompts"
+      },
+      {
+        "check": "reject_trainable",
+        "passed": true,
+        "rejection": "Use the frozen official SAM3 model with the five fixed predeclared class prompts"
+      },
+      {
+        "check": "reject_training_section",
+        "passed": true,
+        "rejection": "Inference-only SAM3 has no training/loss section; place execution settings in runtime"
+      },
+      {
+        "check": "reject_loss",
+        "passed": true,
+        "rejection": "Inference-only SAM3 has no training/loss section; place execution settings in runtime"
+      },
+      {
+        "check": "reject_TTA",
+        "passed": true,
+        "rejection": "SAM3 pretrained evaluation admits only the single profile, without TTA"
+      },
+      {
+        "check": "reject_scale",
+        "passed": true,
+        "rejection": "SAM3 pretrained evaluation admits only the single profile, without TTA"
+      },
+      {
+        "check": "reject_amp",
+        "passed": true,
+        "rejection": "runtime requires amp, nonnegative num_workers and boolean torch backend settings"
+      },
+      {
+        "check": "reject_negative_workers",
+        "passed": true,
+        "rejection": "runtime requires amp, nonnegative num_workers and boolean torch backend settings"
+      },
+      {
+        "check": "CPU_entry_refused_before_large_model_construction",
+        "passed": true,
+        "rejection": "Official SAM3 inference requires an available CUDA GPU. CPU-only source/weight audits remain supported; the original geometry encoder uses CUDA pinned memory."
+      },
+      {
+        "check": "actual_entry_shared_metrics_all_5004_CPU_fixture_dense_scores",
+        "passed": true,
+        "samples": 5004,
+        "forward_calls": 5005
+      },
+      {
+        "check": "refuse_score_overwrite",
+        "passed": true,
+        "rejection": "Refusing to overwrite pretrained scores: /home/disk02/wjj/moonseg/pretrained_cpu_xjxa4_vr/entry_scores.json"
+      },
+      {
+        "check": "complete_pretrained_result",
+        "passed": true
+      },
+      {
+        "check": "reject_result_samples",
+        "passed": true,
+        "rejection": "Pretrained SAM3 scores differ from the frozen config/assets/profile/public-data provenance"
+      },
+      {
+        "check": "reject_result_profile",
+        "passed": true,
+        "rejection": "Pretrained SAM3 scores differ from the frozen config/assets/profile/public-data provenance"
+      },
+      {
+        "check": "reject_result_policy",
+        "passed": true,
+        "rejection": "Pretrained SAM3 scores differ from the frozen config/assets/profile/public-data provenance"
+      },
+      {
+        "check": "reject_result_epoch",
+        "passed": true,
+        "rejection": "Pretrained-only scores must not contain training checkpoint, epoch, selection or loss metadata"
+      },
+      {
+        "check": "reject_result_checkpoint",
+        "passed": true,
+        "rejection": "Pretrained-only scores must not contain training checkpoint, epoch, selection or loss metadata"
+      },
+      {
+        "check": "reject_result_global_step",
+        "passed": true,
+        "rejection": "Pretrained-only scores must not contain training checkpoint, epoch, selection or loss metadata"
+      },
+      {
+        "check": "reject_result_loss",
+        "passed": true,
+        "rejection": "Pretrained-only scores must not contain training checkpoint, epoch, selection or loss metadata"
+      },
+      {
+        "check": "reject_result_prompts",
+        "passed": true,
+        "rejection": "Pretrained SAM3 scores differ from the frozen config/assets/profile/public-data provenance"
+      },
+      {
+        "check": "reject_result_weights_identity",
+        "passed": true,
+        "rejection": "Pretrained SAM3 scores differ from the frozen config/assets/profile/public-data provenance"
+      },
+      {
+        "check": "reject_result_source_commit",
+        "passed": true,
+        "rejection": "Pretrained SAM3 scores differ from the frozen config/assets/profile/public-data provenance"
+      },
+      {
+        "check": "reject_result_internal_resize",
+        "passed": true,
+        "rejection": "Pretrained SAM3 scores differ from the frozen config/assets/profile/public-data provenance"
+      },
+      {
+        "check": "reject_result_missing_scene",
+        "passed": true,
+        "rejection": "Pretrained-only scores must contain exactly the complete public scenes 2/4/9"
+      },
+      {
+        "check": "reject_result_scene_count",
+        "passed": true,
+        "rejection": "Incomplete pretrained evaluation of scene 2"
+      },
+      {
+        "check": "reject_result_metric",
+        "passed": true,
+        "rejection": "Invalid or inconsistent pooled mIoU"
+      },
+      {
+        "check": "reject_result_negative_confusion",
+        "passed": true,
+        "rejection": "Invalid five-class confusion counts: pooled"
+      },
+      {
+        "check": "reject_result_wrong_class_IoU",
+        "passed": true,
+        "rejection": "Inconsistent five-class IoU: pooled"
+      },
+      {
+        "check": "reject_result_pooled_count",
+        "passed": true,
+        "rejection": "Pooled pretrained confusion counts differ from the three scenes"
+      },
+      {
+        "check": "reject_result_macro",
+        "passed": true,
+        "rejection": "Inconsistent pooled or equal-scene pretrained metrics"
+      },
+      {
+        "check": "reject_result_smoke",
+        "passed": true,
+        "rejection": "Missing successful real first-image five-class inference smoke"
+      },
+      {
+        "check": "real_assets_complete_dataset_plan_admission",
+        "passed": true
+      },
+      {
+        "check": "reject_plan_other_GPU",
+        "passed": true,
+        "rejection": "Admit only one version-1 inference-only SAM3 evaluation on released GPU2"
+      },
+      {
+        "check": "reject_plan_reserve_second_GPU",
+        "passed": true,
+        "rejection": "Admit only one version-1 inference-only SAM3 evaluation on released GPU2"
+      },
+      {
+        "check": "reject_plan_missing_predecessor",
+        "passed": true,
+        "rejection": "SAM3 must wait for the complete approved frozen full-training lane_23"
+      },
+      {
+        "check": "reject_plan_wrong_predecessor",
+        "passed": true,
+        "rejection": "SAM3 must wait for the complete approved frozen full-training lane_23"
+      },
+      {
+        "check": "reject_plan_wrong_UUID",
+        "passed": true,
+        "rejection": "Freeze the complete predecessor 15/20-epoch lane, both physical UUIDs and its job membership"
+      },
+      {
+        "check": "reject_plan_training_budget",
+        "passed": true,
+        "rejection": "Declare exactly one sam3_pretrained_single config job, without training budgets"
+      },
+      {
+        "check": "reject_plan_extra_job",
+        "passed": true,
+        "rejection": "Declare exactly one sam3_pretrained_single config job, without training budgets"
+      },
+      {
+        "check": "reject_plan_wrong_public_dataset",
+        "passed": true,
+        "rejection": "Use the fixed complete public scenes 2/4/9 research dataset"
+      },
+      {
+        "check": "reject_plan_outside_venv",
+        "passed": true,
+        "rejection": "All full-training artifacts must resolve under /home/disk02/wjj/moonseg: /usr/bin"
+      },
+      {
+        "check": "isolated_durable_worker_shared_single_GPU_locks_and_single_execution_restart",
+        "passed": true,
+        "launches": 1,
+        "gpu_queries": "mocked",
+        "reserved_gpus": [
+          2
+        ]
+      },
+      {
+        "check": "failed_worker_marks_lane_failed",
+        "passed": true,
+        "rejection": "Stage sam3_pretrained_single_single failed; inspect /home/disk02/wjj/moonseg/pretrained_cpu_xjxa4_vr/failed_queue.state/stages/sam3_pretrained_single_single/receipt.json and /home/disk02/wjj/moonseg/pretrained_cpu_xjxa4_vr/failed_queue.state/scores/evaluation.log"
+      },
+      {
+        "check": "failed_stage_never_retried",
+        "passed": true,
+        "rejection": "Lane previously failed. Inspect its stage receipt/log; automatic retry is disabled"
+      },
+      {
+        "check": "actual_CUDA_hidden_entry_gate_no_model_build_or_score_write",
+        "passed": true,
+        "message": "Official SAM3 inference requires an available CUDA GPU. CPU-only source/weight audits remain supported; the original geometry encoder uses CUDA pinned memory.",
+        "cuda_initialized": false
+      }
+    ],
+    "real_source_weight_metadata": {
+      "pretrained_weights": "/home/disk02/wjj/moonseg/checkpoints/sam3/sam3.pt",
+      "pretrained_file_identity": {
+        "size": 3450062241,
+        "mtime_ns": 1794238291074314293,
+        "inode": 356997619
+      },
+      "source_repository": "https://github.com/facebookresearch/sam3",
+      "source_commit": "f6e51f59500a87c576c2df2323ce56b9fd7a12de",
+      "source_manifest": "/home/disk02/wjj/moonseg/code/third_party/sam3/SOURCE_MANIFEST.json",
+      "source_manifest_file_identity": {
+        "size": 3750,
+        "mtime_ns": 1794239049481113093,
+        "inode": 357043508
+      },
+      "bpe_file_identity": {
+        "size": 1356917,
+        "mtime_ns": 1794238786916705963,
+        "inode": 357043502
+      }
+    },
+    "real_dataset_counts": {
+      "2": 1597,
+      "4": 1320,
+      "9": 2087
+    },
+    "cuda_initialized": false,
+    "production_launches": 0,
+    "production_locks_or_status_writes": 0,
+    "GPU_forward": "Not run. Full 5004 metric-pipeline exercise used a tiny frozen CPU fixture model; actual SAM3 GPU smoke waits for released lane_23."
+  },
+  "predecessor_checks": {
+    "passed": 18,
+    "checks": [
+      {
+        "check": "complete_original_lane_and_all_scores_admitted",
+        "passed": true
+      },
+      {
+        "check": "wait_complete_old_lane_starting",
+        "passed": true
+      },
+      {
+        "check": "wait_complete_old_lane_waiting_dependency",
+        "passed": true
+      },
+      {
+        "check": "wait_complete_old_lane_waiting_gpu_locks",
+        "passed": true
+      },
+      {
+        "check": "wait_complete_old_lane_training",
+        "passed": true
+      },
+      {
+        "check": "wait_complete_old_lane_public_test",
+        "passed": true
+      },
+      {
+        "check": "reject_failed_old_lane",
+        "passed": true,
+        "rejection": "Frozen predecessor lane did not succeed; automatic continuation refused"
+      },
+      {
+        "check": "reject_dead_incomplete_old_lane",
+        "passed": true,
+        "rejection": "Frozen predecessor supervisor exited before complete lane success"
+      },
+      {
+        "check": "reject_failed_old_receipt",
+        "passed": true,
+        "rejection": "Frozen predecessor stage lacks a matching successful durable receipt: dnv3_va_m2f_vitl16_fulltrain_clip001_e15_train"
+      },
+      {
+        "check": "reject_missing_old_stage",
+        "passed": true,
+        "rejection": "Completed frozen predecessor has incomplete or changed stage membership"
+      },
+      {
+        "check": "reject_missing_old_job",
+        "passed": true,
+        "rejection": "Completed frozen predecessor has incomplete or changed job membership"
+      },
+      {
+        "check": "reject_changed_old_saved_scores",
+        "passed": true,
+        "rejection": "Frozen predecessor final checkpoints/scores are incomplete: dnv3_va_m2f_vitl16_fulltrain_clip001_e15"
+      },
+      {
+        "check": "reread_actual_old_checkpoints_and_scores",
+        "passed": true,
+        "rejection": "fixture corrupt actual final checkpoint or public score"
+      },
+      {
+        "check": "wait_old_worker_exit",
+        "passed": true
+      },
+      {
+        "check": "wait_old_child_exit",
+        "passed": true
+      },
+      {
+        "check": "reject_missing_completion_marker",
+        "passed": true,
+        "rejection": "Completed frozen predecessor lacks its durable completion marker"
+      },
+      {
+        "check": "wait_old_supervisor_publish_marker",
+        "passed": true
+      },
+      {
+        "check": "reject_changed_marker_membership",
+        "passed": true,
+        "rejection": "Frozen predecessor completion marker differs from verified state"
+      }
+    ],
+    "production_status_or_lock_writes": 0,
+    "gpu_queries": 0
+  },
+  "sam3_plan": {
+    "version": 1,
+    "id": "sam3_pretrained_single_20261110",
+    "recipe": "sam3_pretrained_only",
+    "gpus": [
+      2
+    ],
+    "expected_gpu_uuids": {
+      "2": "GPU-aec3a52c-8629-106e-3b66-a374628971a8"
+    },
+    "python": "/home/disk02/wjj/moonseg/.venv-baselines/bin/python",
+    "poll_seconds": 30,
+    "predecessor": {
+      "kind": "fulltrain_lane",
+      "plan_path": "runs/plans/2026-11-09/fulltrain/lane_23.json",
+      "status_path": "runs/plans/2026-11-09/fulltrain/lane_23.state/status.json",
+      "expected_gpu_uuids": {
+        "2": "GPU-aec3a52c-8629-106e-3b66-a374628971a8",
+        "3": "GPU-91456d0d-9e31-d4d4-4648-9a2489b270ee"
+      },
+      "expected_job_names": [
+        "dnv3_va_m2f_vitl16_fulltrain_clip001_e15",
+        "dnv3_va_m2f_vitl16_fulltrain_clip001_e20"
+      ]
+    },
+    "jobs": [
+      {
+        "name": "sam3_pretrained_single",
+        "config": "configs/sam3_pretrained.yaml"
+      }
+    ],
+    "public_test": {
+      "data_root": "data/research_test/LuSNAR",
+      "manifest": "data/research_test/manifest.json"
+    }
+  },
+  "sam3_queue_status": "waiting_dependency",
+  "sam3_gpu_forward": "Pending predecessor completion; queue first performs a real first-image smoke",
+  "sam3_full_cpu_forward": "Real 1024 RGB encoder completed; subsequent upstream geometry pin_memory requires CUDA. Evaluator now explicitly requires CUDA. No CPU dataset score claimed.",
+  "baseline_environment": {
+    "path": "/home/disk02/wjj/moonseg/.venv-baselines",
+    "packages": {
+      "torch": "2.7.1+cu126",
+      "torchvision": "0.22.1+cu126",
+      "numpy": "2.5.4",
+      "timm": "1.0.17",
+      "huggingface-hub": "0.36.0",
+      "setuptools": "80.10.2",
+      "decord": "0.6.0"
+    },
+    "pip_check": "passed",
+    "production_environment_unchanged": true,
+    "decord_metadata_fix": "Published py3-none wheel contains incorrect cp36 WHEEL tag; setup script atomically corrects isolated environment tag only; real import passed."
+  },
+  "training_budgets": {
+    "segformer_b5": null,
+    "deeplabv3plus_mobilenetv3": null
+  },
+  "new_training_jobs": 0,
+  "limits": [
+    "No B5 or lightweight-baseline GPU capacity/training/test results yet.",
+    "SAM3 public 5004-image scores are not yet available.",
+    "Docker optional-baseline path is prepared, not image-built or runtime-tested."
+  ]
+}

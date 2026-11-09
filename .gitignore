@@ -8,6 +8,7 @@
 /manifests/
 /build
 /.venv
+/.venv-baselines
 /.cache
 __pycache__/
 *.py[cod]

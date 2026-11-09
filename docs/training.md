@@ -84,6 +84,14 @@
 
 新计划位于`runs/plans/2026-11-09/fulltrain_joint/lane_07.json`与`lane_45.json`，显式`recipe: joint_fullft`、`predecessor: null`；仍先查实时空闲和UUID并取得共享训练/测试锁。4/5训练关闭NCCL P2P，0/7保留已验证P2P；所有单卡评测关闭P2P。旧冻结计划仍保留原卡对、配方与依赖约束。配置及验证见[evidence/joint_fulltrain_configs_20261109.json](evidence/joint_fulltrain_configs_20261109.json)、[调度与保存检查](evidence/joint_fulltrain_verification_20261109.json)，实际启动状态见[启动记录](evidence/joint_fulltrain_launch_20261109.json)。
 
+## 基线准备与SAM3推理
+
+按用户最新安排，仅SAM3排公开测试，SegFormer-B5与官方轻量基线暂不训练。两个[准备配置](../configs/segformer_b5_fulltrain.yaml)及[轻量配置](../configs/deeplabv3plus_mobilenetv3_fulltrain.yaml)的`train.epochs`均为null，直接启动会在初始化CUDA前报错；没有默认25轮或80轮，也没有新增训练计划。训练长度确定后再复制配置、设置唯一输出目录并测实际显存；模板每卡4×双卡×累积8=64只是预置值，尚未做GPU容量测试。
+
+B5保留作者的编码器lr6e-5、head lr6e-4、AdamW衰减0.01与poly1；作者1500步warmup按batch16→64的样本数折为375步。数据增强沿用本项目1024RRC与光度方案，裁剪仍为项目默认0.01。轻量基线准备使用CE1+Dice1、不设类别权重，lr2e-4、衰减0.01；这些系数与学习率并非官方已公开配方。二者均预置全部8002张、无val、最终last，与官方轻量演示使用2400张×10轮、batch16及400张验证不同，未来分数不能称作该演示的严格复现。B5原版SyncBN与轻量原版BN均保留。
+
+SAM3配置为[`sam3_pretrained.yaml`](../configs/sam3_pretrained.yaml)，由`moonseg.evaluate_pretrained`读取官方预训练权重，固定五类文本、单尺度覆盖公开场景2/4/9全部5004张。输出标为`pretrained_only`，记录源码、权重文件身份、提示词、官方内部1008预处理及混淆矩阵；不伪造best、last或训练轮数。它使用独立uv基线环境，等待原2/3 lane的训练和普通/TTA测试结束后在物理GPU2执行，继续使用共享GPU锁、物理UUID和`NCCL_P2P_DISABLE=1`。0/7与4/5的现有DINO联合微调照常，1/6不使用。本次计划为`runs/plans/2026-11-10/baselines/sam3.json`，监督进程已启动，状态为`waiting_dependency`；结果将写入同目录`sam3.state/scores/scores.json`。当前没有SAM3公开测试分数。
+
 ## GPU 放置与启动
 
 11-09结果已完整归档：联合微调DINOv3在best与last两种选择口径下均提高公开场景2/4/9；冻结DA3当前方案未显示整体优势。逐场景单尺度/TTA、mAcc及阶段微调取舍见[roadmap.md](roadmap.md#实验记录)和[evidence/public_development_20261109/summary.json](evidence/public_development_20261109/summary.json)。已排全六场景任务仍按冻结10/15/20/25轮执行，本次记录不改变训练计划。

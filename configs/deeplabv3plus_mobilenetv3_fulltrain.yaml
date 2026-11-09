@@ -1,0 +1,91 @@
+# Preparation template only: training duration is undecided; not queued.
+# Copy this file and set train.epochs/output_dir before launch.
+# Batch4 x 2 x accumulation8 = 64 is provisional, not a measured GPU capacity.
+# Keep project grad_clip=0.01. This is not an exact paper/baseline recipe.
+model:
+  architecture: deeplabv3plus_mobilenetv3
+  smp_repo: third_party/segmentation_models_pytorch
+  encoder_name: tu-mobilenetv3_large_100
+  backbone_weights: ckpts/deeplabv3plus/mobilenetv3_large_100.ra_in1k.safetensors
+  num_classes: 5
+loss:
+  type: semantic_ce_dice
+  ce_weight: 1.0
+  dice_weight: 1.0
+  ignore_index: 255
+data:
+  root: data/LuSNAR
+  development_pool: true
+  train_manifest: data/manifests/dev_final_train.json
+  val_manifest: null
+  label_stats: data/manifests/label_stats_dev_final_train.json
+  train_scenes:
+  - 1
+  - 3
+  - 5
+  - 6
+  - 7
+  - 8
+  val_scenes: []
+  train_mode: random_resize_crop
+  crop_size:
+  - 1024
+  - 1024
+  resize_range:
+  - 0.5
+  - 2.0
+  cat_max_ratio: 0.75
+  crop_attempts: 10
+  image_size:
+  - 1024
+  - 1024
+  hflip_probability: 0.5
+  brightness_probability: 0.5
+  brightness_delta: 32
+  contrast_probability: 0.5
+  contrast_range:
+  - 0.5
+  - 1.5
+  pixel_floor: 22
+  gamma_probability: 0.0
+  shadow_probability: 0.0
+  scale_jitter_probability: 0.0
+  mean:
+  - 0.485
+  - 0.456
+  - 0.406
+  std:
+  - 0.229
+  - 0.224
+  - 0.225
+train:
+  output_dir: runs/deeplabv3plus_mobilenetv3_fulltrain
+  seed: 42
+  epochs: null
+  batch_size: 4
+  accumulation_steps: 8
+  min_effective_batch: 64
+  num_workers: 4
+  lr: 0.0002
+  backbone_lr_multiplier: 1.0
+  weight_decay: 0.01
+  warmup_iters: 0
+  warmup_ratio: 0.001
+  poly_power: 0.9
+  amp: bf16
+  tf32: true
+  cudnn_benchmark: true
+  grad_clip: 0.01
+  sampling:
+    mode: uniform
+  validate: false
+  eval_every: 1
+  eval_stride: 2
+  save_every: 0
+  log_every: 10
+  resume: null
+inference:
+  sliding_window: false
+  scales:
+  - 1.0
+  flip: false

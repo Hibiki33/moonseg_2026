@@ -20,13 +20,33 @@ SCORE_POSTPROCESS = ("pred_masks logits bilinearly upsampled to the padded input
                      "Mask2Former semantic inference order)")
 
 
+def score_postprocess(config):
+    architecture = config.get("model", {}).get("architecture", "dinov3_mask2former")
+    if architecture == "sam3":
+        return "Official per-prompt dense semantic logits resized to input size, then sigmoid; five-class argmax."
+    if architecture in {"segformer_b5", "deeplabv3plus_mobilenetv3"}:
+        return "Dense semantic logits bilinearly resized to input size, then class softmax."
+    return SCORE_POSTPROCESS
+
+
 def semantic_scores(outputs, size, num_classes=5):
-    """Mask2Former semantic scores at `size`.
+    """Dense or Mask2Former semantic scores at `size`.
 
     Upsample mask logits before the sigmoid, as upstream DINOv3 (heads/mask2former_head.py
     predict() + eval/segmentation/inference.py) and Mask2Former sem_seg_postprocess do.
     The trailing no-object class is dropped by keeping the first num_classes probabilities.
     """
+    dense_keys = {"semantic_logits", "semantic_scores"} & outputs.keys()
+    if dense_keys:
+        if len(dense_keys) != 1 or {"pred_masks", "pred_logits"} & outputs.keys():
+            raise ValueError("Model output must have one unambiguous semantic representation")
+        key = next(iter(dense_keys))
+        scores = outputs[key].float()
+        if scores.ndim != 4 or scores.shape[1] != num_classes:
+            raise ValueError(f"Dense scores must have BCHW shape and {num_classes} channels")
+        if tuple(scores.shape[-2:]) != tuple(size):
+            scores = F.interpolate(scores, size=tuple(size), mode="bilinear", align_corners=False)
+        return scores.softmax(dim=1) if key == "semantic_logits" else scores
     mask_logits = outputs["pred_masks"].float()
     if tuple(mask_logits.shape[-2:]) != tuple(size):
         mask_logits = F.interpolate(mask_logits, size=tuple(size), mode="bilinear", align_corners=False)
@@ -199,7 +219,7 @@ def main():
                     "crop_size": inference.get("crop_size"), "stride": inference.get("stride"),
                     "scales": [float(scale) for scale in inference.get("scales", [1.0])],
                     "flip": bool(inference.get("flip", False)), "amp": amp, "num_classes": num_classes,
-                    "pad_multiple": 32, "score_postprocess": SCORE_POSTPROCESS, "world_size": world_size}
+                    "pad_multiple": 32, "score_postprocess": score_postprocess(config), "world_size": world_size}
         write_json({"kind": "prediction_index", "layout": "test/Moon_i/submission/<sample_id>.png",
                     "packaging_status": "Official prediction layout; validate complete files with tools/package_submission.py before submitting.",
                     "checkpoint": str(args.checkpoint), "weights_key": weights_key,

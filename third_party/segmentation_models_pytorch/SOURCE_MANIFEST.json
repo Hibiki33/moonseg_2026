@@ -1,0 +1,21 @@
+{
+  "repository": "https://github.com/qubvel-org/segmentation_models.pytorch",
+  "tag": "v0.5.0",
+  "commit": "420ce84b0c2df0286fa9bb2bd1499eea625c9b33",
+  "vendored": [
+    "segmentation_models_pytorch/ (entire importable package, excluding Python bytecode caches)",
+    "LICENSE",
+    "licenses/",
+    "pyproject.toml"
+  ],
+  "local_changes": [],
+  "license": "MIT; additional upstream notices retained in licenses/",
+  "tested_dependencies": {
+    "timm": "1.0.17",
+    "huggingface-hub": "0.36.0",
+    "torch": "2.7.1+cu126",
+    "torchvision": "0.22.1+cu126"
+  },
+  "selected_encoder": "tu-mobilenetv3_large_100",
+  "selection_note": "Official competition reports DeepLabV3Plus, ImageNet MobileNetV3-Large and ~4.71M trainable parameters, but no exact encoder ID. This ID gives 4,709,381 parameters with classes=5. TF and deprecated aliases have equal counts, so the count does not establish the unpublished encoder ID."
+}

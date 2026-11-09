@@ -243,6 +243,10 @@ def main():
     parser.add_argument("--initialize-from", help="Trusted weights-only frozen-stage checkpoint; fresh optimizer/schedule")
     args = parser.parse_args()
     config = load_config(args.config)
+    if config.get("model", {}).get("architecture") == "sam3":
+        raise ValueError("SAM3 is inference-only; use moonseg.evaluate_pretrained")
+    if config["train"].get("epochs", 80) is None:
+        raise ValueError("Set train.epochs explicitly before running this unbudgeted configuration template")
     settings = resolve_train_settings(config["train"])
     backends = configure_torch_backends(settings)
     device, rank, world_size = init_distributed()
@@ -452,8 +456,10 @@ def main():
                      "config": config, "sampler_epoch": epoch, "data_snapshot": data_snapshot, "batch_plan": batch_plan,
                      "stage_initialization": stage_initialization,
                      "frozen_backbone": {"weights": config["model"].get("backbone_weights"),
-                                         "note": "Frozen DINOv3 tensors are not stored; rebuild the model with "
-                                                 "model.backbone_weights before loading these weights."},
+                                         "note": "Only frozen tensors under backbone.backbone are omitted; "
+                                                 "trainable encoder tensors and the complete head are saved. "
+                                                 "Rebuild the configured model with its native pretrained weights "
+                                                 "before loading this state."},
                      "resume_scope": "Complete state at epoch boundary; use same config/world size. "
                                      "CUDA deformable-attention and grid_sample backward are nondeterministic; "
                                      "bitwise replay is not guaranteed."}

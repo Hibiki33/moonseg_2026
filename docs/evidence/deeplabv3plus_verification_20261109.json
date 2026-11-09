@@ -1,0 +1,68 @@
+{
+  "upstream_package_files_byte_identical": 92,
+  "asset_preflight": {
+    "source_commit": "420ce84b0c2df0286fa9bb2bd1499eea625c9b33",
+    "encoder_name": "tu-mobilenetv3_large_100",
+    "pretrained": {
+      "path": "/home/disk02/wjj/moonseg/checkpoints/deeplabv3plus/mobilenetv3_large_100.ra_in1k.safetensors",
+      "keys": 308,
+      "omitted_head_keys": [
+        "classifier.bias",
+        "classifier.weight",
+        "conv_head.bias",
+        "conv_head.weight"
+      ],
+      "missing_keys": [],
+      "unexpected_keys": []
+    },
+    "parameters": 4709381,
+    "trainable_parameters": 4709381
+  },
+  "encoder_channels": [
+    3,
+    16,
+    24,
+    40,
+    112,
+    960
+  ],
+  "official_forward_max_abs_error": 0.0,
+  "input_shape": [
+    2,
+    3,
+    32,
+    48
+  ],
+  "output_shape": [
+    2,
+    5,
+    32,
+    48
+  ],
+  "all_parameters_trainable_and_finite_gradients": true,
+  "official_gradient_max_abs_error": 0.0,
+  "official_divisible_by_16_input_check_preserved": true,
+  "ce_plus_official_dice_match": true,
+  "ce_value": 1.7955955266952515,
+  "dice_value": 0.8005796670913696,
+  "all_ignored_loss_zero": true,
+  "full_model_save_strict_reload_equal": true,
+  "full_model_saved_keys": 369,
+  "all_parameter_keys_saved": true,
+  "versions": {
+    "torch": "2.7.1+cu126",
+    "timm": "1.0.17",
+    "huggingface-hub": "0.36.0",
+    "smp": "0.5.0"
+  },
+  "source_commit": "420ce84b0c2df0286fa9bb2bd1499eea625c9b33",
+  "pretrained_asset": "ckpts/deeplabv3plus/mobilenetv3_large_100.ra_in1k.safetensors",
+  "external_verification_script": "/home/disk02/wjj/moonseg/.cache/verification/verify_deeplabv3plus_20261109.py",
+  "limitations": [
+    "CPU execution only; GPU memory, throughput, and distributed training not measured.",
+    "Official competition exact MobileNet encoder ID and CE/Dice coefficients are unpublished. This selected encoder and equal loss coefficients are explicit local choices.",
+    "SMP default BatchNorm is preserved, unlike SegFormer SyncBatchNorm.",
+    "The entire SMP package is vendored byte-for-byte; timm is its official declared encoder dependency and remains an external pinned library."
+  ],
+  "passed": true
+}

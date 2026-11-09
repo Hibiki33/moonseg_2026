@@ -1,0 +1,19 @@
+# Official SAM3, fixed text prompts, no training or test-time adaptation.
+# The wrapper uses Meta's native 1008 preprocessing and restores original coordinates.
+model:
+  architecture: sam3
+  sam3_repo: third_party/sam3
+  backbone_weights: ckpts/sam3/sam3.pt
+  num_classes: 5
+data:
+  mean: [0.485, 0.456, 0.406]
+  std: [0.229, 0.224, 0.225]
+runtime:
+  amp: bf16
+  num_workers: 2
+  tf32: true
+  cudnn_benchmark: true
+inference:
+  sliding_window: false
+  scales: [1.0]
+  flip: false

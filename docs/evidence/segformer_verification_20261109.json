@@ -1,0 +1,76 @@
+{
+  "all_upstream_python_non_import_AST_identical": true,
+  "official_reference_forward_max_abs_error": 0.0,
+  "input_shape": [
+    2,
+    3,
+    33,
+    49
+  ],
+  "feature_shapes": [
+    [
+      2,
+      64,
+      9,
+      13
+    ],
+    [
+      2,
+      128,
+      5,
+      7
+    ],
+    [
+      2,
+      320,
+      3,
+      4
+    ],
+    [
+      2,
+      512,
+      2,
+      2
+    ]
+  ],
+  "logit_shape": [
+    2,
+    5,
+    9,
+    13
+  ],
+  "all_executed_parameters_have_finite_gradient": true,
+  "official_reference_gradient_max_abs_error": 0.0,
+  "frozen_parameters": [
+    "decode_head.conv_seg.weight",
+    "decode_head.conv_seg.bias"
+  ],
+  "parameters": 84597834,
+  "trainable_parameters": 84597189,
+  "strict_encoder_load": {
+    "path": "/home/disk02/wjj/moonseg/checkpoints/segformer/mit_b5_imagenet.pth",
+    "keys": 1052,
+    "missing_keys": [],
+    "unexpected_keys": []
+  },
+  "original_ce_value": 1.5347673892974854,
+  "original_ce_loss_and_gradient_equal": true,
+  "all_ignored_ce_zero": true,
+  "saved_state_keys": 1070,
+  "all_parameter_keys_saved": true,
+  "full_model_strict_roundtrip_output_equal": true,
+  "device": "CPU only; no CUDA model construction or execution",
+  "reference_note": "Unmodified upstream class bodies executed from pinned NVlabs checkout; legacy infrastructure imports replaced by documented torch-only compat. All non-import AST nodes match vendored files.",
+  "torch": "2.7.1+cu126",
+  "official_commit": "65fa8cfa9b52b6ee7e8897a98705abf8570f9e32",
+  "passed": true,
+  "asset_provenance": "ckpts/segformer/mit_b5_imagenet.pth.source.json",
+  "external_verification_script": "/home/disk02/wjj/moonseg/.cache/verification/verify_segformer_20261109.py",
+  "limitations": [
+    "CPU small spatial dimensions only; no GPU memory/throughput or distributed SyncBatchNorm execution measured.",
+    "Reference class bodies use the same infrastructure shim; framework compatibility choices are independently documented against MMCV 1.2.7 source."
+  ],
+  "source_repository": "https://github.com/NVlabs/SegFormer",
+  "native_checkpoint_bytes": 326097227,
+  "original_nvidia_checkpoint_bytes": 328277459
+}
