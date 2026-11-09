@@ -1,0 +1,80 @@
+# Full six-scene joint fine tuning, 15 epochs / 1875 updates.
+# Native pretrained DINOv3 encoder + fresh Adapter/head; train the complete model from step one.
+# No validation or best selection; overwrite last.pt each epoch for recovery and evaluate final last only.
+model:
+  backbone: vitl16
+  backbone_weights: ckpts/dinov3_vitl16_pretrain_lvd1689m-8aa4cbdd.pth
+  freeze_backbone: false
+  unfreeze_last_blocks: 0
+  num_classes: 5
+  num_queries: 100
+  hidden_dim: 256
+  decoder_layers: 6
+  encoder_layers: 6
+  gradient_checkpointing: true
+  deformable_attention: auto
+loss:
+  ce_weight: 2.0
+  mask_weight: 5.0
+  dice_weight: 5.0
+  no_object_weight: 0.1
+  num_points: 12544
+data:
+  root: data/LuSNAR
+  development_pool: true
+  train_manifest: data/manifests/dev_final_train.json
+  val_manifest: null
+  label_stats: data/manifests/label_stats_dev_final_train.json
+  train_scenes: [1, 3, 5, 6, 7, 8]
+  val_scenes: []
+  train_mode: random_resize_crop
+  crop_size: [1024, 1024]
+  resize_range: [0.5, 2.0]
+  cat_max_ratio: 0.75
+  crop_attempts: 10
+  image_size: [1024, 1024]
+  hflip_probability: 0.5
+  # Standard DINOv3/MMSeg PhotoMetricDistortion strengths for brightness and contrast.
+  brightness_probability: 0.5
+  brightness_delta: 32
+  contrast_probability: 0.5
+  contrast_range: [0.5, 1.5]
+  # Rendered LuSNAR pixels never fall below 22 (docs/data.md).
+  pixel_floor: 22
+  # Candidates kept off for the baseline.
+  gamma_probability: 0.0
+  shadow_probability: 0.0
+  scale_jitter_probability: 0.0
+  mean: [0.485, 0.456, 0.406]
+  std: [0.229, 0.224, 0.225]
+train:
+  output_dir: runs/dnv3_va_m2f_vitl16_fulltrain_joint_e15
+  seed: 42
+  epochs: 15
+  batch_size: 4
+  accumulation_steps: 8
+  # 4 x 2 GPUs x 8 = 64 images per update.
+  min_effective_batch: 64
+  num_workers: 4
+  lr: 0.0002
+  backbone_lr_multiplier: 0.1
+  weight_decay: 0.05
+  warmup_iters: 0
+  warmup_ratio: 0.001
+  poly_power: 0.9
+  amp: bf16
+  tf32: true
+  cudnn_benchmark: true
+  grad_clip: 0.01
+  sampling:
+    mode: uniform
+  validate: false
+  eval_every: 1
+  eval_stride: 2
+  save_every: 0
+  log_every: 1
+  resume: null
+inference:
+  sliding_window: false
+  scales: [1.0]
+  flip: false

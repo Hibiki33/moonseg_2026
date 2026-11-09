@@ -69,6 +69,21 @@
 
 计划为`runs/plans/2026-11-09/fulltrain/lane_07.json`与`lane_23.json`，每lane由`scripts/run_fulltrain_plan.py --plan <path>`管理。代码、解释器、CUDA扩展、数据和输出均走disk02本地路径；共享训练/评测锁、GPU UUID与占用检查保留，2/3训练关闭NCCL P2P，两组单卡测试均关闭P2P。新队列不继承已撤销的临时额外卡授权。数据及配置核对见[evidence/fulltrain_config_verification_20261109.json](evidence/fulltrain_config_verification_20261109.json)。 两条队列已完成上游依赖并分别开始10轮、15轮训练；状态分别在`lane_07.state/status.json`与`lane_23.state/status.json`；启动记录见[evidence/fulltrain_queue_launch_20261109.json](evidence/fulltrain_queue_launch_20261109.json)。 无验证集的末轮校验、旧checkpoint兼容和调度恢复检查见[evidence/fulltrain_no_val_verification_20261109.json](evidence/fulltrain_no_val_verification_20261109.json)。
 
+### 全六场景联合微调（11-09晚追加）
+
+用户根据已完成公开测试的收益，追加同样10/15/20/25轮的联合微调预算。当前2/3上的冻结20轮继续完成训练和测试；新任务使用不冲突的0/7、4/5，每条lane依次训练、并行测试last普通/TTA、再进入下一预算。该授权更新此前仅四张卡的范围，不使用1/6。
+
+| 卡对 | 顺序 | 配置 | 完整预算 |
+|---|---:|---|---:|
+| 0/7 | 1 | [joint e10](../configs/dnv3_va_m2f_vitl16_fulltrain_joint_e10.yaml) | 10轮，1250更新 |
+| 0/7 | 2 | [joint e25](../configs/dnv3_va_m2f_vitl16_fulltrain_joint_e25.yaml) | 25轮，3125更新 |
+| 4/5 | 1 | [joint e15](../configs/dnv3_va_m2f_vitl16_fulltrain_joint_e15.yaml) | 15轮，1875更新 |
+| 4/5 | 2 | [joint e20](../configs/dnv3_va_m2f_vitl16_fulltrain_joint_e20.yaml) | 20轮，2500更新 |
+
+每个预算独立从原始DINOv3预训练权重和新Adapter/head开始，从第一步训练整个ViT；不从冻结模型或其他预算续训。配方沿用已测联合微调：每卡4×2卡×累积8=64，Adapter/head lr2e-4、骨干lr2e-5、AdamW wd0.05、clip0.01、poly0.9、无warmup、bf16、seed42，1024² RRC与原亮度/对比度增强，decoder6/width256。训练全部8002张，不建立val、不生成best，`save_every: 0`不保存独立epoch权重；每轮原子覆盖一个`last.pt`，保留全部可训练骨干/分割头和优化器等恢复状态，只有完整预算结束后的last进入测试。
+
+新计划位于`runs/plans/2026-11-09/fulltrain_joint/lane_07.json`与`lane_45.json`，显式`recipe: joint_fullft`、`predecessor: null`；仍先查实时空闲和UUID并取得共享训练/测试锁。4/5训练关闭NCCL P2P，0/7保留已验证P2P；所有单卡评测关闭P2P。旧冻结计划仍保留原卡对、配方与依赖约束。配置及验证见[evidence/joint_fulltrain_configs_20261109.json](evidence/joint_fulltrain_configs_20261109.json)、[调度与保存检查](evidence/joint_fulltrain_verification_20261109.json)，实际启动状态见[启动记录](evidence/joint_fulltrain_launch_20261109.json)。
+
 ## GPU 放置与启动
 
 11-09结果已完整归档：联合微调DINOv3在best与last两种选择口径下均提高公开场景2/4/9；冻结DA3当前方案未显示整体优势。逐场景单尺度/TTA、mAcc及阶段微调取舍见[roadmap.md](roadmap.md#实验记录)和[evidence/public_development_20261109/summary.json](evidence/public_development_20261109/summary.json)。已排全六场景任务仍按冻结10/15/20/25轮执行，本次记录不改变训练计划。

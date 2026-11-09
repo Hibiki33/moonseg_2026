@@ -1,0 +1,206 @@
+{
+  "started_at": "2026-11-09T14:38:38.342095+00:00",
+  "authorization": "User authorized four available GPUs not conflicting with the two existing training GPUs; use 0/7 and 4/5",
+  "new_training_gpus": [
+    0,
+    7,
+    4,
+    5
+  ],
+  "existing_training_23": {
+    "name": "dnv3_va_m2f_vitl16_fulltrain_clip001_e20",
+    "child_pid": 2392212,
+    "start_ticks": 671601692,
+    "signalled": false,
+    "same_original_process_verified": true
+  },
+  "lanes": [
+    {
+      "lane": "lane_07",
+      "pid": 2644134,
+      "start_ticks": 673895957,
+      "plan": {
+        "version": 1,
+        "recipe": "joint_fullft",
+        "id": "fulltrain_joint_20261109_lane_07",
+        "gpus": [
+          0,
+          7
+        ],
+        "expected_gpu_uuids": {
+          "0": "GPU-0ffe3205-b1ee-ae93-3052-66609665f5b1",
+          "7": "GPU-a8ecdaa9-88ae-d4b7-f87e-b013ef33b516"
+        },
+        "predecessor": null,
+        "jobs": [
+          {
+            "name": "dnv3_va_m2f_vitl16_fulltrain_joint_e10",
+            "config": "configs/dnv3_va_m2f_vitl16_fulltrain_joint_e10.yaml",
+            "expected_epochs": 10,
+            "expected_updates": 1250
+          },
+          {
+            "name": "dnv3_va_m2f_vitl16_fulltrain_joint_e25",
+            "config": "configs/dnv3_va_m2f_vitl16_fulltrain_joint_e25.yaml",
+            "expected_epochs": 25,
+            "expected_updates": 3125
+          }
+        ],
+        "public_test": {
+          "data_root": "data/research_test/LuSNAR",
+          "manifest": "data/research_test/manifest.json"
+        },
+        "poll_seconds": 30
+      },
+      "plan_path": "/home/disk02/wjj/moonseg/runs/plans/2026-11-09/fulltrain_joint/lane_07.json",
+      "cwd": "/home/disk02/wjj/moonseg/code",
+      "log": "/home/disk02/wjj/moonseg/runs/plans/2026-11-09/fulltrain_joint/lane_07.launcher.log",
+      "verification": {
+        "status": "training",
+        "current_run": "dnv3_va_m2f_vitl16_fulltrain_joint_e10",
+        "torchrun_pid": 2644279,
+        "torchrun_start_ticks": 673896776,
+        "environment": {
+          "CUDA_VISIBLE_DEVICES": "GPU-0ffe3205-b1ee-ae93-3052-66609665f5b1,GPU-a8ecdaa9-88ae-d4b7-f87e-b013ef33b516",
+          "CUDA_DEVICE_ORDER": "PCI_BUS_ID",
+          "NCCL_P2P_DISABLE": null,
+          "MOONSEG_MSDA_DIR": "/home/disk02/wjj/moonseg/build/ms_deform_attn"
+        },
+        "batch_plan": {
+          "batch_per_gpu": 4,
+          "world_size": 2,
+          "accumulation_steps": 8,
+          "effective_batch": 64,
+          "minimum_effective_batch": 64,
+          "drop_incomplete_updates": true,
+          "microbatches_per_epoch": 1000,
+          "optimizer_steps_per_epoch": 125,
+          "samples_used_per_epoch": 8000,
+          "dropped_samples_per_epoch": 2,
+          "tail_policy": "drop incomplete shuffled optimizer batch",
+          "sampling": {
+            "mode": "uniform"
+          }
+        },
+        "model_freeze_backbone": false,
+        "validate": false,
+        "runtime": {
+          "deformable_attention": "cuda",
+          "torch": "2.7.1+cu126",
+          "tf32": true,
+          "cudnn_benchmark": true
+        },
+        "latest_update": {
+          "epoch": 1,
+          "step": 56,
+          "loss": 7.924005508422852,
+          "grad_norm": 24.538463592529297,
+          "lr": [
+            0.00019191763274035336,
+            1.919176327403534e-05,
+            1.919176327403534e-05,
+            0.00019191763274035336
+          ],
+          "elapsed_seconds": 602.9
+        }
+      }
+    },
+    {
+      "lane": "lane_45",
+      "pid": 2644135,
+      "start_ticks": 673895957,
+      "plan": {
+        "version": 1,
+        "recipe": "joint_fullft",
+        "id": "fulltrain_joint_20261109_lane_45",
+        "gpus": [
+          4,
+          5
+        ],
+        "expected_gpu_uuids": {
+          "4": "GPU-b670033f-ee6f-9e5c-b832-ca86dd2cd974",
+          "5": "GPU-bc3b6f53-b1dd-94dc-508c-04819399b297"
+        },
+        "predecessor": null,
+        "jobs": [
+          {
+            "name": "dnv3_va_m2f_vitl16_fulltrain_joint_e15",
+            "config": "configs/dnv3_va_m2f_vitl16_fulltrain_joint_e15.yaml",
+            "expected_epochs": 15,
+            "expected_updates": 1875
+          },
+          {
+            "name": "dnv3_va_m2f_vitl16_fulltrain_joint_e20",
+            "config": "configs/dnv3_va_m2f_vitl16_fulltrain_joint_e20.yaml",
+            "expected_epochs": 20,
+            "expected_updates": 2500
+          }
+        ],
+        "public_test": {
+          "data_root": "data/research_test/LuSNAR",
+          "manifest": "data/research_test/manifest.json"
+        },
+        "poll_seconds": 30
+      },
+      "plan_path": "/home/disk02/wjj/moonseg/runs/plans/2026-11-09/fulltrain_joint/lane_45.json",
+      "cwd": "/home/disk02/wjj/moonseg/code",
+      "log": "/home/disk02/wjj/moonseg/runs/plans/2026-11-09/fulltrain_joint/lane_45.launcher.log",
+      "verification": {
+        "status": "training",
+        "current_run": "dnv3_va_m2f_vitl16_fulltrain_joint_e15",
+        "torchrun_pid": 2644278,
+        "torchrun_start_ticks": 673896757,
+        "environment": {
+          "CUDA_VISIBLE_DEVICES": "GPU-b670033f-ee6f-9e5c-b832-ca86dd2cd974,GPU-bc3b6f53-b1dd-94dc-508c-04819399b297",
+          "CUDA_DEVICE_ORDER": "PCI_BUS_ID",
+          "NCCL_P2P_DISABLE": "1",
+          "MOONSEG_MSDA_DIR": "/home/disk02/wjj/moonseg/build/ms_deform_attn"
+        },
+        "batch_plan": {
+          "batch_per_gpu": 4,
+          "world_size": 2,
+          "accumulation_steps": 8,
+          "effective_batch": 64,
+          "minimum_effective_batch": 64,
+          "drop_incomplete_updates": true,
+          "microbatches_per_epoch": 1000,
+          "optimizer_steps_per_epoch": 125,
+          "samples_used_per_epoch": 8000,
+          "dropped_samples_per_epoch": 2,
+          "tail_policy": "drop incomplete shuffled optimizer batch",
+          "sampling": {
+            "mode": "uniform"
+          }
+        },
+        "model_freeze_backbone": false,
+        "validate": false,
+        "runtime": {
+          "deformable_attention": "cuda",
+          "torch": "2.7.1+cu126",
+          "tf32": true,
+          "cudnn_benchmark": true
+        },
+        "latest_update": {
+          "epoch": 1,
+          "step": 37,
+          "loss": 11.500205039978027,
+          "grad_norm": 24.774160385131836,
+          "lr": [
+            0.00019644446973601538,
+            1.964444697360154e-05,
+            1.964444697360154e-05,
+            0.00019644446973601538
+          ],
+          "elapsed_seconds": 605.2
+        }
+      }
+    }
+  ],
+  "checkpoint_policy": "One last.pt overwritten each epoch, includes complete trainable encoder and decoder plus recovery state; evaluate final budget last only",
+  "parameter_inventory": {
+    "total": 338785670,
+    "native_encoder": 303154176,
+    "adapter_and_decoder": 35631494,
+    "joint_trainable": 338785670
+  }
+}

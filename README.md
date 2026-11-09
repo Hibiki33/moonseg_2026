@@ -6,8 +6,8 @@ LuSNAR 月面五类语义分割。类别编号固定为月壤 0、岩石 1、撞
 
 代码与Git的开发副本位于 `/home/disk02/wjj/moonseg/code`。原A/B与DA3训练及测试已完成，当前全六场景任务的Python、源码、CUDA扩展、数据和输出均走disk02本地路径。
 
-- 当前训练：场景1/3/5/6/7/8共8002张，冻结DINOv3-L、clip0.01；0/7的10轮和2/3的15轮已自动开始，之后分别接25轮和20轮。每项独立初始化、关闭验证，完整训练后仅评last普通/TTA，再进入下一项，见[训练说明](docs/training.md#全六场景训练与末轮测试)。
-- GPU范围固定0/7/2/3，训练和测试共同遵守。GPU1上的临时TTA已完成并释放；不再使用1/4/5/6。
+- 当前训练：新增全六场景DINOv3联合微调，0/7按10→25轮、4/5按15→20轮，10轮与15轮已启动；原2/3冻结20轮继续。全部8002张、无val，各预算独立初始化，训完只测last普通/TTA。仅每轮覆盖一个含完整微调骨干的last用于恢复，不存独立中间epoch文件，见[训练说明](docs/training.md#全六场景联合微调11-09晚追加)。
+- 本批GPU授权：新联合微调只使用0/7和4/5；原2/3任务完成其训练与测试。1/6保持空闲。
 - 默认配方：冻结 DINOv3 ViT-L + ViT-Adapter + Mask2Former，1024×1024 RRC，decoder6层/hidden256，梯度裁剪 **0.01**，每卡8×两卡×累积4=有效batch64。五场景历史对照从 [默认模板](configs/dnv3_va_m2f_vitl16_default.yaml) 派生；本批全量训练使用上述独立配置，历史配置保持原值；详见 [训练说明](docs/training.md)。
 - 已测最佳路线：DINOv3从分割训练第一步联合微调骨干与Adapter/head。公开测试TTA的best15在场景2/4/9为95.146/93.840/91.401%，均值93.462%；last25为95.275/93.409/90.689%，均值93.124%，两种选择口径均优于对应冻结基线。各场景、普通/TTA及best/last完整对照见[路线记录](docs/roadmap.md#实验记录)。新全量训练仍只取last，路线收益以公开测试为准。
 - clip0.01、decoder9、width384及各自末轮评估均已完成。width384的场景9 TTA87.892%低于同clip0.01的width256基线88.021%，三个公开场景mIoU均下降，默认保持6层/width256/clip0.01。以上为10-29已完成实验；原A/B和DA3按原划分完成；本批全量训练按上文加入场景5并比较10/15/20/25轮。状态与结果见 [路线记录](docs/roadmap.md)。
@@ -46,6 +46,24 @@ bash scripts/setup_env.sh
 该脚本让 uv 下载并管理 Python 3.12。Python 和安装缓存实际位于 `/home/disk02/wjj/moonseg/.cache`，虚拟环境位于 `/home/disk02/wjj/moonseg/.venv`；代码目录的 `.cache` 与 `.venv` 都是指向它们的软链接。可用 `MOONSEG_STORAGE_ROOT=/其他目录 bash scripts/setup_env.sh` 指定新的存储根目录。PyTorch 2.7.1 / torchvision 0.22.1 使用官方 CUDA 12.6 wheel 索引，默认面向 Linux x86_64；本机 GPU 见 [docs/gpu_topology.md](docs/gpu_topology.md)。
 
 `uv.lock` 随代码保留。迁移时复制代码及锁文件，重新运行安装脚本（内部使用 `uv sync --locked`）；不复制 `.venv`，也不依赖其他人的解释器路径。数据和模型存储位置通过下载脚本的 `--storage` 设置。训练、预测脚本直接使用本地 `.venv/bin/python`，也可用 `PYTHON` 指定同一环境的解释器；环境安装完成后不在运行入口隐式同步依赖。
+
+### Docker
+
+[Dockerfile](Dockerfile)使用CUDA12.6.3 devel、uv0.13.4与`.python-version`指定的Python3.12.15，按`uv.lock`安装PyTorch2.7.1/cu126等依赖。构建时编译A6000/Ada所需的sm86/sm89可变形注意力扩展；`FORCE_CUDA=1`支持只有CUDA toolkit、没有可见GPU的构建环境，仅修改临时setup副本。数据、权重和输出在运行时挂载，`.dockerignore`排除`.venv/.cache/build`、Git、模型/数据、日志及`.da3tmp`。当前完成文件和静态检查，尚未实际构建或测试容器。
+
+```bash
+docker build --platform linux/amd64 -t moonseg:cu126 .
+
+# 示例：仅把宿主机0/7暴露给容器，容器内使用0/1；按实际目录替换三个挂载源。
+docker run --rm --gpus '"device=0,7"' --ipc=host \
+  -e CUDA_VISIBLE_DEVICES=0,1 -e NPROC_PER_NODE=2 \
+  -v /path/to/data:/workspace/data:ro \
+  -v /path/to/checkpoints:/workspace/ckpts:ro \
+  -v /path/to/runs:/workspace/runs \
+  moonseg:cu126 bash scripts/train.sh configs/dnv3_va_m2f_vitl16_fulltrain_joint_e10.yaml
+```
+
+宿主机需安装NVIDIA驱动和NVIDIA Container Toolkit。直接使用镜像里的训练/评估/预测入口；已有按本机绝对路径绑定的后台队列仍在宿主机管理，不是容器入口。不要挂载整个`/workspace`覆盖镜像中的源码和已编译扩展。模型权重仍须挂载到`/workspace/ckpts`，不随镜像发布。
 
 ## 下载与存储
 

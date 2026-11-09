@@ -4,6 +4,8 @@
 
 Input is ImageNet-normalized RGB `[B,3,H,W]`. Output is a dictionary containing `pred_logits: [B,Q,6]` (five semantic classes plus no-object), `pred_masks: [B,Q,h,w]` (raw logits), and `aux_outputs` from earlier predictions. Semantic scores are `einsum('bqc,bqhw->bchw', logits.softmax(-1)[...,:5], masks.sigmoid())`; at inference the mask logits are upsampled before the sigmoid, as in upstream DINOv3 and Mask2Former. Input dimensions are padded to multiples of 32 internally. Non-divisible sizes return masks cropped to the original field of view; divisible sizes keep stride-4 mask logits. Minimum image size is 64 pixels per dimension.
 
+The complete DINOv3 ViT-L + ViT-Adapter + Mask2Former has 338,785,670 parameters: 303,154,176 in the native encoder and 35,631,494 in the Adapter and segmentation head. Frozen training updates the latter; full joint fine tuning updates all parameters without changing the inference architecture or total parameter count. The [competition baseline](https://insight.onescience.cn/competition/moonseg?event_id=c2f557a58ff2e9f4265d56f112a7e01&tab=info&section=baseline) reports 4.71M trainable parameters for MobileNetV3-Large + DeepLabV3+, so our joint model has about 71.93 times as many parameters (the baseline count is rounded). This ratio is not a memory or throughput ratio.
+
 ## Configuration
 
 All model settings belong to `config['model']`:

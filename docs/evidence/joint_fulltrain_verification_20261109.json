@@ -1,0 +1,44 @@
+{
+  "created_at": "2026-11-09T14:39:39.233095+00:00",
+  "scope": "CPU-only extension verification for explicit six-scene joint_fullft lanes; legacy frozen plans preserved",
+  "result": "passed",
+  "passed_checks": 50,
+  "cuda_initialized": false,
+  "production_gpu_queries": false,
+  "production_gpu_locks_modified": false,
+  "existing_processes_or_plans_modified": false,
+  "gpu_training_or_evaluation_launched": false,
+  "coverage": [
+    "Both real legacy frozen plans and both real explicit joint_fullft plans validate.",
+    "Only explicit joint_fullft permits explicit predecessor:null; missing predecessor and legacy null are rejected.",
+    "Joint admits 0/7 epochs10,25 and 4/5 epochs15,20; wrong pairs, order, budgets, UUIDs, and recipe labels are rejected.",
+    "Joint configs must equal the proven rrc_fullft baseline except six-scene no-val membership, epoch budget, and matching output.",
+    "Wrong freeze/unfreeze, microbatch, accumulation, head/backbone learning rate, clip, resume/init, native backbone checkpointing, validation, or intermediate save are rejected.",
+    "No-validation final-checkpoint metadata passes for all four budgets with joint batch4/accum8 and legacy batch8/accum4; both remain effective64 and125updates/epoch.",
+    "4/5 training and every single-GPU test disable P2P; 0/7 training retains P2P. GPU UUID visibility and physical paths verified.",
+    "Four lane flow simulations hold all shared locks and verify train, concurrent single+narrowflip on last, complete scores, then next independent budget.",
+    "Four completed lane restarts perform no duplicate launches.",
+    "Real completed joint last checkpoint has every requires_grad tensor with matching shape and the exact partial-state key set; removing mask_token or first-block qkv is rejected."
+  ],
+  "real_checkpoint": {
+    "path": "runs/dnv3_va_m2f_vitl16_rrc_fullft/last.pt",
+    "trainable_vit_tensors": 343,
+    "trainable_vit_parameters": 303154176,
+    "total_saved_model_tensors": 768,
+    "tolerated_frozen_buffers": 25,
+    "mask_token_saved": true
+  },
+  "verification_artifacts": {
+    "metadata_and_checkpoint_checks": "/home/disk02/wjj/moonseg/verification/joint_fulltrain_20261109/verification.json",
+    "lane_flow_checks": "/home/disk02/wjj/moonseg/verification/joint_fulltrain_20261109/flow_verification.json",
+    "temporary_scripts": [
+      "/home/disk02/wjj/moonseg/verification/joint_fulltrain_20261109/verify.py",
+      "/home/disk02/wjj/moonseg/verification/joint_fulltrain_20261109/verify_flow.py"
+    ]
+  },
+  "limits": [
+    "Metadata fixtures contain no synthetic evaluated model weights; real backbone inventory uses a meta model and the trusted real checkpoint mapped on CPU.",
+    "Lane flow checks simulate stage execution and GPU idleness with isolated real filesystem locks; no GPU training/evaluation was launched.",
+    "Training, checkpoint save/load, shared-lock inheritance, PID/start-tick, receipt and race protection implementations were not changed."
+  ]
+}

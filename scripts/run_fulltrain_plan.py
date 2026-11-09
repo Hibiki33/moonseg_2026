@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
-"""Run one frozen-DINO full-training lane: predecessor -> train -> last tests.
+"""Run one approved full-training lane: predecessor -> train -> last tests.
 
-Only pairs 0/7 (10 then 25 epochs) and 2/3 (15 then 20 epochs) are admitted.
+Legacy frozen lanes use 0/7 (10 then 25 epochs) or 2/3 (15 then 20 epochs).
+Explicit joint_fullft lanes use 0/7 or 4/5 respectively and may explicitly
+declare predecessor: null to start as soon as their GPUs and locks are free.
 Each training starts independently. A durable stage worker retains shared GPU
 locks and its actual child exit receipt if this supervisor exits. Restart the
 same --plan to adopt successful/in-progress stages; failures are never retried.
@@ -74,7 +76,7 @@ def environment(gpus, uuids, *, evaluation=False):
                MOONSEG_MSDA_DIR=str((ROOT / "build/ms_deform_attn").resolve()),
                XDG_CACHE_HOME=str(STORAGE / ".cache"), HF_HOME=str(STORAGE / ".cache/huggingface"),
                TORCH_HOME=str(STORAGE / ".cache/torch"), UV_PROJECT_ENVIRONMENT=str(PYTHON.parent.parent))
-    if evaluation or gpus == [2, 3]:
+    if evaluation or gpus in ([2, 3], [4, 5]):
         env["NCCL_P2P_DISABLE"] = "1"
     else:
         env.pop("NCCL_P2P_DISABLE", None)
@@ -82,9 +84,13 @@ def environment(gpus, uuids, *, evaluation=False):
 
 
 def validate_plan(plan):
-    if (plan.get("version") != 1 or plan.get("gpus") not in ([0, 7], [2, 3])
+    joint = plan.get("recipe") == "joint_fullft"
+    if "recipe" in plan and not joint:
+        raise ValueError("Only the explicit joint_fullft recipe or a legacy plan without recipe is admitted")
+    pairs = ([0, 7], [4, 5]) if joint else ([0, 7], [2, 3])
+    if (plan.get("version") != 1 or plan.get("gpus") not in pairs
             or not isinstance(plan.get("id"), str) or not plan["id"]):
-        raise ValueError("Expected one version-1 full-training lane on GPUs 0/7 or 2/3")
+        raise ValueError(f"Expected one version-1 {'joint' if joint else 'frozen'} full-training lane on {pairs}")
     gpus, uuids = plan["gpus"], plan["expected_gpu_uuids"]
     if (set(uuids) != {str(gpu) for gpu in gpus} or len(set(uuids.values())) != 2
             or any(not isinstance(value, str) or not value.startswith("GPU-") for value in uuids.values())):
@@ -94,17 +100,21 @@ def validate_plan(plan):
         raise ValueError(f"The approved sequential epoch budgets for {gpus} are {budgets}")
     if type(plan.get("poll_seconds")) is not int or not 1 <= plan["poll_seconds"] <= 60:
         raise ValueError("poll_seconds must be an integer from 1 to 60")
+    if "predecessor" not in plan or (plan["predecessor"] is None and not joint):
+        raise ValueError("A predecessor is required; only joint_fullft permits explicit predecessor: null")
     dep = plan["predecessor"]
-    local_path(dep["status_path"])
-    if any(type(dep.get(key)) is not int or dep[key] <= 0 for key in ("parent_pid", "parent_start_ticks")):
-        raise ValueError("Freeze the predecessor public queue PID/start_ticks")
-    if (not dep.get("expected_job_keys") or len(set(dep["expected_job_keys"])) != len(dep["expected_job_keys"])):
-        raise ValueError("Freeze every predecessor public-test job key exactly once")
-    baseline = load_config(ROOT / "configs/dnv3_va_m2f_vitl16_rrc_clip001.yaml")
+    if dep is not None:
+        local_path(dep["status_path"])
+        if any(type(dep.get(key)) is not int or dep[key] <= 0 for key in ("parent_pid", "parent_start_ticks")):
+            raise ValueError("Freeze the predecessor public queue PID/start_ticks")
+        if (not dep.get("expected_job_keys") or len(set(dep["expected_job_keys"])) != len(dep["expected_job_keys"])):
+            raise ValueError("Freeze every predecessor public-test job key exactly once")
+    baseline_name = "fullft" if joint else "clip001"
+    baseline = load_config(ROOT / f"configs/dnv3_va_m2f_vitl16_rrc_{baseline_name}.yaml")
     contents = {}
     for job in plan["jobs"]:
         epochs, name = job["expected_epochs"], job["name"]
-        expected_name = f"dnv3_va_m2f_vitl16_fulltrain_clip001_e{epochs}"
+        expected_name = f"dnv3_va_m2f_vitl16_fulltrain_{'joint' if joint else 'clip001'}_e{epochs}"
         source = local_path(job["config"])
         content, config = source.read_bytes(), load_config(source)
         expected = json.loads(json.dumps(baseline))
@@ -113,7 +123,8 @@ def validate_plan(plan):
         expected["train"].update(epochs=epochs, output_dir=f"runs/{expected_name}", validate=False)
         if (name != expected_name or source.stem != name or config != expected
                 or job.get("expected_updates") != epochs * 125):
-            raise ValueError(f"{name}: config must preserve the approved independent frozen clip.01 recipe/budget")
+            raise ValueError(f"{name}: config must preserve the approved independent "
+                             f"{'joint fullft' if joint else 'frozen clip.01'} recipe/budget")
         output = local_path(config["train"]["output_dir"])
         if output.parent != local_path("runs") or output.name != name:
             raise ValueError("Training outputs must be matching direct children of runs")
@@ -139,7 +150,13 @@ def validate_plan(plan):
 
 def predecessor_ready(plan):
     """Require the complete frozen queue, including both profiles of every selection."""
+    if "predecessor" not in plan:
+        raise ValueError("A predecessor must be declared explicitly")
     dep = plan["predecessor"]
+    if dep is None:
+        if plan.get("recipe") != "joint_fullft":
+            raise ValueError("Only joint_fullft permits explicit predecessor: null")
+        return True, "explicit joint_fullft lane without predecessor; shared locks and GPU idleness still required"
     state = read_json(local_path(dep["status_path"]))
     if (state.get("parent_pid"), state.get("parent_start_ticks")) != (dep["parent_pid"], dep["parent_start_ticks"]):
         raise ValueError("Predecessor public queue identity changed; explicitly review/freeze the replacement")
