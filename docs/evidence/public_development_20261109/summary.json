@@ -1,0 +1,304 @@
+{
+  "recorded_at": "2026-11-09T01:38:31.626621+00:00",
+  "scope": "Public LuSNAR scenes 2/4/9, full 5004 images; all reported scores are public-test metrics, not scene-5 validation or organizer-weighted official results",
+  "new_completed_evaluations": 14,
+  "reused_baseline_evaluations": 2,
+  "profiles": {
+    "single": {
+      "scales": [
+        1.0
+      ],
+      "flip": false
+    },
+    "narrowflip": {
+      "scales": [
+        0.9,
+        1.0,
+        1.1
+      ],
+      "flip": true
+    }
+  },
+  "training_split": "Scenes 1/3/6/7/8, 6403 samples; scene5 independently validates the historical runs in this comparison",
+  "stage2_source": "clip001 best_miou at epoch15, then fresh optimizer and 5 epochs of full fine tuning; not initialized from clip001 last25",
+  "comparison_limits": [
+    "Compare best with best and last with last; stage2 has a different initialization and budget.",
+    "Frozen DINO/DA3 use batch8 x2 xaccum4; DINO full fine tuning uses batch4 x2 xaccum8. Effective batch64 does not equalize Adapter BatchNorm statistics.",
+    "One training seed; gains describe these measured recipes, not isolated causal proof or replicated statistical confidence.",
+    "The new six-scene 10/15/20/25-epoch frozen jobs are separate, still running/queued; no performance conclusion yet."
+  ],
+  "evaluations": [
+    {
+      "run": "dnv3_va_m2f_vitl16_rrc_clip001",
+      "checkpoint": "best_miou.pt",
+      "epoch": 15,
+      "global_step": 1500,
+      "profile": "single",
+      "policy": "validation_selected",
+      "evidence": "clip001_best_miou_single.json",
+      "source_score": "/home/disk02/wjj/moonseg/runs/public_development_fullft_2026-11-08/dnv3_va_m2f_vitl16_rrc_clip001/best_miou/single/scores.json",
+      "scene_miou_percent": {
+        "2": 93.32639569755182,
+        "4": 91.92616091572496,
+        "9": 88.18269342040225
+      },
+      "scene_equal_miou_percent": 91.14508334455968,
+      "scene_equal_macc_percent": 94.1283636901599
+    },
+    {
+      "run": "dnv3_va_m2f_vitl16_rrc_clip001",
+      "checkpoint": "best_miou.pt",
+      "epoch": 15,
+      "global_step": 1500,
+      "profile": "narrowflip",
+      "policy": "validation_selected",
+      "evidence": "clip001_best_miou_narrowflip.json",
+      "source_score": "/home/disk02/wjj/moonseg/runs/public_development_fullft_2026-11-08/dnv3_va_m2f_vitl16_rrc_clip001/best_miou/narrowflip/scores.json",
+      "scene_miou_percent": {
+        "2": 93.53174903703008,
+        "4": 92.26760804079565,
+        "9": 88.88245665128326
+      },
+      "scene_equal_miou_percent": 91.56060457636967,
+      "scene_equal_macc_percent": 94.2572860793302
+    },
+    {
+      "run": "dnv3_va_m2f_vitl16_rrc_clip001_stage2_fullft",
+      "checkpoint": "best_miou.pt",
+      "epoch": 2,
+      "global_step": 200,
+      "profile": "single",
+      "policy": "validation_selected",
+      "evidence": "stage2_best_miou_single.json",
+      "source_score": "/home/disk02/wjj/moonseg/runs/public_development_fullft_2026-11-08/dnv3_va_m2f_vitl16_rrc_clip001_stage2_fullft/best_miou/single/scores.json",
+      "scene_miou_percent": {
+        "2": 94.2922254423243,
+        "4": 92.55063698885373,
+        "9": 88.11569152876473
+      },
+      "scene_equal_miou_percent": 91.65285131998093,
+      "scene_equal_macc_percent": 95.33305735496981
+    },
+    {
+      "run": "dnv3_va_m2f_vitl16_rrc_clip001_stage2_fullft",
+      "checkpoint": "best_miou.pt",
+      "epoch": 2,
+      "global_step": 200,
+      "profile": "narrowflip",
+      "policy": "validation_selected",
+      "evidence": "stage2_best_miou_narrowflip.json",
+      "source_score": "/home/disk02/wjj/moonseg/runs/public_development_fullft_2026-11-08/dnv3_va_m2f_vitl16_rrc_clip001_stage2_fullft/best_miou/narrowflip/scores.json",
+      "scene_miou_percent": {
+        "2": 94.44633481207845,
+        "4": 92.98003418250599,
+        "9": 88.80606707766326
+      },
+      "scene_equal_miou_percent": 92.07747869074923,
+      "scene_equal_macc_percent": 95.41556678074458
+    },
+    {
+      "run": "dnv3_va_m2f_vitl16_rrc_clip001_stage2_fullft",
+      "checkpoint": "last.pt",
+      "epoch": 5,
+      "global_step": 500,
+      "profile": "single",
+      "policy": "final_epoch",
+      "evidence": "stage2_last_single.json",
+      "source_score": "/home/disk02/wjj/moonseg/runs/public_development_fullft_2026-11-08/dnv3_va_m2f_vitl16_rrc_clip001_stage2_fullft/last/single/scores.json",
+      "scene_miou_percent": {
+        "2": 94.43810510076909,
+        "4": 92.76472379982937,
+        "9": 87.71343994283059
+      },
+      "scene_equal_miou_percent": 91.63875628114302,
+      "scene_equal_macc_percent": 95.53917800818986
+    },
+    {
+      "run": "dnv3_va_m2f_vitl16_rrc_clip001_stage2_fullft",
+      "checkpoint": "last.pt",
+      "epoch": 5,
+      "global_step": 500,
+      "profile": "narrowflip",
+      "policy": "final_epoch",
+      "evidence": "stage2_last_narrowflip.json",
+      "source_score": "/home/disk02/wjj/moonseg/runs/public_development_fullft_2026-11-08/dnv3_va_m2f_vitl16_rrc_clip001_stage2_fullft/last/narrowflip/scores.json",
+      "scene_miou_percent": {
+        "2": 94.57146765590463,
+        "4": 93.13698190144648,
+        "9": 88.53626067334017
+      },
+      "scene_equal_miou_percent": 92.0815700768971,
+      "scene_equal_macc_percent": 95.60581998975753
+    },
+    {
+      "run": "dnv3_va_m2f_vitl16_rrc_fullft",
+      "checkpoint": "best_miou.pt",
+      "epoch": 15,
+      "global_step": 1500,
+      "profile": "single",
+      "policy": "validation_selected",
+      "evidence": "joint_best_miou_single.json",
+      "source_score": "/home/disk02/wjj/moonseg/runs/public_development_fullft_2026-11-08/dnv3_va_m2f_vitl16_rrc_fullft/best_miou/single/scores.json",
+      "scene_miou_percent": {
+        "2": 94.81982872386561,
+        "4": 93.18126822210311,
+        "9": 90.50745169092193
+      },
+      "scene_equal_miou_percent": 92.83618287896354,
+      "scene_equal_macc_percent": 96.2188404039572
+    },
+    {
+      "run": "dnv3_va_m2f_vitl16_rrc_fullft",
+      "checkpoint": "best_miou.pt",
+      "epoch": 15,
+      "global_step": 1500,
+      "profile": "narrowflip",
+      "policy": "validation_selected",
+      "evidence": "joint_best_miou_narrowflip.json",
+      "source_score": "/home/disk02/wjj/moonseg/runs/public_development_fullft_2026-11-08/dnv3_va_m2f_vitl16_rrc_fullft/best_miou/narrowflip/scores.json",
+      "scene_miou_percent": {
+        "2": 95.14608307204651,
+        "4": 93.83978956140777,
+        "9": 91.40071879745825
+      },
+      "scene_equal_miou_percent": 93.46219714363751,
+      "scene_equal_macc_percent": 96.52090550278541
+    },
+    {
+      "run": "dnv3_va_m2f_vitl16_rrc_fullft",
+      "checkpoint": "last.pt",
+      "epoch": 25,
+      "global_step": 2500,
+      "profile": "single",
+      "policy": "final_epoch",
+      "evidence": "joint_last_single.json",
+      "source_score": "/home/disk02/wjj/moonseg/runs/public_development_fullft_2026-11-08/dnv3_va_m2f_vitl16_rrc_fullft/last/single/scores.json",
+      "scene_miou_percent": {
+        "2": 94.9565084324892,
+        "4": 92.67630598955752,
+        "9": 90.06368496461388
+      },
+      "scene_equal_miou_percent": 92.56549979555354,
+      "scene_equal_macc_percent": 96.2481246066159
+    },
+    {
+      "run": "dnv3_va_m2f_vitl16_rrc_fullft",
+      "checkpoint": "last.pt",
+      "epoch": 25,
+      "global_step": 2500,
+      "profile": "narrowflip",
+      "policy": "final_epoch",
+      "evidence": "joint_last_narrowflip.json",
+      "source_score": "/home/disk02/wjj/moonseg/runs/public_development_fullft_2026-11-08/dnv3_va_m2f_vitl16_rrc_fullft/last/narrowflip/scores.json",
+      "scene_miou_percent": {
+        "2": 95.27498814146,
+        "4": 93.40867434600244,
+        "9": 90.68878567375145
+      },
+      "scene_equal_miou_percent": 93.12414938707131,
+      "scene_equal_macc_percent": 96.46595434249255
+    },
+    {
+      "run": "da3mono_va_m2f_vitl14_rrc_frozen",
+      "checkpoint": "best_miou.pt",
+      "epoch": 14,
+      "global_step": 1400,
+      "profile": "single",
+      "policy": "validation_selected",
+      "evidence": "da3_frozen_best_miou_single.json",
+      "source_score": "/home/disk02/wjj/moonseg/runs/public_development_da3mono_frozen_2026-11-08/da3mono_va_m2f_vitl14_rrc_frozen/best_miou/single/scores.json",
+      "scene_miou_percent": {
+        "2": 93.7245863125717,
+        "4": 91.41003357588154,
+        "9": 87.25744516640823
+      },
+      "scene_equal_miou_percent": 90.79735501828715,
+      "scene_equal_macc_percent": 94.50217284434014
+    },
+    {
+      "run": "da3mono_va_m2f_vitl14_rrc_frozen",
+      "checkpoint": "best_miou.pt",
+      "epoch": 14,
+      "global_step": 1400,
+      "profile": "narrowflip",
+      "policy": "validation_selected",
+      "evidence": "da3_frozen_best_miou_narrowflip.json",
+      "source_score": "/home/disk02/wjj/moonseg/runs/public_development_da3mono_frozen_2026-11-08/da3mono_va_m2f_vitl14_rrc_frozen/best_miou/narrowflip/scores.json",
+      "scene_miou_percent": {
+        "2": 93.85438482861359,
+        "4": 91.32934487271139,
+        "9": 88.04939249357346
+      },
+      "scene_equal_miou_percent": 91.07770739829948,
+      "scene_equal_macc_percent": 94.37327326079512
+    },
+    {
+      "run": "da3mono_va_m2f_vitl14_rrc_frozen",
+      "checkpoint": "last.pt",
+      "epoch": 25,
+      "global_step": 2500,
+      "profile": "single",
+      "policy": "final_epoch",
+      "evidence": "da3_frozen_last_single.json",
+      "source_score": "/home/disk02/wjj/moonseg/runs/public_development_da3mono_frozen_2026-11-08/da3mono_va_m2f_vitl14_rrc_frozen/last/single/scores.json",
+      "scene_miou_percent": {
+        "2": 93.83280282540653,
+        "4": 92.47068666543218,
+        "9": 86.4890300740069
+      },
+      "scene_equal_miou_percent": 90.93083985494856,
+      "scene_equal_macc_percent": 94.88175545587146
+    },
+    {
+      "run": "da3mono_va_m2f_vitl14_rrc_frozen",
+      "checkpoint": "last.pt",
+      "epoch": 25,
+      "global_step": 2500,
+      "profile": "narrowflip",
+      "policy": "final_epoch",
+      "evidence": "da3_frozen_last_narrowflip.json",
+      "source_score": "/home/disk02/wjj/moonseg/runs/public_development_da3mono_frozen_2026-11-08/da3mono_va_m2f_vitl14_rrc_frozen/last/narrowflip/scores.json",
+      "scene_miou_percent": {
+        "2": 94.09638566442496,
+        "4": 92.67682404963405,
+        "9": 87.3862013867353
+      },
+      "scene_equal_miou_percent": 91.38647036693143,
+      "scene_equal_macc_percent": 94.92474616162116
+    },
+    {
+      "run": "dnv3_va_m2f_vitl16_rrc_clip001",
+      "checkpoint": "last.pt",
+      "epoch": 25,
+      "global_step": 2500,
+      "profile": "single",
+      "policy": "final_epoch",
+      "evidence": "../public_development_last_20261029/rrc_clip001_single.json",
+      "source_score": "previously archived baseline; reused without rerunning",
+      "scene_miou_percent": {
+        "2": 94.37017303807299,
+        "4": 92.81170916132302,
+        "9": 87.19048822349474
+      },
+      "scene_equal_miou_percent": 91.45745680763025,
+      "scene_equal_macc_percent": 95.48586643412554
+    },
+    {
+      "run": "dnv3_va_m2f_vitl16_rrc_clip001",
+      "checkpoint": "last.pt",
+      "epoch": 25,
+      "global_step": 2500,
+      "profile": "narrowflip",
+      "policy": "final_epoch",
+      "evidence": "../public_development_last_20261029/rrc_clip001_narrowflip.json",
+      "source_score": "previously archived baseline; reused without rerunning",
+      "scene_miou_percent": {
+        "2": 94.47981906001002,
+        "4": 93.22474978665295,
+        "9": 88.0213070533701
+      },
+      "scene_equal_miou_percent": 91.90862530001101,
+      "scene_equal_macc_percent": 95.54585185358427
+    }
+  ]
+}

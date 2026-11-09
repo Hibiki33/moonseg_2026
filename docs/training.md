@@ -54,7 +54,7 @@
 
 ## 全六场景训练与末轮测试
 
-11-09用户确认将场景5加入训练，四个独立预算按两条双卡队列接续；仅使用物理GPU0/7和2/3。原训练继续，当前GPU1上的阶段last5 TTA允许完成，随后不再占用1/4/5/6。每条新队列等原卡对的训练与公开测试全部完成，再执行下表任务；一项训练结束后，同卡对各跑一个last普通/TTA，完成后才进入下一项。
+11-09用户确认将场景5加入训练，四个独立预算按两条双卡队列接续；仅使用物理GPU0/7和2/3。原训练继续，GPU1上的阶段last5 TTA已完成，后续不再占用1/4/5/6。每条新队列等原卡对的训练与公开测试全部完成，再执行下表任务；一项训练结束后，同卡对各跑一个last普通/TTA，完成后才进入下一项。
 
 | 卡对 | 顺序 | 配置 | 完整预算 |
 |---|---:|---|---:|
@@ -67,15 +67,17 @@
 
 沿用本地数据实体与`dev_final_train.json`，训练场景1/3/5/6/7/8共8002张；其样本成员已核对等于原6403张加场景5的1599张，并与官方全训练清单完全一致。`validate: false`、`val_manifest: null`、`val_scenes: []`，不再用场景5选best，不按训练loss选权重。每轮125次更新、8000张，随机打乱后跳过不足完整batch的2张；完整运行后只测最终`last.pt`，公开2/4/9全部5004张分别做single和narrowflip。比较训练预算及后续路线只依据这些测试结果。
 
-计划为`runs/plans/2026-11-09/fulltrain/lane_07.json`与`lane_23.json`，每lane由`scripts/run_fulltrain_plan.py --plan <path>`管理。代码、解释器、CUDA扩展、数据和输出均走disk02本地路径；共享训练/评测锁、GPU UUID与占用检查保留，2/3训练关闭NCCL P2P，两组单卡测试均关闭P2P。新队列不继承已撤销的临时额外卡授权。数据及配置核对见[evidence/fulltrain_config_verification_20261109.json](evidence/fulltrain_config_verification_20261109.json)。 两条队列已启动并处于`waiting_dependency`，状态分别在`lane_07.state/status.json`与`lane_23.state/status.json`；启动记录见[evidence/fulltrain_queue_launch_20261109.json](evidence/fulltrain_queue_launch_20261109.json)。 无验证集的末轮校验、旧checkpoint兼容和调度恢复检查见[evidence/fulltrain_no_val_verification_20261109.json](evidence/fulltrain_no_val_verification_20261109.json)。
+计划为`runs/plans/2026-11-09/fulltrain/lane_07.json`与`lane_23.json`，每lane由`scripts/run_fulltrain_plan.py --plan <path>`管理。代码、解释器、CUDA扩展、数据和输出均走disk02本地路径；共享训练/评测锁、GPU UUID与占用检查保留，2/3训练关闭NCCL P2P，两组单卡测试均关闭P2P。新队列不继承已撤销的临时额外卡授权。数据及配置核对见[evidence/fulltrain_config_verification_20261109.json](evidence/fulltrain_config_verification_20261109.json)。 两条队列已完成上游依赖并分别开始10轮、15轮训练；状态分别在`lane_07.state/status.json`与`lane_23.state/status.json`；启动记录见[evidence/fulltrain_queue_launch_20261109.json](evidence/fulltrain_queue_launch_20261109.json)。 无验证集的末轮校验、旧checkpoint兼容和调度恢复检查见[evidence/fulltrain_no_val_verification_20261109.json](evidence/fulltrain_no_val_verification_20261109.json)。
 
 ## GPU 放置与启动
 
-11-08首组DA3MONO采用冻结骨干对照：`da3mono_va_m2f_vitl14_rrc_frozen`在PCI2/3从官方DA3MONO-LARGE encoder与新Adapter/head开始，完整冻结encoder（eval、no_grad、无encoder优化器参数）。严格复制冻结`dnv3_va_m2f_vitl16_rrc_clip001`：25轮/2500更新、1024² RRC0.5–2、每卡8×2卡×累积4=64、AdamW lr2e-4/wd0.05、poly0.9/无warmup、clip0.01、decoder6/width256、seed42、原亮度/对比度增强及uniform采样；dev_train6403与dev_val1599、场景5独立验证保持不变。保留每卡batch8以对齐Adapter普通BatchNorm，不能仅用有效batch相等代替。原生patch14仅右下补到1036²，再按像素坐标桥接64²的stride16特征；输入未缩小。独立计划/状态在`runs/plans/2026-11-08/da3mono_frozen/`，从disk02本地代码、环境与CUDA扩展运行；完成后独立队列`runs/public_development_da3mono_frozen_2026-11-08/`在2/3评`best_miou.pt`与`last.pt`的公开2/4/9全5004张single/narrowflip。best与原A/B队列中的clip001验证best比较，25轮last与已有clip001末轮结果比较。
+11-09结果已完整归档：联合微调DINOv3在best与last两种选择口径下均提高公开场景2/4/9；冻结DA3当前方案未显示整体优势。逐场景单尺度/TTA、mAcc及阶段微调取舍见[roadmap.md](roadmap.md#实验记录)和[evidence/public_development_20261109/summary.json](evidence/public_development_20261109/summary.json)。已排全六场景任务仍按冻结10/15/20/25轮执行，本次记录不改变训练计划。
+
+11-08首组DA3MONO采用冻结骨干对照：`da3mono_va_m2f_vitl14_rrc_frozen`在PCI2/3从官方DA3MONO-LARGE encoder与新Adapter/head开始，完整冻结encoder（eval、no_grad、无encoder优化器参数）。严格复制冻结`dnv3_va_m2f_vitl16_rrc_clip001`：25轮/2500更新、1024² RRC0.5–2、每卡8×2卡×累积4=64、AdamW lr2e-4/wd0.05、poly0.9/无warmup、clip0.01、decoder6/width256、seed42、原亮度/对比度增强及uniform采样；dev_train6403与dev_val1599、场景5独立验证保持不变。保留每卡batch8以对齐Adapter普通BatchNorm，不能仅用有效batch相等代替。原生patch14仅右下补到1036²，再按像素坐标桥接64²的stride16特征；输入未缩小。独立计划/状态在`runs/plans/2026-11-08/da3mono_frozen/`，从disk02本地代码、环境与CUDA扩展运行；独立队列`runs/public_development_da3mono_frozen_2026-11-08/`已完成`best_miou.pt`与`last.pt`的公开2/4/9全5004张single/narrowflip。best与原A/B队列中的clip001验证best比较，25轮last与已有clip001末轮结果比较。
 
 此前误启动的`da3mono_va_m2f_vitl14_rrc_fullft`因路线纠正在完成第1轮后、第2轮最后日志step114处停止；全部日志、三个checkpoint与旧计划保留，旧训练/评测计划已禁用。它不用于性能淘汰结论，也不向冻结运行提供初始化。2/3沿用PCI_BUS_ID、UUID检查、共享训练/评估双锁和`NCCL_P2P_DISABLE=1`。冻结实测与checkpoint回载证据见[evidence/da3mono_frozen_verification_20261108.json](evidence/da3mono_frozen_verification_20261108.json)，配置逐项差异、disk02进程与正式DDP更新见[启动证据](evidence/da3mono_frozen_launch_20261108.json)。
 
-11-08两条全解冻训练已获用户确认并启动：`dnv3_va_m2f_vitl16_rrc_fullft`在0/7从原生DINOv3开始联合训练25轮/2500更新，Adapter/head与骨干初始lr为2e-4/2e-5；`dnv3_va_m2f_vitl16_rrc_clip001_stage2_fullft`在4/5从clip001的第15轮`best_miou.pt`权重初始化，完整解冻后以新优化器训练5轮/500更新，lr为2e-5/2e-6。均为每卡4×2卡×累积8=64、1024²/RRC/width256/decoder6/clip0.01；4/5关闭NCCL P2P，0/7保持已验证P2P路径。`--initialize-from`不同于`--resume`，阶段加载约定见[model.md](model.md#checkpoints)。
+11-08两条全解冻训练已于11-09完成训练和全部公开测试；原配方为：`dnv3_va_m2f_vitl16_rrc_fullft`在0/7从原生DINOv3开始联合训练25轮/2500更新，Adapter/head与骨干初始lr为2e-4/2e-5；`dnv3_va_m2f_vitl16_rrc_clip001_stage2_fullft`在4/5从clip001的第15轮`best_miou.pt`权重初始化，完整解冻后以新优化器训练5轮/500更新，lr为2e-5/2e-6。均为每卡4×2卡×累积8=64、1024²/RRC/width256/decoder6/clip0.01；4/5关闭NCCL P2P，0/7保持已验证P2P路径。`--initialize-from`不同于`--resume`，阶段加载约定见[model.md](model.md#checkpoints)。
 
 本批使用单计划启动器`scripts/run_finetuning_plan.py`，计划与启动状态在`runs/plans/2026-11-08/fullft/`中的`joint/stage2.json`与对应`.status.json`，训练日志在各运行目录的`train.log`。启动前核对物理UUID/进程占用，同时持有既有训练与评估GPU锁，并向torchrun继承锁描述符；历史队列和配置不改。训练完成后校验完整history、全量末轮验证及三个checkpoint，再写`queue_completed.json`。公开评估计划为同目录`public_test.json`，状态在`runs/public_development_fullft_2026-11-08/`；只等这两组卡释放，补评父权重的验证`best_miou.pt`及A/B各自的`best_miou.pt`、`last.pt`，共10项；DA3MONO原独立2/3计划扩为best+last共4项。每队列默认最多2个单卡任务；11-09曾临时授权本次fullft测试增加空卡1/6（随后已撤销，仅已有GPU1任务允许结束）；计划显式声明`temporary_extra_gpus: [1, 6]`时最多4个单卡任务，并发不超过计划GPU数，UUID、锁、占用检查及单卡P2P禁用保持。每个checkpoint先单尺度再窄尺度翻转，各覆盖5004张，父权重优先。
 
