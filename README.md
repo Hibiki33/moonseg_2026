@@ -8,7 +8,7 @@ LuSNAR 月面五类语义分割。类别编号固定为月壤 0、岩石 1、撞
 
 - 当前训练：新增全六场景DINOv3联合微调，0/7按10→25轮、4/5按15→20轮，10轮与15轮已启动；原2/3冻结20轮已完成，普通/TTA测试进行中。全部8002张、无val，各预算独立初始化，训完只测last普通/TTA。仅每轮覆盖一个含完整微调骨干的last用于恢复，不存独立中间epoch文件，见[训练说明](docs/training.md#全六场景联合微调11-09晚追加)。
 - 本批GPU授权：新联合微调只使用0/7和4/5；原2/3任务完成其训练与测试。1/6保持空闲。
-- 新增基线：SegFormer-B5、SAM3和官方轻量DeepLabV3+/MobileNetV3-Large均接入第一手源码；SAM3固定文本普通推理已测完5004张，场景2/4/9 mIoU为70.808/68.087/66.563%，均值68.486%，整体撞击坑IoU仅3.235%；结果见[实验记录](docs/roadmap.md#实验记录)。GPU2已释放，B5与轻量基线的训练轮数待定，配置中`epochs: null`且不排训练。实现与参数量见[模型说明](docs/model.md#first-party-baselines)，准备配方见[训练说明](docs/training.md#基线准备与sam3推理)。
+- 新增基线：SegFormer-B5、SAM3和官方轻量DeepLabV3+/MobileNetV3-Large均接入第一手源码；SAM3固定文本普通推理已测完5004张，场景2/4/9 mIoU为70.808/68.087/66.563%，均值68.486%，整体撞击坑IoU仅3.235%。随后审计发现该版dense后处理遗漏presence且不符合Meta官方语义评测流程，这些数值仅保留为旧适配的诊断结果；审计及结果见[实验记录](docs/roadmap.md#实验记录)。GPU2已释放，B5与轻量基线的训练轮数待定，配置中`epochs: null`且不排训练。实现与参数量见[模型说明](docs/model.md#first-party-baselines)，准备配方见[训练说明](docs/training.md#基线准备与sam3推理)。
 - 默认配方：冻结 DINOv3 ViT-L + ViT-Adapter + Mask2Former，1024×1024 RRC，decoder6层/hidden256，梯度裁剪 **0.01**，每卡8×两卡×累积4=有效batch64。五场景历史对照从 [默认模板](configs/dnv3_va_m2f_vitl16_default.yaml) 派生；本批全量训练使用上述独立配置，历史配置保持原值；详见 [训练说明](docs/training.md)。
 - 已测最佳路线：DINOv3从分割训练第一步联合微调骨干与Adapter/head。公开测试TTA的best15在场景2/4/9为95.146/93.840/91.401%，均值93.462%；last25为95.275/93.409/90.689%，均值93.124%，两种选择口径均优于对应冻结基线。各场景、普通/TTA及best/last完整对照见[路线记录](docs/roadmap.md#实验记录)。新全量训练仍只取last，路线收益以公开测试为准。
 - clip0.01、decoder9、width384及各自末轮评估均已完成。width384的场景9 TTA87.892%低于同clip0.01的width256基线88.021%，三个公开场景mIoU均下降，默认保持6层/width256/clip0.01。以上为10-29已完成实验；原A/B和DA3按原划分完成；本批全量训练按上文加入场景5并比较10/15/20/25轮。状态与结果见 [路线记录](docs/roadmap.md)。
