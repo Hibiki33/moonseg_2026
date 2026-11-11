@@ -1,0 +1,73 @@
+{
+  "checked_at": "2026-11-08T21:49:21.251475+08:00",
+  "method": "Read actual completed-epoch checkpoints on CPU, verified learned ViT coverage and shapes, compared saved tensors directly with original pretrained tensors; no hashes.",
+  "checkpoints": [
+    {
+      "run": "dnv3_va_m2f_vitl16_rrc_fullft",
+      "checkpoint": "last.pt",
+      "epoch": 2,
+      "global_step": 200,
+      "bytes": 4067592107,
+      "trainable_vit_tensor_count": 343,
+      "vit_numel": 303154176,
+      "tensors_different_from_pretraining": 342,
+      "optimizer_state_entries": 738
+    },
+    {
+      "run": "dnv3_va_m2f_vitl16_rrc_fullft",
+      "checkpoint": "best_miou.pt",
+      "epoch": 2,
+      "global_step": 200,
+      "bytes": 1356658269,
+      "trainable_vit_tensor_count": 343,
+      "vit_numel": 303154176,
+      "tensors_different_from_pretraining": 342,
+      "optimizer_state_entries": 0
+    },
+    {
+      "run": "dnv3_va_m2f_vitl16_rrc_fullft",
+      "checkpoint": "best_loss.pt",
+      "epoch": 2,
+      "global_step": 200,
+      "bytes": 1356658269,
+      "trainable_vit_tensor_count": 343,
+      "vit_numel": 303154176,
+      "tensors_different_from_pretraining": 342,
+      "optimizer_state_entries": 0
+    },
+    {
+      "run": "dnv3_va_m2f_vitl16_rrc_clip001_stage2_fullft",
+      "checkpoint": "last.pt",
+      "epoch": 1,
+      "global_step": 100,
+      "bytes": 4067592875,
+      "trainable_vit_tensor_count": 343,
+      "vit_numel": 303154176,
+      "tensors_different_from_pretraining": 342,
+      "optimizer_state_entries": 738
+    },
+    {
+      "run": "dnv3_va_m2f_vitl16_rrc_clip001_stage2_fullft",
+      "checkpoint": "best_miou.pt",
+      "epoch": 1,
+      "global_step": 100,
+      "bytes": 1356658973,
+      "trainable_vit_tensor_count": 343,
+      "vit_numel": 303154176,
+      "tensors_different_from_pretraining": 342,
+      "optimizer_state_entries": 0
+    },
+    {
+      "run": "dnv3_va_m2f_vitl16_rrc_clip001_stage2_fullft",
+      "checkpoint": "best_loss.pt",
+      "epoch": 1,
+      "global_step": 100,
+      "bytes": 1356658973,
+      "trainable_vit_tensor_count": 343,
+      "vit_numel": 303154176,
+      "tensors_different_from_pretraining": 342,
+      "optimizer_state_entries": 0
+    }
+  ],
+  "scope": "Actual serialized training checkpoints from running DINOv3 experiments A/B. Model weights and saved optimizer-state presence were inspected on CPU; this does not claim an end-to-end resumed GPU training run."
+}
