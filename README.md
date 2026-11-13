@@ -28,6 +28,7 @@ LuSNAR 月面五类语义分割。类别编号固定为月壤 0、岩石 1、撞
 | [docs/handover.md](docs/handover.md) | 交接文档：现状、实验结果、保守消融阶梯、大胆创新设计、决策规则、操作手册与流程规则 |
 | [docs/model.md](docs/model.md) | 模型结构、损失、兼容性改动、CUDA 扩展、采样/解冻/验证抽样选项、验证损失、checkpoint 格式 |
 | [docs/figures/vit_adapter_mask2former.svg](docs/figures/vit_adapter_mask2former.svg) | ViT + ViT-Adapter + Mask2Former 结构示意图；绘制脚本为 [docs/figures/make_pipeline.py](docs/figures/make_pipeline.py) |
+| [docs/figures/tta_narrowflip.svg](docs/figures/tta_narrowflip.svg) | narrowflip 测试时增强示意图；绘制脚本为 [docs/figures/make_tta.py](docs/figures/make_tta.py) |
 | [docs/augmentation_research.md](docs/augmentation_research.md) | 增强默认值与可选算子的精确语义、源码依据、文献 |
 | [docs/gpu_topology.md](docs/gpu_topology.md) | 主机 GPU 拓扑、P2P 故障与启动约定、显存与吞吐容量 |
 | [docs/metrics.md](docs/metrics.md) | 评测指标定义 |
