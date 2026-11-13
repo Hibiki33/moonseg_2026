@@ -4,6 +4,9 @@
 Legacy frozen lanes use 0/7 (10 then 25 epochs) or 2/3 (15 then 20 epochs).
 Explicit joint_fullft lanes use 0/7 or 4/5 respectively and may explicitly
 declare predecessor: null to start as soon as their GPUs and locks are free.
+Supervised baseline lanes run SegFormer-B5 on 0/7 or MobileNetV3 DeepLabV3+
+on 2/3, using the isolated baseline environment and an explicit epoch budget.
+da3metric_e25 is one 25-epoch joint run on 4/5 from DA3METRIC-LARGE, predecessor null.
 Each training starts independently. A durable stage worker retains shared GPU
 locks and its actual child exit receipt if this supervisor exits. Restart the
 same --plan to adopt successful/in-progress stages; failures are never retried.
@@ -25,8 +28,8 @@ ROOT = Path(__file__).resolve().parents[1]
 STORAGE = ROOT.parent
 PYTHON = (ROOT / ".venv").resolve() / "bin/python"
 sys.path.insert(0, str(ROOT))
-from moonseg.evaluate_public_test import PROFILES, PublicTestResearchDataset, fulltrain_data_snapshot
-from moonseg.train import resolve_train_settings
+from moonseg.evaluate_public_test import PROFILES, PublicTestResearchDataset, file_identity, fulltrain_data_snapshot, inference_runtime
+from moonseg.train import resolve_train_settings, training_batch_plan
 from moonseg.utils import load_config
 from scripts.run_public_test_queue import (checkpoint_runs, prepare_checkpoint,
     score_result, validate_config as validate_public_config)
@@ -59,7 +62,13 @@ def live_stage(spec):
     return found
 
 
-def environment(gpus, uuids, *, evaluation=False):
+def python_for_plan(plan):
+    return ((ROOT / ".venv-baselines").resolve() / "bin/python"
+            if plan.get("recipe") == "supervised_baseline" else PYTHON)
+
+
+def environment(gpus, uuids, *, evaluation=False, python=None):
+    python = PYTHON if python is None else python
     env = os.environ.copy()
     for key in ("RANK", "LOCAL_RANK", "WORLD_SIZE", "LOCAL_WORLD_SIZE", "MASTER_ADDR", "MASTER_PORT",
                 "GROUP_RANK", "ROLE_RANK", "ROLE_WORLD_SIZE", "TORCHELASTIC_RUN_ID", "PYTHONHOME"):
@@ -69,21 +78,118 @@ def environment(gpus, uuids, *, evaluation=False):
         if "/home/nas_1/" in value:
             env.pop(key, None)
     env.update(CUDA_DEVICE_ORDER="PCI_BUS_ID", CUDA_VISIBLE_DEVICES=",".join(uuids[str(g)] for g in gpus),
-               PYTHON=str(PYTHON), VIRTUAL_ENV=str(PYTHON.parent.parent), PYTHONPATH=str(ROOT),
-               PATH=str(PYTHON.parent) + os.pathsep + env.get("PATH", "/usr/local/bin:/usr/bin:/bin"),
+               PYTHON=str(python), VIRTUAL_ENV=str(python.parent.parent), PYTHONPATH=str(ROOT),
+               PATH=str(python.parent) + os.pathsep + env.get("PATH", "/usr/local/bin:/usr/bin:/bin"),
                PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True", OMP_NUM_THREADS="4",
                PYTHONUNBUFFERED="1", TORCH_EXTENSIONS_DIR=str(STORAGE / "build/torch_extensions"),
                MOONSEG_MSDA_DIR=str((ROOT / "build/ms_deform_attn").resolve()),
                XDG_CACHE_HOME=str(STORAGE / ".cache"), HF_HOME=str(STORAGE / ".cache/huggingface"),
-               TORCH_HOME=str(STORAGE / ".cache/torch"), UV_PROJECT_ENVIRONMENT=str(PYTHON.parent.parent))
-    if evaluation or gpus in ([2, 3], [4, 5]):
+               TORCH_HOME=str(STORAGE / ".cache/torch"), UV_PROJECT_ENVIRONMENT=str(python.parent.parent))
+    if evaluation or gpus in ([1, 6], [2, 3], [4, 5]):
         env["NCCL_P2P_DISABLE"] = "1"
     else:
         env.pop("NCCL_P2P_DISABLE", None)
     return env
 
 
+def validate_baseline_plan(plan):
+    """Keep each baseline's prepared recipe, allowing a budget and measured microbatch."""
+    templates = {(0, 7): "segformer_b5_fulltrain", (2, 3): "deeplabv3plus_mobilenetv3_fulltrain"}
+    gpus = plan.get("gpus", [])
+    if (plan.get("version") != 1 or tuple(gpus) not in templates
+            or not isinstance(plan.get("id"), str) or not plan["id"]
+            or "predecessor" not in plan or plan["predecessor"] is not None
+            or type(plan.get("poll_seconds")) is not int or not 1 <= plan["poll_seconds"] <= 60
+            or len(plan.get("jobs", [])) != 1):
+        raise ValueError("Require one explicitly budgeted baseline on 0/7 or 2/3, predecessor: null")
+    uuids = plan.get("expected_gpu_uuids", {})
+    if (set(uuids) != {str(g) for g in gpus} or len(set(uuids.values())) != 2
+            or any(not isinstance(v, str) or not v.startswith("GPU-") for v in uuids.values())):
+        raise ValueError("Freeze one distinct physical UUID per baseline GPU")
+    job = plan["jobs"][0]
+    epochs = job.get("expected_epochs")
+    if type(epochs) is not int or epochs < 1:
+        raise ValueError("A positive explicit baseline epoch budget is required")
+    template = templates[tuple(gpus)]
+    name = f"{template}_e{epochs}"
+    source = local_path(job["config"])
+    config = load_config(source)
+    expected = load_config(ROOT / "configs" / f"{template}.yaml")
+    expected["train"].update(epochs=epochs, output_dir=f"runs/{name}",
+        batch_size=config["train"]["batch_size"], accumulation_steps=config["train"]["accumulation_steps"])
+    if job.get("name") != name or source.stem != name or config != expected:
+        raise ValueError("Baseline config must preserve its prepared model/data/optimizer recipe")
+    batch = training_batch_plan(8002, 2, config["train"])
+    if (batch["effective_batch"] != 64 or batch["optimizer_steps_per_epoch"] != 125
+            or job.get("expected_updates") != epochs * 125):
+        raise ValueError("Baseline comparison requires batch64 and 125 optimizer updates per epoch")
+    for path in [config["train"]["output_dir"], config["model"]["backbone_weights"],
+                 *(config["data"][key] for key in ("root", "train_manifest", "label_stats"))]:
+        local_path(path)
+    fulltrain_data_snapshot(config)
+    test = plan.get("public_test")
+    if test != {"data_root": "data/research_test/LuSNAR", "manifest": "data/research_test/manifest.json"}:
+        raise ValueError("Use the complete public scenes 2/4/9 dataset for both final tests")
+    dataset = PublicTestResearchDataset(local_path(test["data_root"]), local_path(test["manifest"]), config["data"])
+    for record in dataset.records:
+        for field in ("image", "label"):
+            local_path(dataset.root / record[field])
+    if not python_for_plan(plan).is_file() or not ROOT.is_relative_to(Path("/home/disk02")):
+        raise ValueError("Baseline code and isolated environment must be on disk02")
+    return {name: source.read_bytes()}
+
+
+def validate_da3metric_e25(plan):
+    """One 25-epoch joint run from DA3METRIC-LARGE, same recipe as DA3MONO e25."""
+    name = "da3metric_va_m2f_vitl14_fulltrain_joint_bblr003_e25"
+    if (plan.get("version") != 1 or plan.get("gpus") != [4, 5] or not plan.get("id")
+            or plan.get("predecessor") is not None
+            or type(plan.get("poll_seconds")) is not int or not 1 <= plan["poll_seconds"] <= 60
+            or [job.get("name") for job in plan.get("jobs", [])] != [name]
+            or [job.get("expected_epochs") for job in plan.get("jobs", [])] != [25]):
+        raise ValueError("DA3METRIC requires one 25-epoch job on GPU 4/5 with predecessor: null")
+    uuids = plan.get("expected_gpu_uuids", {})
+    if (set(uuids) != {"4", "5"} or len(set(uuids.values())) != 2
+            or any(not isinstance(v, str) or not v.startswith("GPU-") for v in uuids.values())):
+        raise ValueError("Freeze both physical GPU 4/5 UUIDs")
+    job = plan["jobs"][0]
+    source = local_path(job["config"])
+    config = load_config(source)
+    expected = load_config(ROOT / "configs/da3mono_va_m2f_vitl14_fulltrain_joint_bblr003_e25.yaml")
+    expected["model"]["backbone_weights"] = "ckpts/da3metric-large/model.safetensors"
+    expected["model"]["model_family"] = "da3metric-large"
+    expected["train"]["output_dir"] = f"runs/{name}"
+    if (source.stem != name or config != expected or job.get("expected_updates") != 25 * 125
+            or job.get("evaluation_precision") != "bf16"):
+        raise ValueError("Keep the DA3MONO 25-epoch joint recipe; only the metric encoder file may change")
+    batch = training_batch_plan(8002, 2, config["train"])
+    if batch["effective_batch"] != 64 or batch["optimizer_steps_per_epoch"] != 125:
+        raise ValueError("DA3METRIC comparison requires batch 64 and 125 updates per epoch")
+    fulltrain_data_snapshot(config)
+    for value in [config["train"]["output_dir"], config["model"]["backbone_weights"],
+                  *(config["data"][key] for key in ("root", "train_manifest", "label_stats"))]:
+        local_path(value)
+    if plan.get("public_test") != {"data_root": "data/research_test/LuSNAR", "manifest": "data/research_test/manifest.json"}:
+        raise ValueError("Require both full 5004-image public-test profiles")
+    dataset = PublicTestResearchDataset(local_path(plan["public_test"]["data_root"]),
+        local_path(plan["public_test"]["manifest"]), config["data"])
+    for row in dataset.records:
+        for field in ("image", "label"):
+            local_path(dataset.root / row[field])
+    return {name: source.read_bytes()}
+
+
 def validate_plan(plan):
+    if plan.get("recipe") == "da3metric_e25":
+        return validate_da3metric_e25(plan)
+    if plan.get("recipe") == "da3_backbone_lr_budgets":
+        return validate_da3_backbone_lr_budgets(plan)
+    if plan.get("recipe") == "scene9_backbone_lr":
+        return validate_scene9_backbone_lr(plan)
+    if plan.get("recipe") == "mainline_followup":
+        return validate_mainline_followup(plan)
+    if plan.get("recipe") == "supervised_baseline":
+        return validate_baseline_plan(plan)
     joint = plan.get("recipe") == "joint_fullft"
     if "recipe" in plan and not joint:
         raise ValueError("Only the explicit joint_fullft recipe or a legacy plan without recipe is admitted")
@@ -148,15 +254,223 @@ def validate_plan(plan):
     return contents
 
 
+def validate_mainline_followup(plan):
+    """Joint15 comparisons on4/5; an explicit cancellation may remove pending FP32."""
+    names = ["da3mono_va_m2f_vitl14_fulltrain_joint_e15", "dnv3_va_m2f_vitl16_fulltrain_joint_fp32_e15"]
+    cancelled = plan.get("cancelled_jobs", [])
+    if cancelled not in ([], [names[1]]):
+        raise ValueError("Only the explicitly cancelled pending FP32 job may be removed")
+    expected_names = names[:1] if cancelled else names
+    if (plan.get("version") != 1 or plan.get("gpus") != [4, 5] or not plan.get("id")
+            or "predecessor" not in plan or plan["predecessor"] is not None
+            or type(plan.get("poll_seconds")) is not int or not 1 <= plan["poll_seconds"] <= 60
+            or [job.get("name") for job in plan.get("jobs", [])] != expected_names):
+        raise ValueError("Require the remaining DA3/FP32 joint15 comparisons exclusively on GPU4/5")
+    uuids = plan.get("expected_gpu_uuids", {})
+    if (set(uuids) != {"4", "5"} or len(set(uuids.values())) != 2
+            or any(not isinstance(v, str) or not v.startswith("GPU-") for v in uuids.values())):
+        raise ValueError("Freeze both physical GPU4/5 UUIDs")
+    baseline = load_config(ROOT / "configs/dnv3_va_m2f_vitl16_fulltrain_joint_e15.yaml")
+    contents = {}
+    for job in plan["jobs"]:
+        name = job["name"]
+        source = local_path(job["config"])
+        config = load_config(source)
+        expected = json.loads(json.dumps(baseline))
+        expected["train"].update(output_dir=f"runs/{name}", log_every=1,
+            batch_size=config["train"]["batch_size"], accumulation_steps=config["train"]["accumulation_steps"])
+        if name == names[0]:
+            expected["model"] = load_config(ROOT / "configs/da3mono_va_m2f_vitl14_rrc_fullft.yaml")["model"]
+        else:
+            expected["model"]["backbone_gradient_checkpointing"] = True
+            expected["train"].update(amp="none", tf32=True)
+        if (config != expected or source.stem != name or job.get("expected_epochs") != 15
+                or job.get("expected_updates") != 1875 or job.get("evaluation_precision") != "bf16"):
+            raise ValueError("Preserve the tested joint15 recipe, with only the declared encoder/precision changes")
+        batch = training_batch_plan(8002, 2, config["train"])
+        if batch["effective_batch"] != 64 or batch["optimizer_steps_per_epoch"] != 125:
+            raise ValueError("Followup comparisons require effective batch64 and 125 updates per epoch")
+        fulltrain_data_snapshot(config)
+        for value in [config["train"]["output_dir"], config["model"]["backbone_weights"],
+                      *(config["data"][key] for key in ("root", "train_manifest", "label_stats"))]:
+            local_path(value)
+        contents[name] = source.read_bytes()
+    if plan.get("public_test") != {"data_root": "data/research_test/LuSNAR", "manifest": "data/research_test/manifest.json"}:
+        raise ValueError("Use both complete public test profiles on the fixed5004 images")
+    dataset = PublicTestResearchDataset(local_path(plan["public_test"]["data_root"]),
+        local_path(plan["public_test"]["manifest"]), baseline["data"])
+    for row in dataset.records:
+        for field in ("image", "label"):
+            local_path(dataset.root / row[field])
+    return contents
+
+
+def validate_scene9_backbone_lr(plan):
+    """The joint15 LR ablation, or its independent5/20/25-epoch followup."""
+    budgets = [job.get("expected_epochs") for job in plan.get("jobs", [])]
+    sweep = budgets == [5, 20, 25]
+    if (plan.get("version") != 1 or plan.get("gpus") != [1, 6] or not plan.get("id")
+            or "predecessor" not in plan or budgets not in ([15], [5, 20, 25])
+            or (not sweep and plan["predecessor"] is not None)
+            or (sweep and not isinstance(plan["predecessor"], dict))
+            or type(plan.get("poll_seconds")) is not int or not 1 <= plan["poll_seconds"] <= 60
+            ):
+        raise ValueError("Require joint15 or the independent5/20/25 followup on physical GPU1/6")
+    uuids = plan.get("expected_gpu_uuids", {})
+    if (set(uuids) != {"1", "6"} or len(set(uuids.values())) != 2
+            or any(not isinstance(v, str) or not v.startswith("GPU-") for v in uuids.values())):
+        raise ValueError("Freeze both physical GPU1/6 UUIDs")
+    if sweep:
+        dep = plan["predecessor"]
+        if (dep.get("kind") != "fulltrain_lane"
+                or dep.get("plan_snapshot", {}).get("recipe") != "scene9_backbone_lr"
+                or [j.get("expected_epochs") for j in dep["plan_snapshot"].get("jobs", [])] != [15]):
+            raise ValueError("Budget sweep must follow the original joint15 LR comparison")
+    contents = {}
+    for job in plan["jobs"]:
+        epochs = job["expected_epochs"]
+        name = f"dnv3_va_m2f_vitl16_fulltrain_joint_bblr003_e{epochs}"
+        source = local_path(job["config"])
+        config = load_config(source)
+        expected = load_config(ROOT / "configs/dnv3_va_m2f_vitl16_fulltrain_joint_e15.yaml")
+        expected["train"].update(output_dir=f"runs/{name}", epochs=epochs, backbone_lr_multiplier=0.03)
+        if (job.get("name") != name or source.stem != name or config != expected
+                or job.get("expected_updates") != epochs * 125 or job.get("evaluation_precision") != "bf16"):
+            raise ValueError("Preserve joint15 with backbone multiplier .03; only budget/output may vary")
+        batch = training_batch_plan(8002, 2, config["train"])
+        if batch["effective_batch"] != 64 or batch["optimizer_steps_per_epoch"] != 125:
+            raise ValueError("Preserve effective batch64 and125 updates per epoch")
+        fulltrain_data_snapshot(config)
+        for value in [config["train"]["output_dir"], config["model"]["backbone_weights"],
+                      *(config["data"][key] for key in ("root", "train_manifest", "label_stats"))]:
+            local_path(value)
+        contents[name] = source.read_bytes()
+    if plan.get("public_test") != {"data_root": "data/research_test/LuSNAR", "manifest": "data/research_test/manifest.json"}:
+        raise ValueError("Keep both complete public-test profiles on all5004 images")
+    dataset = PublicTestResearchDataset(local_path(plan["public_test"]["data_root"]),
+        local_path(plan["public_test"]["manifest"]), config["data"])
+    for row in dataset.records:
+        for field in ("image", "label"):
+            local_path(dataset.root / row[field])
+    if sweep:
+        fulltrain_predecessor_ready(plan)
+    return contents
+
+
+def validate_da3_backbone_lr_budgets(plan):
+    """Four independent DA3 low-LR budgets, allocated behind the two active lanes."""
+    allocation = {(4, 5): [15, 20, 25], (1, 6): [10]}
+    gpus = tuple(plan.get("gpus", []))
+    if (plan.get("version") != 1 or gpus not in allocation or not plan.get("id")
+            or [j.get("expected_epochs") for j in plan.get("jobs", [])] != allocation.get(gpus)
+            or not isinstance(plan.get("predecessor"), dict)
+            or type(plan.get("poll_seconds")) is not int or not 1 <= plan["poll_seconds"] <= 60):
+        raise ValueError("DA3 low-LR budgets require15/20/25 on4/5 and10 on1/6, after their active lanes")
+    uuids = plan.get("expected_gpu_uuids", {})
+    if (set(uuids) != {str(g) for g in gpus} or len(set(uuids.values())) != 2
+            or any(not isinstance(v, str) or not v.startswith("GPU-") for v in uuids.values())):
+        raise ValueError("Freeze two distinct physical GPU UUIDs")
+    dep = plan["predecessor"]
+    previous = dep.get("plan_snapshot", {})
+    expected_recipe = "mainline_followup" if gpus == (4, 5) else "scene9_backbone_lr"
+    expected_budgets = [15] if gpus == (4, 5) else [5, 20, 25]
+    if (dep.get("kind") != "fulltrain_lane" or previous.get("recipe") != expected_recipe
+            or [j.get("expected_epochs") for j in previous.get("jobs", [])] != expected_budgets):
+        raise ValueError("DA3 sweep must wait for the unchanged active lane on its assigned pair")
+    if gpus == (4, 5) and previous.get("cancelled_jobs") != ["dnv3_va_m2f_vitl16_fulltrain_joint_fp32_e15"]:
+        raise ValueError("This allocation assumes the user's pending FP32 cancellation")
+    baseline = load_config(ROOT / "configs/da3mono_va_m2f_vitl14_fulltrain_joint_e15.yaml")
+    contents = {}
+    for job in plan["jobs"]:
+        epochs = job["expected_epochs"]
+        name = f"da3mono_va_m2f_vitl14_fulltrain_joint_bblr003_e{epochs}"
+        source = local_path(job["config"])
+        config = load_config(source)
+        expected = json.loads(json.dumps(baseline))
+        expected["train"].update(epochs=epochs, output_dir=f"runs/{name}", backbone_lr_multiplier=0.03)
+        if (job.get("name") != name or source.stem != name or config != expected
+                or job.get("expected_updates") != epochs * 125 or job.get("evaluation_precision") != "bf16"):
+            raise ValueError("Change only native DA3 backbone LR multiplier to.03, budget and output")
+        batch = training_batch_plan(8002, 2, config["train"])
+        if batch["effective_batch"] != 64 or batch["optimizer_steps_per_epoch"] != 125:
+            raise ValueError("DA3 budget comparisons require batch64 and125 updates per epoch")
+        fulltrain_data_snapshot(config)
+        for value in [config["train"]["output_dir"], config["model"]["backbone_weights"],
+                      *(config["data"][key] for key in ("root", "train_manifest", "label_stats"))]:
+            local_path(value)
+        contents[name] = source.read_bytes()
+    if plan.get("public_test") != {"data_root": "data/research_test/LuSNAR", "manifest": "data/research_test/manifest.json"}:
+        raise ValueError("Require both full5004-image public-test profiles")
+    dataset = PublicTestResearchDataset(local_path(plan["public_test"]["data_root"]),
+        local_path(plan["public_test"]["manifest"]), baseline["data"])
+    for row in dataset.records:
+        for field in ("image", "label"):
+            local_path(dataset.root / row[field])
+    fulltrain_predecessor_ready(plan)
+    return contents
+
+
+def fulltrain_predecessor_ready(plan):
+    """Wait for a snapshotted Lane, including both final tests, before reusing its GPUs."""
+    dep = plan["predecessor"]
+    path = local_path(dep["plan_path"])
+    status_path = local_path(dep["status_path"])
+    original = read_json(path)
+    state = read_json(status_path)
+    if (original != dep["plan_snapshot"] or state["plan"] != original
+            or original["gpus"] != plan["gpus"]
+            or original["expected_gpu_uuids"] != plan["expected_gpu_uuids"]
+            or status_path != path.with_suffix(".state") / "status.json"
+            or (state.get("parent_pid"), state.get("parent_start_ticks"))
+               != (dep["parent_pid"], dep["parent_start_ticks"])):
+        raise ValueError("Predecessor plan, GPU assignment or process identity changed")
+    if state["status"] in {"failed", "cancelled", "stopped", "blocked"}:
+        raise ValueError("Predecessor lane did not finish successfully")
+    if state["status"] != "completed":
+        if not same_process({"pid": dep["parent_pid"], "start_ticks": dep["parent_start_ticks"]}):
+            raise ValueError("Predecessor supervisor exited before completion")
+        return False, "waiting for predecessor training and both complete final-test profiles"
+    marker = status_path.parent / "completed.json"
+    if not marker.exists():
+        return False, "waiting for predecessor completion marker"
+    complete = read_json(marker)
+    names = {job["name"] for job in original["jobs"]}
+    stages = {name + suffix for name in names for suffix in ("_train", "_single", "_narrowflip")}
+    if (complete.get("status") != "completed" or complete.get("exit_code") != 0
+            or set(complete.get("jobs", [])) != names or set(state["jobs"]) != names
+            or set(state["stages"]) != stages):
+        raise ValueError("Predecessor completion membership differs")
+    for stage in state["stages"].values():
+        receipt = read_json(local_path(stage["receipt_path"]))
+        if (stage.get("status") != "completed" or receipt != stage.get("receipt")
+                or receipt.get("status") != "completed" or receipt.get("exit_code") != 0):
+            raise ValueError("Predecessor stage lacks a successful matching receipt")
+        if live_stage(local_path(stage["spec_path"])):
+            return False, "waiting for predecessor workers to exit"
+    for job in original["jobs"]:
+        if state["jobs"][job["name"]].get("status") != "completed":
+            raise ValueError("Predecessor job is incomplete")
+        checkpoint = local_path(f"runs/{job['name']}/last.pt")
+        for profile in PROFILES:
+            record = dict(profile=profile, epoch=job["expected_epochs"], global_step=job["expected_updates"],
+                          file_identity=file_identity(checkpoint), checkpoint_path=str(checkpoint),
+                          checkpoint_policy="final_epoch")
+            score_result(status_path.parent / "scores" / job["name"] / "last" / profile / "scores.json",
+                         record, original["public_test"])
+    return True, "predecessor training and both full final tests verified"
+
+
 def predecessor_ready(plan):
     """Require the complete frozen queue, including both profiles of every selection."""
     if "predecessor" not in plan:
         raise ValueError("A predecessor must be declared explicitly")
     dep = plan["predecessor"]
+    if isinstance(dep, dict) and dep.get("kind") == "fulltrain_lane":
+        return fulltrain_predecessor_ready(plan)
     if dep is None:
-        if plan.get("recipe") != "joint_fullft":
-            raise ValueError("Only joint_fullft permits explicit predecessor: null")
-        return True, "explicit joint_fullft lane without predecessor; shared locks and GPU idleness still required"
+        if plan.get("recipe") not in {"joint_fullft", "supervised_baseline", "mainline_followup", "scene9_backbone_lr", "da3metric_e25"}:
+            raise ValueError("This recipe requires an explicit predecessor")
+        return True, f"explicit {plan['recipe']} lane; shared locks and GPU idleness still required"
     state = read_json(local_path(dep["status_path"]))
     if (state.get("parent_pid"), state.get("parent_start_ticks")) != (dep["parent_pid"], dep["parent_start_ticks"]):
         raise ValueError("Predecessor public queue identity changed; explicitly review/freeze the replacement")
@@ -313,7 +627,7 @@ class Lane:
         self.state["stages"][key] = stage
         self.save()
         fds = tuple(lock.fileno() for lock in locks)
-        child = subprocess.Popen([str(PYTHON), str(Path(__file__).resolve()), "--stage-spec", str(spec_path),
+        child = subprocess.Popen([str(python_for_plan(self.plan)), str(Path(__file__).resolve()), "--stage-spec", str(spec_path),
             "--inherited-fds", ",".join(map(str, fds))], cwd=ROOT, env=env, stdin=subprocess.DEVNULL,
             start_new_session=True, close_fds=True, pass_fds=fds)
         self.children[key] = child
@@ -343,13 +657,19 @@ class Lane:
         return result
 
     def verify_tests(self, job):
-        _, checkpoint, meta = self.checkpoint(job)
+        config_path, checkpoint, meta = self.checkpoint(job)
         results = {}
         for profile, record in self.evaluate_records(job, checkpoint, meta).items():
             key = f"{job['name']}_{profile}"
             if self.state["stages"].get(key, {}).get("status") != "completed":
                 raise ValueError(f"Missing complete evaluator stage receipt: {key}")
             results[profile] = score_result(Path(record["score_path"]), record, self.plan["public_test"])
+            if job.get("evaluation_precision"):
+                precision = job["evaluation_precision"]
+                actual = results[profile].get("inference_runtime", {})
+                wanted = inference_runtime(load_config(config_path), precision)
+                if actual.get("precision") != precision or any(actual.get(k) != v for k, v in wanted.items()):
+                    raise ValueError("Final test did not use the planned common inference precision")
         return results
 
     def run(self):
@@ -431,11 +751,11 @@ class Lane:
             if source.read_bytes() != frozen.read_bytes():
                 raise ValueError("Source config changed after lane startup")
             output.mkdir(exist_ok=True)
-            command = [str(PYTHON), "-m", "torch.distributed.run", "--standalone", "--nproc_per_node=2",
+            command = [str(python_for_plan(self.plan)), "-m", "torch.distributed.run", "--standalone", "--nproc_per_node=2",
                        "-m", "moonseg.train", "--config", str(frozen)]
             self.save(status="training")
             self.launch(key, command, output / "train.log", environment(self.plan["gpus"],
-                        self.plan["expected_gpu_uuids"]), locks)
+                        self.plan["expected_gpu_uuids"], python=python_for_plan(self.plan)), locks)
             self.wait_stage(key)
         config_path, checkpoint, meta = self.checkpoint(job)
         marker = output / "queue_completed.json"
@@ -465,13 +785,16 @@ class Lane:
             if directory.exists() and any(directory.iterdir()):
                 raise ValueError(f"Refusing an untracked prior public-test attempt: {directory}")
             directory.mkdir(parents=True, exist_ok=True)
-            command = [str(PYTHON), "-m", "moonseg.evaluate_public_test", "--config", str(config_path),
+            command = [str(python_for_plan(self.plan)), "-m", "moonseg.evaluate_public_test", "--config", str(config_path),
                 "--checkpoint", str(checkpoint), "--weights", "model", "--checkpoint-policy", "final_epoch",
                 "--data-root", str(local_path(self.plan["public_test"]["data_root"])),
                 "--manifest", str(local_path(self.plan["public_test"]["manifest"])), "--profile", profile,
                 "--output", record["score_path"]]
+            if job.get("evaluation_precision"):
+                command += ["--precision", job["evaluation_precision"], "--progress-every", "100"]
             self.launch(f"{name}_{profile}", command, Path(record["log_path"]),
-                        environment([gpu], self.plan["expected_gpu_uuids"], evaluation=True), locks)
+                        environment([gpu], self.plan["expected_gpu_uuids"], evaluation=True,
+                                    python=python_for_plan(self.plan)), locks)
         for profile in PROFILES:
             self.wait_stage(f"{name}_{profile}")
         results = self.verify_tests(job)
@@ -502,8 +825,9 @@ def main():
     if args.dry_run:
         ready, message = predecessor_ready(plan)
         print(json.dumps(dict(plan=plan, ready=ready, dependency=message,
-            state_dir=str(plan_path.with_name(plan_path.stem + ".state")), python=str(PYTHON), cwd=str(ROOT),
-            training_environment={key: value for key, value in environment(plan["gpus"], plan["expected_gpu_uuids"]).items()
+            state_dir=str(plan_path.with_name(plan_path.stem + ".state")), python=str(python_for_plan(plan)), cwd=str(ROOT),
+            training_environment={key: value for key, value in environment(plan["gpus"], plan["expected_gpu_uuids"],
+                python=python_for_plan(plan)).items()
                 if key in ("CUDA_VISIBLE_DEVICES", "NCCL_P2P_DISABLE", "PYTHON", "PYTHONPATH", "TORCH_EXTENSIONS_DIR")},
             test_profiles=PROFILES, checkpoint_policy="final_epoch", expected_public_samples=5004), indent=2))
         return 0

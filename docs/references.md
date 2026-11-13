@@ -91,6 +91,6 @@ Wu 报告的其他设置：增强为水平翻转、±10° 旋转、亮度/对比
 | SegFormer | 2105.15203v3 | `references/2021_neurips_arxiv_2105.15203v3_segformer.pdf` | LuSNAR 表 V 基线（mIoU 89.96，是原有五个模型中最高的，终稿中低于 SAM2/SAM3），也是表 VII 泛化实验和表 IX 嫦娥实验使用的模型；[training.md](training.md) 中的轻量异构候选 |
 | PointRend: Image Segmentation as Rendering | 1912.08193v2 | `references/2020_cvpr_arxiv_1912.08193v2_pointrend.pdf` | LuSNAR 表 V 基线，月壤（99.07）和天空（99.70）IoU 最高；它在 v3 中最高的撞击坑 IoU 82.45，终稿中被 SAM3 的 85.12 超过 |
 
-TGRS 终稿表 V 新增的 SAM2（arXiv 2408.00714）和 SAM3（arXiv 2511.16719）只作为论文基线登记，没有存档；本仓库不使用这两个模型。
+TGRS 终稿表 V 新增 SAM2（arXiv 2408.00714）和 SAM3（arXiv 2511.16719）。SAM2仍只登记为论文基线；11-10已用Meta原生SAM3及固定预训练权重完成自定义dense适配的公开测试，随后发现后处理协议缺口，不能称为TGRS或Meta官方语义评测复现。SAM3及后续SegEarth-OV-3、FSS-SAM3、SegRAG、ActiveSAM、CoCo-SAM3、DCR-SAM的一手出处、固定作者提交和适配边界集中见[SAM3接入方案](sam3_route.md)；原始小源码与来源清单位于`references/sam3_route_20261110/`；未下载新权重，共享前向实现与GPU2固定样本检查见该方案及其证据，新全量尚未运行。
 
 ShadowCast 的 arXiv 号已核对：2610.23440 即 Yoon 等的 *ShadowCast: On-the-Fly Context-Aware Shadow Augmentation for Remote Sensing Image Segmentation*（当前 v2），与 [augmentation_research.md](augmentation_research.md#文献证据) 引用的是同一篇。已对照 v2 正文核实 DeepLabV3+ 在 LoveDA 上 43.29→44.89、RandomShadow 43.67，以及表 S1 默认阴影长度 (5, 30)、衰减 (0.5, 0.8)；该文档中的其余数字（10 种架构、OCRNet、InternImage 增益）没有逐一核对。

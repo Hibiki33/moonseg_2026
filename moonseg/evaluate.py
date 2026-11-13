@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import argparse
+import json
+import time
 
 import torch
 import torch.distributed as dist
@@ -37,7 +39,7 @@ def _single_forward(inference, image):
 
 @torch.inference_mode()
 def evaluate_model(model, dataset, device, inference, amp="none", rank=0, world_size=1, num_workers=2,
-                   indices=None, criterion=None):
+                   indices=None, criterion=None, progress_every=0):
     """Evaluate a raw or DDP-wrapped model on dataset[indices] (default: all records).
 
     With a criterion, result["val_loss"] is its total training loss (final plus auxiliary layers,
@@ -56,6 +58,7 @@ def evaluate_model(model, dataset, device, inference, amp="none", rank=0, world_
     scene_metrics = {scene: SegmentationMetrics(device=device) for scene in scenes}
     loss_totals = torch.zeros(2, device=device, dtype=torch.float64)  # loss sum, sample count
     sync_num_masks = criterion.sync_num_masks if criterion is not None else None
+    started = time.monotonic()
     try:
         if criterion is not None:
             # Ranks evaluate different sample counts (e.g. 800/799 of 1599), so the criterion's
@@ -66,7 +69,7 @@ def evaluate_model(model, dataset, device, inference, amp="none", rank=0, world_
             if device.type == "cuda":
                 with torch.cuda.device(device):
                     torch.cuda.manual_seed(VALIDATION_LOSS_SEED)
-            for batch in loader:
+            for evaluated_count, batch in enumerate(loader, 1):
                 image = batch["images"].to(device, non_blocking=True)
                 target = batch["targets"].to(device, non_blocking=True)
                 if criterion is not None and _single_forward(inference, image):
@@ -85,6 +88,9 @@ def evaluate_model(model, dataset, device, inference, amp="none", rank=0, world_
                     loss_totals[1] += 1
                 metrics.update(prediction, target)
                 scene_metrics[batch["scenes"][0]].update(prediction, target)
+                if progress_every and rank == 0 and (evaluated_count == 1 or evaluated_count % progress_every == 0):
+                    print(json.dumps({"evaluated_samples": evaluated_count, "expected_samples": len(loader),
+                                      "elapsed_seconds": round(time.monotonic() - started, 2)}), flush=True)
     finally:
         if criterion is not None:
             criterion.sync_num_masks = sync_num_masks

@@ -23,3 +23,6 @@ __pycache__/
 .env.*
 !.env.example
 /references
+
+# Temporary agent edit files
+*.da3tmp

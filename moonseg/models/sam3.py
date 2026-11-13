@@ -78,7 +78,12 @@ class SAM3Semantic(nn.Module):
         return super()._apply(fn, recurse=recurse)
 
     @torch.inference_mode()
-    def forward(self, images):
+    def iter_grounding(self, images):
+        """Yield image/class indices and native outputs, sharing each image encoding.
+
+        Only images enter this API. Each class gets independent empty geometry;
+        consumers must reduce outputs before advancing rather than retain masks.
+        """
         if self.training or any(module.training for module in self.model.modules()):
             raise RuntimeError("SAM3 and all of its modules must remain in eval mode")
         if images.ndim != 4 or images.shape[0] < 1 or images.shape[1] != 3:
@@ -92,7 +97,7 @@ class SAM3Semantic(nn.Module):
         # without the one-byte truncation error of a float-to-uint8 cast.
         pixels = ((images.float() * self.input_std + self.input_mean).clamp(0, 1) * 255).round()
         pixels = pixels.to(torch.uint8)
-        cache_key = (str(images.device), torch.is_autocast_enabled(images.device.type),
+        cache_key = (tuple(self.prompts), str(images.device), torch.is_autocast_enabled(images.device.type),
                      torch.get_autocast_dtype(images.device.type))
         if cache_key not in self._text_cache:
             self._text_cache[cache_key] = tuple(
@@ -100,11 +105,9 @@ class SAM3Semantic(nn.Module):
             )
         text_outputs = self._text_cache[cache_key]
         processor = self.processor_class(self.model, resolution=self.native_resolution, device=images.device)
-        batch_scores = []
-        for image in pixels:
+        for image_index, image in enumerate(pixels):
             state = processor.set_image(image)
-            class_scores = []
-            for text_out in text_outputs:
+            for class_index, text_out in enumerate(text_outputs):
                 # Each prompt starts from the same image features and an empty
                 # geometric prompt. No earlier class prediction is reused.
                 backbone_out = dict(state["backbone_out"])
@@ -113,13 +116,24 @@ class SAM3Semantic(nn.Module):
                     backbone_out=backbone_out, find_input=processor.find_stage,
                     geometric_prompt=self.model._get_dummy_prompt(), find_target=None,
                 )
-                dense = outputs.get("semantic_seg")
-                if dense is None or dense.ndim != 4 or tuple(dense.shape[:2]) != (1, 1):
-                    raise RuntimeError("Official SAM3 did not return its Bx1xHxW dense semantic_seg logits")
-                dense = F.interpolate(dense.float(), size=(height, width), mode="bilinear", align_corners=False)
-                class_scores.append(dense.sigmoid())
-            batch_scores.append(torch.cat(class_scores, dim=1))
-        return {"semantic_scores": torch.cat(batch_scores, dim=0)}
+                yield image_index, class_index, outputs
+
+    @torch.inference_mode()
+    def forward(self, images):
+        # Preserve the historical FP32-resize/sigmoid path exactly. The separate
+        # multimode evaluator consumes the same raw generator without rerunning it.
+        if images.ndim != 4 or images.shape[0] < 1 or images.shape[1] != 3:
+            raise ValueError("SAM3 expects a nonempty batch of normalized RGB BCHW images")
+        batch_scores = [[] for _ in range(images.shape[0])]
+        height, width = images.shape[-2:]
+        for image_index, _, outputs in self.iter_grounding(images):
+            dense = outputs.get("semantic_seg")
+            if dense is None or dense.ndim != 4 or tuple(dense.shape[:2]) != (1, 1):
+                raise RuntimeError("Official SAM3 did not return its Bx1xHxW dense semantic_seg logits")
+            dense = F.interpolate(dense.float(), size=(height, width), mode="bilinear", align_corners=False)
+            batch_scores[image_index].append(dense.sigmoid())
+        return {"semantic_scores": torch.cat([torch.cat(scores, dim=1) for scores in batch_scores], dim=0)}
+
 
 
 def build_sam3(config, load_weights=True):

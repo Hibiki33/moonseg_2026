@@ -9,6 +9,9 @@ def build_model(config, load_backbone=True):
     architecture = settings.get("architecture", "dinov3_mask2former")
     if architecture == "dinov3_mask2former":
         return _adapter_model(config, load_backbone=load_backbone)
+    if architecture == "da3_dpt_mask2former":
+        from .da3_dpt_mask2former import build_da3_dpt_mask2former
+        return build_da3_dpt_mask2former(config, load_backbone=load_backbone)
     if architecture == "segformer_b5":
         from .segformer import build_segformer
         return build_segformer(settings, load_weights=load_backbone)
@@ -23,7 +26,7 @@ def build_model(config, load_backbone=True):
 
 def build_criterion(config):
     architecture = config.get("model", {}).get("architecture", "dinov3_mask2former")
-    if architecture == "dinov3_mask2former":
+    if architecture in {"dinov3_mask2former", "da3_dpt_mask2former"}:
         return _mask2former_criterion(config)
     if architecture == "sam3":
         raise ValueError("SAM3 is an inference-only baseline and has no training criterion")

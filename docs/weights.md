@@ -76,3 +76,11 @@ ViT-H+ 使用 SwiGLU（gated）MLP：Transformers 配置为 `use_gated_mlp: true
 用户要求先下载权重，已完成后再启动训练。资产在`ckpts/da3mono-large/`（真实目录disk02），包含`model.safetensors`、官方模型配置/模型卡及`source.json`。下载来源为[ModelScope depth-anything/DA3MONO-LARGE](https://modelscope.cn/models/depth-anything/DA3MONO-LARGE)，修订`ad5c2cd9fd6245ce3591227b4c53fea4b20bb240`；官方HF模型元数据修订`f465978e618db8cc79c83b8bbf24964857db1875`。模型卡许可为Apache-2.0。
 
 文件1,336,734,448字节，406个F32张量、334,171,394参数；模型配置、键/形状、参数总量及文件长度与官方HF元数据一致，未另下载HF整文件做逐字节对照。分割模型只加载其中342个encoder张量/304,367,616参数，排除64个深度head张量。源码固定为官方仓库修订`3d835ec1a5802d64a8b8b15f817a1ab54809bfe4`，最小未改动源码与许可证保存在`third_party/depth_anything_3/`；完整稀疏checkout在disk02的references。详细CPU加载与回载证据见[evidence/da3mono_verification_20261108.json](evidence/da3mono_verification_20261108.json)。
+
+## DA3-LARGE-1.1（独立DPT融合分割路线）
+
+资产位于 `ckpts/da3-large-1.1/`，实际目录为 `/home/disk02/wjj/moonseg/checkpoints/da3-large-1.1/`，包括原始 `model.safetensors`、配置、模型卡及 `source.json`。权重来自 [ModelScope depth-anything/DA3-LARGE-1.1](https://modelscope.cn/models/depth-anything/DA3-LARGE-1.1)，固定修订 `36524905cae6200ad00b4b085a9fdde51db9842b`；对应[官方HF仓库](https://huggingface.co/depth-anything/DA3-LARGE-1.1)，模型卡声明 Apache-2.0。ModelScope是下载来源，未另下载HF整文件做逐字节对比。
+
+文件为 **1,643,843,860字节**，包含637个FP32张量、410,941,767个元素。使用现有 `tools.download_ranges.download_ranges` 完成HTTP分段下载，核对每段 `Content-Range`、文件总长度、safetensors元数据和原生严格加载；没有计算文件摘要。仅提取 `model.backbone.pretrained.*` 的 **407个张量/304,373,760参数**，`strict=True` 无缺键、无多键；保留camera token、QK norm、RoPE和local/global拼接。其余230个预训练张量不加载，DPT融合和语义decoder随机初始化，避免将额外几何head预训练混入首版对照。
+
+该权重属于any-view的DA3-LARGE-1.1，不能与DA3MONO/DA3METRIC文件互换。配置使用 `architecture: da3_dpt_mask2former`，完整结构与CPU验证见 [model.md](model.md#independent-da3-large-11-segmentation)。官方 `dpt.py` 和 `model/utils/head_utils.py` 从与encoder相同的源码修订原样纳入 `third_party/depth_anything_3`，来源清单保留文件说明；其 `addict==2.4.0` 依赖已纳入uv锁文件，现有torch/CUDA版本未升级。

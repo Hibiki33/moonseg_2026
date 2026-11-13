@@ -1,0 +1,141 @@
+{
+  "status": "passed",
+  "date": "2026-11-10",
+  "scope": "CPU boundary checks + fixed audit18 on GPU2 + separate old/new and author formula parity on two fixed audit samples. No full 5004 run.",
+  "cpu": {
+    "status": "passed",
+    "device": "cpu",
+    "checks": [
+      "Empty retained instances yield I=0; q>t is strict; raw masks resize before sigmoid.",
+      "Score equal to threshold is excluded.",
+      "Lowest-ID tie handling; uncovered instance pixels are reject/FN; 5x6 IoU includes them.",
+      "Full all-zero and nonfinite scores fail explicitly.",
+      "FP32 and BF16 synthetic postprocessing is chunk-size invariant.",
+      "Mixed native mask/score dtype retains author scalar type promotion.",
+      "Legacy pre-refactor adapter parity on two non-square inputs; actual prompt tuple invalidates cache; class-order reversal is equivariant."
+    ],
+    "cuda_initialized": false
+  },
+  "gpu_subset_summary": {
+    "scope": "subset_diagnostic",
+    "evaluated_samples": 18,
+    "grounding_calls": 90,
+    "scene_counts": {
+      "2": 6,
+      "4": 6,
+      "9": 6
+    },
+    "mode_mIoU_percent": {
+      "legacy_dense": 69.1701888638156,
+      "dense_presence": 67.85925542445193,
+      "segearth_t050": 67.6741651555996,
+      "segearth_t030": 65.21130840456554,
+      "single_presence_t050": 67.65600723255595
+    },
+    "instance": {
+      "instance_t050": {
+        "coverage_percent": 27.5678899553087,
+        "all_reject_images": 0,
+        "crater_binary": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 113120,
+          "IoU": 0.0,
+          "precision": null,
+          "recall": 0.0
+        }
+      },
+      "instance_t030": {
+        "coverage_percent": 29.652447170681423,
+        "all_reject_images": 0,
+        "crater_binary": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 113120,
+          "IoU": 0.0,
+          "precision": null,
+          "recall": 0.0
+        }
+      }
+    },
+    "crater_presence": {
+      "mean": 0.033152262369791664,
+      "max": 0.0693359375,
+      "retained_t050": 0,
+      "retained_t030": 0
+    },
+    "native_dtype_example": {
+      "raw_dense": "torch.bfloat16",
+      "raw_masks": "torch.bfloat16",
+      "presence": "torch.bfloat16",
+      "r": "torch.bfloat16",
+      "q": "torch.bfloat16",
+      "resized_native_dense": "torch.float32",
+      "resized_retained_masks": null,
+      "accumulator": "torch.float32"
+    },
+    "peak_allocated_bytes": 4192270848
+  },
+  "parity": {
+    "samples": [
+      {
+        "scene": 2,
+        "sample_id": "1693278813069238272",
+        "legacy_max_abs_difference": 0.0,
+        "legacy_label_mismatch_pixels": 0
+      },
+      {
+        "scene": 9,
+        "sample_id": "1692602021661174528",
+        "legacy_max_abs_difference": 0.0,
+        "legacy_label_mismatch_pixels": 0
+      }
+    ],
+    "author_prompt_comparisons": 10,
+    "max_F_difference": 0.0,
+    "max_I_difference": 0.0
+  },
+  "gpu_released": {
+    "physical_index": 2,
+    "uuid": "GPU-aec3a52c-8629-106e-3b66-a374628971a8",
+    "memory_used_MiB": 16,
+    "utilization_percent": 0,
+    "compute_processes": [],
+    "at": "2026-11-10T03:33:24.702309+00:00",
+    "both_shared_locks_available": true
+  },
+  "artifact_paths": {
+    "subset": "/home/disk02/wjj/moonseg/runs/verification/sam3_multimode_20261110/audit18.scores.json",
+    "parity": "/home/disk02/wjj/moonseg/runs/verification/sam3_multimode_20261110/parity.json",
+    "cpu": "/home/disk02/wjj/moonseg/runs/verification/sam3_multimode_20261110/cpu_checks.json",
+    "log": "/home/disk02/wjj/moonseg/runs/verification/sam3_multimode_20261110/audit18.log"
+  },
+  "full_test_status": "not_started",
+  "final_cpu_validation": {
+    "status": "passed",
+    "checks": [
+      "All changed Python source compiles without writing test scripts.",
+      "Saved audit18 5+2 results revalidated against exact 6/6/6 counts and confusion totals.",
+      "Invalid legacy forward input shape raises ValueError before indexing.",
+      "Changed document local links resolve and git diff --check passes."
+    ],
+    "post_gpu_changes": [
+      "Restore explicit invalid-input shape guard in legacy forward; normal-input arithmetic unchanged.",
+      "Add preprocessing and pretrained-mirror provenance fields to future result JSON; decoding unchanged."
+    ]
+  },
+  "implementation_files": {
+    "moonseg/models/sam3.py": {
+      "bytes": 10732,
+      "mtime_ns": 1794281721521132157
+    },
+    "moonseg/models/sam3_semantic.py": {
+      "bytes": 6453,
+      "mtime_ns": 1794281328987887119
+    },
+    "moonseg/evaluate_sam3_multimode.py": {
+      "bytes": 25726,
+      "mtime_ns": 1794281899652132978
+    }
+  }
+}

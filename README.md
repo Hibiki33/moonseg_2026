@@ -2,16 +2,18 @@
 
 LuSNAR 月面五类语义分割。类别编号固定为月壤 0、岩石 1、撞击坑 2、山体 3、天空 4；输入仅左相机 RGB。比赛规则见 [challenge.md](challenge.md)。
 
-## 当前状态（2026-11-10）
+## 当前状态（2026-11-13）
 
-代码与Git的开发副本位于 `/home/disk02/wjj/moonseg/code`。原A/B与DA3训练及测试已完成，当前全六场景任务的Python、源码、CUDA扩展、数据和输出均走disk02本地路径。
+代码与Git的主工作区为 `/home/nas_1/wjj/moon`，`/home/disk02/wjj/moonseg/code` 为本地运行副本。两处的历史修改已合并；后续编辑、提交和推送以主工作区为准，再同步运行副本。训练和测试仍从disk02启动，Python、CUDA扩展、数据和输出也在本地盘，操作约定见 [AGENTS.md](AGENTS.md)。
 
-- 当前训练：新增全六场景DINOv3联合微调，0/7按10→25轮、4/5按15→20轮，10轮与15轮已启动；冻结10/15/20/25轮及全部8项普通/TTA测试已完成，2/3空闲。全部8002张、无val，各预算独立初始化，训完只测last普通/TTA。仅每轮覆盖一个含完整微调骨干的last用于恢复，不存独立中间epoch文件，见[训练说明](docs/training.md#全六场景联合微调11-09晚追加)。
-- 全六场景冻结结果：20轮的场景9 TTA最高89.973%，25轮的三场景均值最高92.859%；按基线页1:1:2估算为92.025%与92.107%，差距仅0.083个百分点。完整[四预算对照](docs/evidence/fulltrain_frozen_20261110/summary.json)已归档；联合微调的最优轮数仍待其自身结果。
-- 本批GPU授权：新联合微调只使用0/7和4/5；原2/3任务及SAM3初始测试已结束，当前2/3空闲；1/6不追加任务。
-- 新增基线：SegFormer-B5、SAM3和官方轻量DeepLabV3+/MobileNetV3-Large均接入第一手源码；SAM3固定文本普通推理已测完5004张，场景2/4/9 mIoU为70.808/68.087/66.563%，均值68.486%，整体撞击坑IoU仅3.235%。随后审计发现该版dense后处理遗漏presence且不符合Meta官方语义评测流程，这些数值仅保留为旧适配的诊断结果；审计及结果见[实验记录](docs/roadmap.md#实验记录)。GPU2已释放，B5与轻量基线的训练轮数待定，配置中`epochs: null`且不排训练。实现与参数量见[模型说明](docs/model.md#first-party-baselines)，准备配方见[训练说明](docs/training.md#基线准备与sam3推理)。
-- 默认配方：冻结 DINOv3 ViT-L + ViT-Adapter + Mask2Former，1024×1024 RRC，decoder6层/hidden256，梯度裁剪 **0.01**，每卡8×两卡×累积4=有效batch64。五场景历史对照从 [默认模板](configs/dnv3_va_m2f_vitl16_default.yaml) 派生；本批全量训练使用上述独立配置，历史配置保持原值；详见 [训练说明](docs/training.md)。
-- 已测最佳路线：DINOv3从分割训练第一步联合微调骨干与Adapter/head。公开测试TTA的best15在场景2/4/9为95.146/93.840/91.401%，均值93.462%；last25为95.275/93.409/90.689%，均值93.124%，两种选择口径均优于对应冻结基线。各场景、普通/TTA及best/last完整对照见[路线记录](docs/roadmap.md#实验记录)。新全量训练仍只取last，路线收益以公开测试为准。
+- 已完成对照：截至11-10，全六场景DINOv3联合微调10/15/20/25轮及8项last普通/TTA均已完成，当时选择15轮为参考。后续低骨干学习率的DINOv3与DA3预算配置、场景9诊断及队列改动现已一并纳入仓库。FP32训练于11-11取消，不应按旧计划恢复；具体任务状态以 `runs/plans/` 中各计划状态为准。
+- DA3METRIC-LARGE：25轮低骨干学习率联合训练使用 [Metric配置](configs/da3metric_va_m2f_vitl14_fulltrain_joint_bblr003_e25.yaml)，任务计划在 `runs/plans/2026-11-13/da3metric_e25/`。
+- 独立DA3-LARGE-1.1：原生编码器→DPT融合→Mask2Former查询解码器已实现，采用 [独立配置](configs/da3_dpt_m2f_large11_fulltrain_joint_bblr003_e25.yaml)，只重算backbone，完整保存微调权重。已通过CPU功能检查，GPU容量与完整训练尚未执行，详见 [模型说明](docs/model.md#independent-da3-large-11-segmentation)。
+- 全六场景冻结结果：20轮的场景9 TTA最高89.973%，25轮的三场景均值最高92.859%；完整[四预算对照](docs/evidence/fulltrain_frozen_20261110/summary.json)已归档，保留为联合微调的历史对照。
+- 本批任务：联合微调四预算、SegFormer-B5/轻量基线及FP32推理对照均已完成。精度对照使用本次授权的1/6，复用已有BF16分数；后续启动须重新核对实际GPU占用和共享锁，训练/测试均使用disk02本地路径。
+- 新增基线：SegFormer-B5与MobileNetV3-Large/DeepLabV3+均已完成15轮及last普通/TTA，TTA等权mIoU分别为90.927%和88.340%，主线为94.462%。SAM3冻结文字提示路线暂缓，原dense及融合实验不作为LuSNAR论文结果复现；实现与参数量见[模型说明](docs/model.md#first-party-baselines)。
+- 默认配方：**DINOv3 ViT-L + ViT-Adapter + Mask2Former联合微调15轮**，从第一步共同训练骨干与新Adapter/head，学习率分别2e-5、2e-4；1024×1024 RRC，decoder6层/hidden256，梯度裁剪 **0.01**，每卡4×两卡×累积8=有效batch64。六场景8002张、无val、最终last；[默认模板](configs/dnv3_va_m2f_vitl16_default.yaml)已设置epochs=15，总计1875次更新。
+- 11-10参考权重：全六场景联合微调last15，BF16 TTA在公开2/4/9全5004张为95.708/96.347/91.332%，等权均值94.462%，1:1:2估算93.680%；20/25轮TTA均值为94.274%/94.191%，场景9退化。纯FP32与允许TF32的FP32仅提升约0.002–0.004个百分点，继续用BF16。完整结果见[路线记录](docs/roadmap.md#实验记录)。
 - clip0.01、decoder9、width384及各自末轮评估均已完成。width384的场景9 TTA87.892%低于同clip0.01的width256基线88.021%，三个公开场景mIoU均下降，默认保持6层/width256/clip0.01。以上为10-29已完成实验；原A/B和DA3按原划分完成；本批全量训练按上文加入场景5并比较10/15/20/25轮。状态与结果见 [路线记录](docs/roadmap.md)。
 - 原DINO批次已完成全部10项公开测试。阶段解冻从clip001 best15开始：阶段best2场景9 TTA88.806%、均值92.077%；阶段last5为88.536%、92.082%，继续训练未改善场景9。原测试结果保留，不重复启动。
 - 冻结DA3MONO已完成25轮及4项公开测试：best14场景9 TTA88.049%、均值91.078%；last25为87.386%、91.386%，当前替换方案不优于对应冻结DINOv3。原误启动的DA3全量微调记录保留，不用于结果比较。
@@ -152,8 +154,10 @@ uv run --no-sync python tools/label_stats.py --manifest data/manifests/dev_train
 # 一次性：编译官方可变形注意力 CUDA 扩展（需要一张可见 GPU，约 40 秒）
 bash scripts/build_ops.sh
 
-# ViT-L/16 默认模板：PCI 0/7，场景5验证；新实验须复制配置并设置唯一output_dir
-PYTHON=.venv/bin/python bash scripts/train.sh configs/dnv3_va_m2f_vitl16_default.yaml
+# ViT-L/16 联合微调15轮主线：复制默认模板，设置唯一output_dir后启动
+cp configs/dnv3_va_m2f_vitl16_default.yaml configs/my_joint_experiment.yaml
+# 编辑 configs/my_joint_experiment.yaml 的output_dir后执行；默认15轮、最终last
+PYTHON=.venv/bin/python bash scripts/train.sh configs/my_joint_experiment.yaml
 
 # ViT-B/16 基线：PCI 5/6。该卡对的 PCIe P2P 有故障，必须关闭 NCCL P2P
 CUDA_VISIBLE_DEVICES=5,6 NCCL_P2P_DISABLE=1 PYTHON=.venv/bin/python \
@@ -180,7 +184,7 @@ uv run --no-sync python tools/package_submission.py \
   --predictions runs/predictions --archive submissions/predictions.zip
 ```
 
-推理默认整图、单尺度、无翻转 TTA，输出恢复原输入尺寸。预测 ZIP 只包含 `test/Moon_2/submission/*.png`、`test/Moon_4/submission/*.png`、`test/Moon_9/submission/*.png`；完整评分口径与一次提交限制见 [challenge.md](challenge.md)，本地指标定义见 [docs/metrics.md](docs/metrics.md)。新训练保存 `last.pt`（完整恢复状态）与 `best_miou.pt`、`best_loss.pt`（仅权重，不能用于 `--resume`）；旧 B/L 的最佳文件名为 `best.pt`。它们不含冻结的 DINOv3 张量，评估、预测和复现包都需要 `model.backbone_weights` 指向的预训练文件（[docs/model.md](docs/model.md#checkpoints)）。最终在全部训练场景上重训的流程见 [docs/roadmap.md](docs/roadmap.md#最终流程方案冻结后)。仓库同时提供顶层 `train.py`、`predict.py` 作为复现入口。
+推理模板默认整图、单尺度，公开评估同时比较0.9/1.0/1.1+水平翻转TTA，输出恢复原输入尺寸。预测 ZIP 只包含 `test/Moon_2/submission/*.png`、`test/Moon_4/submission/*.png`、`test/Moon_9/submission/*.png`；评分口径见 [challenge.md](challenge.md)，本地指标见 [docs/metrics.md](docs/metrics.md)。主线无val，每轮覆盖一个 `last.pt`，保存微调后的完整骨干、Adapter/head及优化器等恢复状态，只评完整预算末轮。历史有val实验的 `best_miou.pt`、`best_loss.pt` 仅含权重，不能用于恢复；冻结实验省略冻结骨干张量，需配合原生预训练文件加载（[docs/model.md](docs/model.md#checkpoints)）。最终流程见 [docs/roadmap.md](docs/roadmap.md#最终流程方案冻结后)。仓库同时提供顶层 `train.py`、`predict.py` 作为复现入口。
 
 公开LuSNAR场景2/4/9共5004张使用 `moonseg.evaluate_public_test` 评估，标签不进入训练。11-08批次的DINO父权重/A/B共10项与DA3共4项现已全部完成；[完整归档](docs/evidence/public_development_20261109/summary.json)保留每项权重、轮次、选择口径及各场景指标。clip001旧last复用既有结果，阶段微调的last5与父last25初始化和预算不同，分别标明。新全六场景任务关闭验证，只在完整训练后评last普通/TTA，状态见[交接文档](docs/handover.md#4-正在跑与排队2026-11-09)。所有公开开发分数均不是官方加权成绩。
 

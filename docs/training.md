@@ -1,47 +1,49 @@
 # 训练配方
 
-更新：2026-11-09。本批全六场景预算对照见下文；原五场景配方以 [`configs/dnv3_va_m2f_vitl16_default.yaml`](../configs/dnv3_va_m2f_vitl16_default.yaml) 为模板：冻结ViT-L、RRC、梯度裁剪0.01、decoder6层/hidden_dim256，五场景训练、场景5验证、有效batch64。复制模板时设置独立输出目录；25轮只是已测参考预算，最合适轮数尚待校准。当前保留独立场景5验证集，可以按验证mIoU或验证loss选择best权重；后续场景5并入训练、没有独立验证集时，使用末轮last.pt。best_loss.pt指最低验证loss，不按训练loss选择模型。完整跑完训练预算与保存、选择验证best并不冲突；10-29的末轮对照是已执行的一组实验，不是所有开发实验的硬性选权重规则。现有结果见 [roadmap.md](roadmap.md#实验记录)。历史B/L的80轮、warmup/EMA配方及其YAML保留用于追溯，不能再当成新训练默认。
+更新：2026-11-10，用户在10/15/20/25轮完整公开测试结束后，确认主线为**联合微调15轮、取last**。[默认模板](../configs/dnv3_va_m2f_vitl16_default.yaml)从原生DINOv3预训练与新Adapter/head开始，第一步即共同优化，训练六场景8002张、无val，每轮125次更新，共1875次更新。后续实验复制该配方并设置独立输出目录；默认BF16训练与推理，保留普通/TTA对照。冻结clip001及原五场景实验保留为历史对照，不修改其YAML或运行配置。旧best_loss指验证loss，不按训练loss选择模型。完整结果见[roadmap.md](roadmap.md#实验记录)。
 
 ## 配方与理由
 
 | 项目 | 当前值 | 理由 |
 |---|---|---|
-| 模型 | 冻结 DINOv3 ViT-L/16（LVD-1689M）+ 官方 ViT-Adapter + Mask2Former；100 query、hidden 256、pixel encoder 6 层、decoder 6 层 | 当前主线；decoder9的末轮对照未提升，结构见 [model.md](model.md) |
-| 骨干 | `freeze_backbone: true`、`unfreeze_last_blocks: 0` | 先把冻结方案训到收敛；部分解冻是候选 |
-| 输入 | `train_mode: random_resize_crop`，1024×1024 | 沿用L1基线；未加入场景5训练 |
+| 模型 | DINOv3 ViT-L/16（LVD-1689M）+ 官方 ViT-Adapter + Mask2Former联合微调；100 query、hidden 256、pixel encoder 6 层、decoder 6 层 | 全六场景四预算及重训基线完整test支持，结构见 [model.md](model.md) |
+| 骨干 | `freeze_backbone: false`、`unfreeze_last_blocks: 0`，全骨干可训练 | 从分割训练第一步联合优化，非冻结训练后的阶段解冻 |
+| 输入 | `train_mode: random_resize_crop`，1024×1024 | 沿用已测联合微调配置 |
 | 几何增强 | resize_range 0.5–2.0，1024裁剪，cat_max_ratio0.75，水平翻转p=0.5 | 已完成L0/L1/L2比较，详细类别取舍见roadmap |
 | 光度增强 | 亮度加性 U[−32,32]、对比度乘性 U[0.5,1.5]，各自独立 p=0.5；随后 `pixel_floor: 22` | DINOv3/MMSeg PhotoMetricDistortion 的标准强度；下限等于渲染器黑位 22 |
 | 其余增强 | gamma、阴影、尺度抖动的概率为 0 | 已实现，默认关闭（[augmentation_research.md](augmentation_research.md)） |
 | 归一化 | ImageNet mean/std | DINOv3 预训练输入约定 |
 | 损失 | Hungarian 匹配；CE / mask BCE / Dice = 2 / 5 / 5，no-object 0.1，12544 个采样点，每个解码层深监督 | Mask2Former 原始配方 |
-| 有效 batch | 每卡 8 × 2 卡 × 累积 4 = 64；`min_effective_batch: 64` | 用户要求不低于 64；每卡 8 在 48 GB 卡上可运行，ViT-L 实际每卡约 45.6 GB（[gpu_topology.md](gpu_topology.md#显存与吞吐容量)） |
-| 优化器 | AdamW，lr 2e-4，weight decay 0.05（偏置、一维张量和嵌入表不衰减）；`backbone_lr_multiplier: 0.1` 只在 ViT 可训练时生效 | Mask2Former 原配方 batch 16 / lr 1e-4，按 √(64/16) 缩放到 2e-4 |
+| 有效 batch | 每卡 4 × 2 卡 × 累积 8 = 64；`min_effective_batch: 64` | 沿用已运行的48GB双卡联合微调配置；冻结对照为8×2×4 |
+| 优化器 | AdamW，Adapter/head lr2e-4、骨干lr2e-5，`backbone_lr_multiplier: 0.1`；weight decay0.05（偏置、一维张量和嵌入表不衰减） | 已测联合微调配方 |
 | 调度 | 无warmup，poly0.9按预设总更新数降到0 | 不同训练轮数的学习率轨迹不同；完整短训练不能由长训练中途快照替代 |
 | 梯度裁剪 | 全局 L2 **0.01**，日志记录裁剪前范数 | 用户10-29指定后续默认；省略grad_clip时解析为0.01，显式0禁用，历史显式0.1保持 |
-| 数值 | BF16 autocast + TF32，`cudnn_benchmark: true`；匹配、损失与可变形注意力在 FP32 | 速度；数值语义见 model.md |
+| 数值 | BF16 autocast + TF32，`cudnn_benchmark: true`；匹配、损失与可变形注意力在 FP32 | 完整FP32推理对照仅提升约0.002–0.004个百分点，耗时明显增加；数值语义见 model.md |
 | 可变形注意力 | `deformable_attention: auto`，选中已编译的官方 CUDA 扩展 | 比纯 PyTorch 路径省约 10.7 GiB、快约 31%（[gpu_topology.md](gpu_topology.md#显存与吞吐容量)） |
 | 激活检查点 | `gradient_checkpointing: true` | 关闭只快约 8%，但每卡多约 9 GiB |
 | EMA | 不使用（2026-10-22 移除；配置含 `train.ema` 会报错） | 所查官方分割配方都不用 EMA；两条基线中它只平滑了漂移的轨迹（见[验证协议](#验证协议)） |
-| 训练长度 | 模板25轮，五场景2500次更新；最优预算未定 | 用户暂缓12/18轮搜索，当前先做width384的25轮单变量容量消融 |
+| 训练长度 | **15轮，1875次更新**；`train.epochs: 15` | 用户11-10确认；四预算中15轮TTA等权均值及1:1:2估算最高 |
 | 采样 | `sampling.mode: uniform`，每轮重新打乱 | 稀有类采样已实现，作为候选 |
-| 数据 | 当前配置仍为开发池 `dev_train.json`（场景1/3/6/7/8，6403帧）训练，`dev_val.json`（场景5，1599帧）验证 | 11-08已核对官方包内容完全一致；用户确认沿用当前数据与划分，已有训练测试结论有效，见 [data.md](data.md#官方数据一致性核对) |
-| 验证 | 每轮验证 mIoU 与验证损失；中间轮 `eval_stride: 2`（800 帧），最后一轮全量 1599 帧 | 隔帧抽样的类别占比偏差 ≤0.4%（[data.md](data.md#时间冗余)） |
+| 数据 | `dev_final_train.json`，场景1/3/5/6/7/8，共8002帧 | 已核对与官方训练包一致，见 [data.md](data.md#官方数据一致性核对) |
+| 验证 | `validate: false`、`val_manifest: null`、`val_scenes: []` | 场景5已入训练，不再选择验证best；结果由公开2/4/9全量测试产生 |
 | 推理 | 模板为整图单尺度；公开评估另测0.9/1.0/1.1+翻转TTA | TTA已有正向证据；比较必须使用相同推理设置和权重选择口径 |
-| checkpoint | 每轮覆盖 `last.pt`；验证 mIoU 新高时覆盖 `best_miou.pt`，验证损失新低时覆盖 `best_loss.pt`；`save_every: 0` | 不存冻结骨干；格式见 [model.md](model.md#checkpoints) |
+| checkpoint | 每轮覆盖同一个 `last.pt`，`save_every: 0`，不生成best或独立epoch文件 | 保存全部微调骨干、Adapter/head及完整恢复状态；格式见 [model.md](model.md#checkpoints) |
 | 其他 | seed 42，`num_workers: 4`，`log_every: 10` | 4 个 worker 每 rank 约 21 img/s，远高于训练需求（[gpu_topology.md](gpu_topology.md#显存与吞吐容量)） |
 
 ## Batch 计划
 
-| 训练清单 | 样本数 | 每轮使用 / 跳过 | 每卡 microbatch / 轮 | 更新 / 轮 | 80 epoch 更新数 |
+| 训练清单 | 样本数 | 每轮使用 / 跳过 | 每卡 microbatch / 轮 | 更新 / 轮 | 15 epoch 更新数 |
 |---|---:|---:|---:|---:|---:|
-| `dev_train`（场景 1/3/6/7/8） | 6403 | 6400 / 3 | 400 | 100 | 8000 |
-| 全训练池（场景 1/3/5/6/7/8） | 8002 | 8000 / 2 | 500 | 125 | 10000 |
+| `dev_train`（历史五场景，按当前microbatch4计算） | 6403 | 6400 / 3 | 800 | 100 | 1500 |
+| 全训练池（当前六场景，microbatch4） | 8002 | 8000 / 2 | 1000 | 125 | 1875 |
 
 只执行完整的 64 张累积更新：每轮重新打乱后跳过尾部不足一组的样本，不让最后一次更新变成小 batch；实际数量写入 `batch_plan.json`。DDP 在累积组的最后一次反向传播时同步梯度，再统一 unscale、裁剪和更新；调度器总步数为 epoch 数 × 每轮更新数。恢复训练要求 batch 计划不变。
 
-累积 64 只表示每次优化器更新的图像数，不等价于一次前向 64 张：Adapter 的普通 BatchNorm 按每卡 microbatch（8 张）统计，mask 损失的归一化也按当前分布式 microbatch 的目标数计算。
+累积64只表示每次优化器更新的图像数，不等价于一次前向64张：Adapter普通BatchNorm按每卡microbatch统计，当前联合微调为4张、冻结对照为8张；mask损失也按当前分布式microbatch的目标数归一化。因此两条路线比较属于完整配方比较。
 
 ## 验证协议
+
+以下保留原五场景实验的验证协议；当前主线已将场景5加入训练，关闭验证，仅评完整预算末轮last，不应用下面的best选择规则。
 
 - 训练启动时检查训练与验证的样本 ID、场景互不重叠。
 - 每轮在场景 5 上验证；中间轮按 `(scene, sample_id)` 顺序每 2 帧取 1 帧（800 帧），最后一轮评估全部 1599 帧。`history.jsonl` 记录每轮的 `eval_stride`、`evaluated_samples`、`val_loss`、`miou_ma3`、`best_miou`/`best_miou_epoch`、`best_loss`/`best_loss_epoch`、`saved_best`（本轮写入的最佳文件）与完整的 `validation`（含 `val_loss`）。
@@ -84,13 +86,17 @@
 
 新计划位于`runs/plans/2026-11-09/fulltrain_joint/lane_07.json`与`lane_45.json`，显式`recipe: joint_fullft`、`predecessor: null`；仍先查实时空闲和UUID并取得共享训练/测试锁。4/5训练关闭NCCL P2P，0/7保留已验证P2P；所有单卡评测关闭P2P。旧冻结计划仍保留原卡对、配方与依赖约束。配置及验证见[evidence/joint_fulltrain_configs_20261109.json](evidence/joint_fulltrain_configs_20261109.json)、[调度与保存检查](evidence/joint_fulltrain_verification_20261109.json)，实际启动状态见[启动记录](evidence/joint_fulltrain_launch_20261109.json)。
 
+11-10后继对照仅使用刚释放的GPU4/5，按[队列](../runs/plans/2026-11-10/da3_fp32_joint/lane_45.json)顺序执行[DA3MONO联合微调15轮](../configs/da3mono_va_m2f_vitl14_fulltrain_joint_e15.yaml)及其last普通/TTA，再执行[DINOv3 FP32联合微调15轮](../configs/dnv3_va_m2f_vitl16_fulltrain_joint_fp32_e15.yaml)及其last普通/TTA。两项均从各自原生预训练与新Adapter/head开始，使用全部8002张、无val、每卡4×两卡×累积8=64、1875更新、clip0.01及既定学习率，保存完整微调骨干。DA3训练为BF16；DINO FP32训练为`amp: none`、`tf32: true`，另开启骨干激活重计算以维持相同microbatch。两组测试统一显式`--precision bf16`，各覆盖公开5004张，以区分训练精度与推理精度的影响。4/5全程关闭P2P，不借用其它卡。
+
+FP32原每卡4在48GB卡上显存不足；开启骨干重计算后，通过三次单卡真实数据更新和两次双卡完整累积更新，双卡峰值allocated/reserved为45.374/45.830GiB。DA3同样通过双卡更新，单卡冷启动峰值reserved44.150GiB，后续双卡测试28.908GiB；冷启动与缓存状态不同，不能把后者当作长跑显存上限。所有可训练骨干参数均有梯度且进入保存状态。原始检查位于`runs/verification/da3_fp32_joint_20261110/`；原五场景DA3冻结/误启动记录均保留，新运行不读取它们的权重。
+
 ## 基线准备与SAM3推理
 
-按用户最新安排，仅SAM3排公开测试，SegFormer-B5与官方轻量基线暂不训练。两个[准备配置](../configs/segformer_b5_fulltrain.yaml)及[轻量配置](../configs/deeplabv3plus_mobilenetv3_fulltrain.yaml)的`train.epochs`均为null，直接启动会在初始化CUDA前报错；没有默认25轮或80轮，也没有新增训练计划。训练长度确定后再复制配置、设置唯一输出目录并测实际显存；模板每卡4×双卡×累积8=64只是预置值，尚未做GPU容量测试。
+11-10两组监督基线均已完成15轮及last普通/TTA，使用全部8002张、无val、有效batch64。[B5运行配置](../configs/segformer_b5_fulltrain_e15.yaml)采用每卡2×两卡×累积16，原生实现1024²下每卡4/8显存不足；[轻量运行配置](../configs/deeplabv3plus_mobilenetv3_fulltrain_e15.yaml)采用每卡32×两卡、无累积。普通/TTA等权mIoU分别为B5 90.462%/90.927%、轻量基线87.672%/88.340%，均低于主线15轮94.102%/94.462%。原未定轮数的准备模板保留，复现本轮应使用带e15的运行配置；计划与结果见`runs/plans/2026-11-10/baseline_training/`。
 
-B5保留作者的编码器lr6e-5、head lr6e-4、AdamW衰减0.01与poly1；作者1500步warmup按batch16→64的样本数折为375步。数据增强沿用本项目1024RRC与光度方案，裁剪仍为项目默认0.01。轻量基线准备使用CE1+Dice1、不设类别权重，lr2e-4、衰减0.01；这些系数与学习率并非官方已公开配方。二者均预置全部8002张、无val、最终last，与官方轻量演示使用2400张×10轮、batch16及400张验证不同，未来分数不能称作该演示的严格复现。B5原版SyncBN与轻量原版BN均保留。
+B5保留作者的编码器lr6e-5、head lr6e-4、AdamW衰减0.01与poly1；作者1500步warmup按batch16→64的样本数折为375步。数据增强沿用本项目1024RRC与光度方案，裁剪仍为项目默认0.01。轻量基线准备使用CE1+Dice1、不设类别权重，lr2e-4、衰减0.01；这些系数与学习率并非官方已公开配方。二者均使用全部8002张、无val、最终last，与官方轻量演示使用2400张×10轮、batch16及400张验证不同，本轮分数不能称作该演示的严格复现。B5原版SyncBN与轻量原版BN均保留。
 
-SAM3配置为[`sam3_pretrained.yaml`](../configs/sam3_pretrained.yaml)，由`moonseg.evaluate_pretrained`读取官方预训练权重，固定五类文本、单尺度覆盖公开场景2/4/9全部5004张。输出标为`pretrained_only`，记录源码、权重文件身份、提示词、官方内部1008预处理及混淆矩阵；不伪造best、last或训练轮数。它使用独立uv基线环境，在物理GPU2单卡执行，使用共享GPU锁、物理UUID和`NCCL_P2P_DISABLE=1`。11-10用户要求立即使用已空闲的GPU2后，启动条件改为该卡最后的普通测试成功完成；GPU3末次TTA独立继续，不再等待整组结束。0/7与4/5的现有DINO联合微调照常，1/6不使用。本次计划为`runs/plans/2026-11-10/baselines/sam3.json`，GPU2交接记录在同目录`gpu2_handoff.json`。11-10 01:01:40评估正常退出，完整覆盖5004张，监督进程已确认完成并释放GPU2；总耗时23分45秒（含加载与单图检查），均值3.51张/秒。结果保存在同目录`sam3.state/scores/scores.json`，并[归档到Git](evidence/sam3_public_test_20261110.json)；场景等权mIoU68.486%、mAcc76.051%。按用户决定不追加批量提速实验。随后正确性审计确认dense后处理遗漏presence，且未采用Meta官方论文的实例掩码语义评测流程；上述全量分数只代表旧自定义适配，不作为正确接入SAM3的性能结论。18张固定样本诊断见[协议审计](evidence/sam3_protocol_audit_20261110.json)，本次未修改生产模型、提示词配置或重跑全量。
+SAM3配置为[`sam3_pretrained.yaml`](../configs/sam3_pretrained.yaml)，由`moonseg.evaluate_pretrained`读取官方预训练权重，固定五类文本、单尺度覆盖公开场景2/4/9全部5004张。输出标为`pretrained_only`，记录源码、权重文件身份、提示词、官方内部1008预处理及混淆矩阵；不伪造best、last或训练轮数。它使用独立uv基线环境，在物理GPU2单卡执行，使用共享GPU锁、物理UUID和`NCCL_P2P_DISABLE=1`。11-10用户要求立即使用已空闲的GPU2后，启动条件改为该卡最后的普通测试成功完成；GPU3末次TTA独立继续，不再等待整组结束。0/7与4/5的现有DINO联合微调照常，1/6不使用。本次计划为`runs/plans/2026-11-10/baselines/sam3.json`，GPU2交接记录在同目录`gpu2_handoff.json`。11-10 01:01:40评估正常退出，完整覆盖5004张，监督进程已确认完成并释放GPU2；总耗时23分45秒（含加载与单图检查），均值3.51张/秒。结果保存在同目录`sam3.state/scores/scores.json`，并[归档到Git](evidence/sam3_public_test_20261110.json)；场景等权mIoU68.486%、mAcc76.051%。按用户决定不追加批量提速实验。随后正确性审计确认dense后处理遗漏presence，且未采用Meta官方论文的实例掩码语义评测流程；上述全量分数只代表旧自定义适配，不作为正确接入SAM3的性能结论。旧18张固定样本诊断见[协议审计](evidence/sam3_protocol_audit_20261110.json)。现已接入`moonseg.evaluate_sam3_multimode`，沿用本配置在一次图像/原词前向中计算5组完整五类结果及2组实例覆盖/拒识诊断；GPU2固定18图和旧适配/作者公式对照已通过，[新检查证据](evidence/sam3_multimode_verification_20261110.json)与[完整运行命令](sam3_route.md)已记录，新一轮5004张全量尚未运行。入口自身取得共享训练/测试锁、核对GPU2 UUID与空闲，不改DINO任务、权重或提示词。
 
 ## GPU 放置与启动
 
@@ -186,3 +192,17 @@ SAM3配置为[`sam3_pretrained.yaml`](../configs/sam3_pretrained.yaml)，由`moo
 | SegFormer-B5 | Cityscapes 84.0（[arXiv 2105.15203](https://arxiv.org/abs/2105.15203)） | ImageNet-1k | 轻量异构成员候选 |
 
 InternImage-H、EVA-02-L、BEiT-3 等更大或预训练来源链更复杂的模型在 2×48 GB 上吃力、来源声明复杂，不考虑。
+
+## 独立DA3-LARGE-1.1 + DPT + Mask2Former
+
+配置为 `configs/da3_dpt_m2f_large11_fulltrain_joint_bblr003_e25.yaml`，模型细节见 [model.md](model.md#independent-da3-large-11-segmentation)，原生权重见 [weights.md](weights.md#da3-large-11独立dpt融合分割路线)。该路线首步即全量微调原生DA3 encoder，DPT像素融合和Mask2Former查询decoder从头训练。场景1/3/5/6/7/8共8002张，无val，1024² RRC，25轮，BF16+TF32，clip0.01，encoder学习率6e-6，新模块2e-4。原生encoder通过自身 `encoder.` 前缀分组，学习率逻辑不依赖Adapter命名。当前仅开启骨干激活重算：`backbone_gradient_checkpointing: true`、`gradient_checkpointing: false`；DPT融合与查询decoder正常保存激活。此前三部分均重算时的显存估计不适用于这一设置。
+
+每卡batch4、累积8，两卡有效batch64；配置要求有效batch至少64。卡数或微batch调整后应相应增加累积步数，并检查生成的 `batch_plan.json`。将已获分配且经占用核对的两张空卡UUID写入 `FREE_GPUS`（逗号分隔）；沿用项目禁用P2P的约定，再使用公共入口：
+
+```bash
+CUDA_VISIBLE_DEVICES="$FREE_GPUS" NCCL_P2P_DISABLE=1 NPROC_PER_NODE=2 \
+PYTHON=/home/disk02/wjj/moonseg/.venv/bin/python \
+bash scripts/train.sh configs/da3_dpt_m2f_large11_fulltrain_joint_bblr003_e25.yaml
+```
+
+输出为 `runs/da3_dpt_m2f_large11_fulltrain_joint_bblr003_e25/`，最终选择 `last.pt`。该模型保存完整encoder、融合和语义decoder状态，并沿用公共optimizer/scheduler/scaler/RNG的epoch边界恢复。普通预测、滑窗和多尺度/翻转TTA沿用公共入口；模型自行完成patch14 padding及原图FOV恢复。配置没有Adapter、deformable pixel encoder或对应算子设置。CPU集成验证及双进程gloo的梯度累积、连续两次参数更新已通过；1024² GPU显存/速度、可行微batch及NCCL同步仍待空卡验收，本次未启动完整训练或修改队列。

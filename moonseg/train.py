@@ -25,7 +25,7 @@ from .utils import (amp_context, atomic_torch_save, configure_torch_backends, in
 # Embedding-like tensors get no weight decay, like Mask2Former's WEIGHT_DECAY_EMBED=0. DINOv3 names
 # its register tokens storage_tokens; register_tokens is kept for other ViT implementations.
 NO_DECAY_NAMES = ("pos_embed", "cls_token", "register_tokens", "storage_tokens", "mask_token",
-                  "level_embed", "level_encoding", "query_feat", "query_embed")
+                  "level_embed", "level_encoding", "query_feat", "query_embed", "camera_token")
 TRAIN_DEFAULTS = {"tf32": True, "cudnn_benchmark": True, "eval_stride": 1, "grad_clip": 0.01,
                   "sampling": {"mode": "uniform", "temperature": 0.01, "min_pixels": 1}}
 # Only last.pt (and epoch_XXX.pt) hold these; best_miou.pt/best_loss.pt are inference-only.
@@ -38,13 +38,14 @@ DEVELOPMENT_NOTE = ("development only; final submission model must be trained on
 
 
 def make_optimizer(model, settings):
-    # Only the original DINO transformer gets the multiplier. The ViT-Adapter trains at full LR.
+    # Only the native pretrained encoder gets the multiplier; new fusion/decoder modules use full LR.
     base_lr = float(settings.get("lr", 1e-4))
     groups = {}
+    backbone_prefix = getattr(unwrap_model(model), "native_backbone_prefix", "backbone.backbone.")
     for name, parameter in model.named_parameters():
         if not parameter.requires_grad:
             continue
-        backbone = name.startswith("backbone.backbone.")
+        backbone = name.startswith(backbone_prefix)
         no_decay = parameter.ndim <= 1 or name.endswith("bias") or any(part in name for part in NO_DECAY_NAMES)
         key = (backbone, no_decay)
         groups.setdefault(key, []).append(parameter)

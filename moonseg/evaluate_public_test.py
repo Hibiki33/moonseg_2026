@@ -10,6 +10,7 @@ from collections import Counter
 import json
 import os
 from pathlib import Path
+import time
 
 import numpy as np
 from PIL import Image
@@ -18,7 +19,7 @@ from torch.utils.data import Dataset
 
 from .data.labels import decode_label
 from .evaluate import evaluate_model
-from .predict import select_weights
+from .predict import predict_scores, select_weights
 from .utils import configure_torch_backends, load_checkpoint, load_config, load_partial_state_dict
 
 MANIFEST_KIND = "public_test_research_manifest"
@@ -33,6 +34,42 @@ CHECKPOINT_POLICIES = ("validation_selected", "final_epoch")
 FULLTRAIN_SCENES = [1, 3, 5, 6, 7, 8]
 FULLTRAIN_SAMPLES = 8002
 FULLTRAIN_UPDATES_PER_EPOCH = 125
+PRECISION_MODES = {"bf16": {"amp": "bf16", "tf32": True},
+                   "fp32_tf32": {"amp": "none", "tf32": True},
+                   "fp32": {"amp": "none", "tf32": False}}
+
+
+def inference_runtime(config, precision=None):
+    """Inference-only overrides; never edit the resolved training/checkpoint config."""
+    train = config.get("train", {})
+    runtime = {"amp": train.get("amp", "none"), "tf32": train.get("tf32", True),
+               "cudnn_benchmark": train.get("cudnn_benchmark", True)}
+    if precision is not None:
+        runtime.update(PRECISION_MODES[precision])
+    return runtime
+
+
+@torch.inference_mode()
+def precision_smoke(model, dataset, device, inference, runtime):
+    """Check actual full-profile outputs before a long precision comparison."""
+    sample = dataset[0]
+    image = sample["image"].unsqueeze(0).to(device)
+    dtypes = []
+    def observe(module, inputs, outputs):
+        dtypes.append({k: str(v.dtype) for k, v in outputs.items() if torch.is_tensor(v) and v.is_floating_point()})
+    handle = model.register_forward_hook(observe)
+    try:
+        scores = predict_scores(model, image, inference, runtime["amp"])
+    finally:
+        handle.remove()
+    if tuple(scores.shape) != (1, 5, *image.shape[-2:]) or not torch.isfinite(scores).all():
+        raise ValueError("Precision preflight requires finite five-class scores in original coordinates")
+    parameter_dtypes = sorted({str(p.dtype) for p in model.parameters() if p.is_floating_point()})
+    if runtime["amp"] == "none" and (parameter_dtypes != ["torch.float32"]
+            or any(dtype != "torch.float32" for row in dtypes for dtype in row.values())):
+        raise ValueError("FP32 comparison contains lower-precision model parameters or model outputs")
+    return {"passed": True, "sample_id": sample["sample_id"], "scene": sample["scene"],
+            "parameter_dtypes": parameter_dtypes, "forward_output_dtypes": dtypes}
 
 
 def fulltrain_data_snapshot(config):
@@ -272,8 +309,13 @@ def main():
     parser.add_argument("--data-root", default="data/research_test/LuSNAR")
     parser.add_argument("--manifest", default="data/research_test/manifest.json")
     parser.add_argument("--profile", choices=PROFILES, required=True)
+    parser.add_argument("--precision", choices=PRECISION_MODES,
+                        help="Inference-only precision override; default preserves training settings")
+    parser.add_argument("--progress-every", type=int, default=0)
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
+    if args.progress_every < 0:
+        raise ValueError("progress-every must be nonnegative")
     if Path(args.output).exists():
         raise FileExistsError(f"Refusing to overwrite scores: {args.output}")
     if int(os.environ.get("WORLD_SIZE", "1")) != 1:
@@ -287,7 +329,8 @@ def main():
         raise ValueError("Checkpoint changed while loading")
     if args.checkpoint_policy == "final_epoch":
         validate_final_checkpoint(config, args.checkpoint, checkpoint)
-    configure_torch_backends(config.get("train", {}))
+    runtime = inference_runtime(config, args.precision)
+    configure_torch_backends(runtime)
     dataset = PublicTestResearchDataset(args.data_root, args.manifest, config["data"])
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     from .models import build_model
@@ -296,9 +339,17 @@ def main():
     load_partial_state_dict(model, state, weights)
     print(f"{message}; public-test RESEARCH ONLY; checkpoint={args.checkpoint}", flush=True)
     model.eval()
+    smoke = precision_smoke(model, dataset, device, PROFILES[args.profile], runtime) if args.precision else None
+    if device.type == "cuda":
+        torch.cuda.synchronize(device)
+        torch.cuda.reset_peak_memory_stats(device)
+    started = time.monotonic()
     metrics = evaluate_model(model, dataset, device, PROFILES[args.profile],
-                             config.get("train", {}).get("amp", "none"),
-                             num_workers=config.get("train", {}).get("num_workers", 2), criterion=None)
+                             runtime["amp"], num_workers=config.get("train", {}).get("num_workers", 2),
+                             criterion=None, progress_every=args.progress_every)
+    if device.type == "cuda":
+        torch.cuda.synchronize(device)
+    elapsed = time.monotonic() - started
     if file_identity(args.checkpoint) != identity:
         raise ValueError("Checkpoint changed during evaluation")
     result = research_result(metrics, dataset, args.checkpoint_policy)
@@ -306,6 +357,14 @@ def main():
                   global_step=checkpoint.get("global_step"), checkpoint_file_identity=identity,
                   selected_by=checkpoint.get("selected_by"), weights=weights,
                   profile=args.profile, inference=PROFILES[args.profile])
+    result.update(inference_runtime={"precision": args.precision or "training", **runtime,
+                  "matmul_allow_tf32": torch.backends.cuda.matmul.allow_tf32,
+                  "cudnn_allow_tf32": torch.backends.cudnn.allow_tf32,
+                  "float32_matmul_precision": torch.get_float32_matmul_precision(),
+                  "device_name": torch.cuda.get_device_name(device) if device.type == "cuda" else "cpu",
+                  "torch": torch.__version__}, precision_smoke=smoke,
+                  elapsed_seconds=elapsed, samples_per_second=len(dataset) / elapsed,
+                  peak_allocated_bytes=torch.cuda.max_memory_allocated(device) if device.type == "cuda" else None)
     write_new_json(args.output, result)
     print(json.dumps({key: result[key] for key in ("evaluated_samples", "mIoU", "mAcc", "scene_equal_macro")}))
 

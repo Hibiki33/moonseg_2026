@@ -21,6 +21,7 @@ import torch
 from torch import nn
 from torch.autograd.function import once_differentiable
 from torch.nn import functional as F
+from torch.utils.checkpoint import checkpoint as activation_checkpoint
 
 DEFORMABLE_ATTENTION_MODES = ("auto", "cuda", "torch")
 # Official hub ViTs (dinov3/hub/backbones.py): B 768x12, L 1024x24, H+ 1280x32 with a SwiGLU MLP.
@@ -287,6 +288,23 @@ def _load_backbone(backbone, path):
     backbone.load_state_dict(state, strict=True)
 
 
+def _checkpoint_dino_blocks(backbone):
+    """Recompute native ViT blocks without changing parameters, keys or eval behavior."""
+    for block in backbone.blocks:
+        if getattr(block, "_moonseg_checkpointed", False):
+            continue
+        original_forward = block.forward
+        def forward(self, *args, _original=original_forward, **kwargs):
+            # The encoder stays in eval mode during fine tuning; gradient mode,
+            # rather than self.training, determines whether recomputation helps.
+            if torch.is_grad_enabled() and any(p.requires_grad for p in self.parameters()):
+                return activation_checkpoint(_original, *args, use_reentrant=False,
+                                             preserve_rng_state=True, **kwargs)
+            return _original(*args, **kwargs)
+        block.forward = types.MethodType(forward, block)
+        block._moonseg_checkpointed = True
+
+
 class DINOv3Mask2Former(nn.Module):
     def __init__(self, backbone, pixel_decoder, transformer_decoder):
         super().__init__()
@@ -333,6 +351,8 @@ def build_model(config: dict, load_backbone: bool = True) -> DINOv3Mask2Former:
         if not weights:
             raise ValueError("Set model.backbone_weights to official local DINOv3 weights; no automatic download is performed")
         _load_backbone(backbone, weights)
+    if architecture != "da3mono_vitl14" and settings.get("backbone_gradient_checkpointing", False):
+        _checkpoint_dino_blocks(backbone)
     adapter = _build_adapter(adapter_module, backbone, settings)
     dimension = int(settings.get("hidden_dim", 256))
     heads = int(settings.get("decoder_heads", 8))

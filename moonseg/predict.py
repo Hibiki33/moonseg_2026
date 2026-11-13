@@ -54,9 +54,20 @@ def semantic_scores(outputs, size, num_classes=5):
     return torch.einsum("bqc,bqhw->bchw", class_prob, mask_logits.sigmoid())
 
 
+def inference_padding(model):
+    """Record common input padding separately from padding owned by a model."""
+    settings = {"pad_multiple": int(getattr(model, "inference_input_multiple", 32))}
+    internal = getattr(model, "inference_internal_padding", None)
+    if internal is not None:
+        settings["model_internal_padding"] = dict(internal)
+    return settings
+
+
 @torch.inference_mode()
-def _forward_scores(model, image, mode="none", multiple=32, num_classes=5):
+def _forward_scores(model, image, mode="none", multiple=None, num_classes=5):
     height, width = image.shape[-2:]
+    if multiple is None:
+        multiple = inference_padding(model)["pad_multiple"]
     image = F.pad(image, (0, (-width) % multiple, 0, (-height) % multiple))
     with amp_context(image.device, mode):
         output = model(image)
@@ -219,7 +230,8 @@ def main():
                     "crop_size": inference.get("crop_size"), "stride": inference.get("stride"),
                     "scales": [float(scale) for scale in inference.get("scales", [1.0])],
                     "flip": bool(inference.get("flip", False)), "amp": amp, "num_classes": num_classes,
-                    "pad_multiple": 32, "score_postprocess": score_postprocess(config), "world_size": world_size}
+                    **inference_padding(model), "score_postprocess": score_postprocess(config),
+                    "world_size": world_size}
         write_json({"kind": "prediction_index", "layout": "test/Moon_i/submission/<sample_id>.png",
                     "packaging_status": "Official prediction layout; validate complete files with tools/package_submission.py before submitting.",
                     "checkpoint": str(args.checkpoint), "weights_key": weights_key,

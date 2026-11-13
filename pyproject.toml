@@ -17,6 +17,7 @@ dependencies = [
     "omegaconf>=2.3,<3",
     "safetensors>=0.5,<1",
     "einops>=0.8,<0.9",
+    "addict>=2.4,<3",
 ]
 
 [project.optional-dependencies]
