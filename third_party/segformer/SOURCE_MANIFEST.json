@@ -1,0 +1,27 @@
+{
+  "repository": "https://github.com/NVlabs/SegFormer",
+  "commit": "65fa8cfa9b52b6ee7e8897a98705abf8570f9e32",
+  "license": "NVIDIA Source Code License (see LICENSE)",
+  "files": {
+    "mix_transformer.py": "mmseg/models/backbones/mix_transformer.py",
+    "segformer_head.py": "mmseg/models/decode_heads/segformer_head.py",
+    "decode_head.py": "mmseg/models/decode_heads/decode_head.py",
+    "cross_entropy_loss.py": "mmseg/models/losses/cross_entropy_loss.py",
+    "utils.py": "mmseg/models/losses/utils.py",
+    "upstream_b5_config.py": "local_configs/segformer/B5/segformer.b5.640x640.ade.160k.py",
+    "LICENSE": "LICENSE"
+  },
+  "local_changes": [
+    "Only framework imports in the four model/loss files are redirected to compat.py; unused timm registration/config and unused head imports removed. Model class bodies and loss algorithms are unchanged.",
+    "compat.py replaces old timm/MMCV/MMseg infrastructure with torch-only services: per-sample DropPath, torch trunc_normal_, ConvModule (Conv2d, native SyncBatchNorm, ReLU), resize, initialization, registries and loss construction.",
+    "Legacy fp16 decorators are identities because MoonSeg owns AMP. Standalone native SyncBatchNorm uses torch batch_norm; distributed training retains SyncBatchNorm.",
+    "MoonSeg wrapper freezes only the unused inherited conv_seg branch; all tensors are preserved in checkpoints, all executed encoder/head parameters train.",
+    "No external timm, mmcv, mmseg, or transformers implementation is imported."
+  ],
+  "compatibility_reference_sources": {
+    "conv_module": "https://github.com/open-mmlab/mmcv/blob/v1.2.7/mmcv/cnn/bricks/conv_module.py",
+    "conv_initialization": "https://github.com/open-mmlab/mmcv/blob/v1.2.7/mmcv/cnn/utils/weight_init.py",
+    "normalization": "https://github.com/open-mmlab/mmcv/blob/v1.2.7/mmcv/cnn/bricks/norm.py",
+    "drop_path": "timm 0.3.2 DropPath per-sample keep_prob + rand, floor, divide by keep_prob; torch.nn.init.trunc_normal_ used for legacy timm truncated-normal initialization"
+  }
+}

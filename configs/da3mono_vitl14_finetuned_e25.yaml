@@ -1,0 +1,102 @@
+# da3mono_vitl14 + ViT-Adapter + Mask2Former, finetuned backbone, 25 epochs, final last.pt. Selected mainline with backbone LR multiplier 0.03.
+model:
+  backbone: da3mono_vitl14
+  backbone_weights: ckpts/da3mono-large/model.safetensors
+  freeze_backbone: false
+  unfreeze_last_blocks: 0
+  num_classes: 5
+  num_queries: 100
+  hidden_dim: 256
+  decoder_layers: 6
+  encoder_layers: 6
+  gradient_checkpointing: true
+  deformable_attention: auto
+  backbone_gradient_checkpointing: true
+  model_family: da3mono-large
+  source_revision: 3d835ec1a5802d64a8b8b15f817a1ab54809bfe4
+  native_patch_size: 14
+  adapter_feature_stride: 16
+loss:
+  ce_weight: 2.0
+  mask_weight: 5.0
+  dice_weight: 5.0
+  no_object_weight: 0.1
+  num_points: 12544
+data:
+  root: data/LuSNAR
+  development_pool: true
+  train_manifest: data/manifests/dev_final_train.json
+  val_manifest: null
+  label_stats: data/manifests/label_stats_dev_final_train.json
+  train_scenes:
+  - 1
+  - 3
+  - 5
+  - 6
+  - 7
+  - 8
+  val_scenes: []
+  train_mode: random_resize_crop
+  crop_size:
+  - 1024
+  - 1024
+  resize_range:
+  - 0.5
+  - 2.0
+  cat_max_ratio: 0.75
+  crop_attempts: 10
+  image_size:
+  - 1024
+  - 1024
+  hflip_probability: 0.5
+  brightness_probability: 0.5
+  brightness_delta: 32
+  contrast_probability: 0.5
+  contrast_range:
+  - 0.5
+  - 1.5
+  pixel_floor: 22
+  gamma_probability: 0.0
+  shadow_probability: 0.0
+  scale_jitter_probability: 0.0
+  mean:
+  - 0.485
+  - 0.456
+  - 0.406
+  std:
+  - 0.229
+  - 0.224
+  - 0.225
+train:
+  output_dir: runs/da3mono_vitl14_finetuned_e25
+  seed: 42
+  epochs: 25
+  batch_size: 4
+  accumulation_steps: 8
+  min_effective_batch: 64
+  num_workers: 4
+  lr: 0.0002
+  backbone_lr_multiplier: 0.03
+  weight_decay: 0.05
+  warmup_iters: 0
+  warmup_ratio: 0.001
+  poly_power: 0.9
+  amp: bf16
+  tf32: true
+  cudnn_benchmark: true
+  grad_clip: 0.01
+  sampling:
+    mode: uniform
+    temperature: 0.01
+    min_pixels: 1
+  validate: false
+  eval_every: 1
+  eval_stride: 2
+  save_every: 0
+  log_every: 1
+  resume: null
+inference:
+  sliding_window: false
+  scales:
+  - 1.0
+  flip: false

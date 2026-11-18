@@ -1,0 +1,36 @@
+# Datasets, checkpoints, local environments, and generated runs
+/data
+/ckpts
+/outputs/
+/runs
+/predictions/
+/submissions/
+/manifests/
+/build
+/.venv
+/.venv-baselines
+/.cache
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.pth
+*.pt
+*.safetensors
+*.zip
+*.tar.gz
+*.aria2
+.env
+.env.*
+!.env.example
+/references
+
+# Temporary agent edit files
+*.da3tmp
+
+# Submission assets and local authoring files
+/report/
+/logs
+/pretrained
+/AGENTS.md
+/scripts/package_release.sh
+/tools/package_submission.py
